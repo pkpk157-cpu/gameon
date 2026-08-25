@@ -78,23 +78,20 @@
   function closeModal() { $("#modalBack").classList.remove("show"); }
 
   /* ---- profile sheet --------------------------------------------------- */
+  function isAdmin() {
+    try { if (/[?&]admin(=|&|$)/.test(location.search)) lsSet("go12.admin", true); } catch (e) {}
+    return !!lsGet("go12.admin");
+  }
+
   function openProfile() {
     var ds = S.dataset();
-    var me = null;
-    if (ds && state.me) me = ds.managers.filter(function (m) { return +m.id === +state.me; })[0];
-    var freshness = ds
-      ? (ds.managers.length + " managers · GW " + (K.currentGw(ds) || "?") + " · updated " + new Date(ds.updatedAt).toLocaleDateString())
-      : "No data loaded yet";
+    var admin = isAdmin();
     var theme = getTheme();
+    var updated = ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString()) : "Standings not loaded yet";
 
     var h = '';
-    h += '<div class="profile-hd"><div class="av">' + svg("person", 24) + '</div>' +
-      '<div><div class="who">' + esc(me ? me.entryName : "Your team") + '</div>' +
-      '<div class="sub">' + esc(me ? me.playerName : "Link your FPL entry to highlight yourself") + '</div></div></div>';
-
-    h += '<label class="field" style="margin-top:10px"><span class="lab">My team (FPL entry ID)</span>' +
-      '<div style="display:flex;gap:8px"><input class="in" id="pfMe" value="' + esc(state.me || "") + '" placeholder="e.g. 1234567" inputmode="numeric">' +
-      '<button class="btn" id="pfMeSave">Save</button></div></label>';
+    h += '<div class="profile-hd"><div class="av">' + svg("gear", 24) + '</div>' +
+      '<div><div class="who">Game On V12</div><div class="sub">' + esc(updated) + '</div></div></div>';
 
     h += '<div class="menu"><div class="lab-sm">Appearance</div>' +
       '<div class="seg" id="pfTheme">' +
@@ -103,37 +100,46 @@
       segBtn("dark", "moon", "Dark", theme) +
       '</div></div>';
 
-    h += '<div class="menu">' +
-      menuItem("pfRefresh", "refresh", "Refresh from FPL") +
-      menuItem("pfRules", "book", "Rules & prize tables") +
-      menuItem("pfSettings", "gear", "League settings & admin") +
-      '<div class="divider"></div>' +
-      menuItem("pfExport", "download", "Export data file") +
-      menuItem("pfImport", "upload", "Import data file") +
-      '</div>';
+    h += '<div class="menu">' + menuItem("pfRules", "book", "Game rules");
+    if (admin) {
+      h += menuItem("pfRefresh", "refresh", "Refresh from FPL") +
+        menuItem("pfSettings", "gear", "League settings & admin") +
+        '<div class="divider"></div>' +
+        menuItem("pfExport", "download", "Export data file") +
+        menuItem("pfImport", "upload", "Import data file");
+    }
+    h += '</div>';
 
-    h += '<div class="note" style="margin-top:14px;text-align:center">' + esc(freshness) + '</div>';
+    if (admin) {
+      h += '<label class="field" style="margin-top:12px"><span class="lab">Highlight my team (entry ID)</span>' +
+        '<div style="display:flex;gap:8px"><input class="in" id="pfMe" value="' + esc(state.me || "") + '" placeholder="e.g. 1234567" inputmode="numeric">' +
+        '<button class="btn" id="pfMeSave">Save</button></div></label>' +
+        '<div class="note" style="margin-top:6px">Admin mode. Participants don\'t see these controls.</div>';
+    }
 
     $("#profileBody").innerHTML = h;
     $("#profileBack").classList.add("show");
 
-    $("#pfMeSave").addEventListener("click", function () {
-      var v = parseInt($("#pfMe").value, 10);
-      state.me = isNaN(v) ? null : v; lsSet(ME_KEY, state.me);
-      toast("Saved"); render(); openProfile();
-    });
     $all("#pfTheme button").forEach(function (b) {
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile(); });
     });
-    $("#pfRefresh").addEventListener("click", function () { closeProfile(); startRefresh(); });
     $("#pfRules").addEventListener("click", function () { closeProfile(); location.hash = "rules"; });
-    $("#pfSettings").addEventListener("click", function () { closeProfile(); location.hash = "settings"; });
-    $("#pfExport").addEventListener("click", function () {
-      var bundle = S.exportBundle();
-      if (!bundle.dataset) { toast("Nothing to export — refresh first"); return; }
-      download("data.json", JSON.stringify(bundle)); toast("Exported data.json");
-    });
-    $("#pfImport").addEventListener("click", function () { importFile(function () { closeProfile(); }); });
+
+    if (admin) {
+      $("#pfRefresh").addEventListener("click", function () { closeProfile(); startRefresh(); });
+      $("#pfSettings").addEventListener("click", function () { closeProfile(); location.hash = "settings"; });
+      $("#pfExport").addEventListener("click", function () {
+        var bundle = S.exportBundle();
+        if (!bundle.dataset) { toast("Nothing to export — refresh first"); return; }
+        download("data.json", JSON.stringify(bundle)); toast("Exported data.json");
+      });
+      $("#pfImport").addEventListener("click", function () { importFile(function () { closeProfile(); }); });
+      $("#pfMeSave").addEventListener("click", function () {
+        var v = parseInt($("#pfMe").value, 10);
+        state.me = isNaN(v) ? null : v; lsSet(ME_KEY, state.me);
+        toast("Saved"); render(); openProfile();
+      });
+    }
   }
   function closeProfile() { $("#profileBack").classList.remove("show"); }
   function segBtn(val, icon, label, cur) {
@@ -161,7 +167,9 @@
   /* ---- boot ------------------------------------------------------------ */
   function boot() {
     buildNav();
-    $("#btnProfile").innerHTML = svg("person", 20);
+    isAdmin(); // persist ?admin flag on first visit
+    $("#btnProfile").innerHTML = svg("gear", 20);
+    $("#btnProfile").setAttribute("title", "Settings");
     $("#btnProfile").addEventListener("click", openProfile);
     $("#modalClose").addEventListener("click", closeModal);
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
@@ -230,6 +238,7 @@
       host.innerHTML = emptyState();
       var b = $("#emptyCta", host); if (b) b.addEventListener("click", function () { location.hash = "settings"; });
       var r = $("#emptyRefresh", host); if (r) r.addEventListener("click", startRefresh);
+      var rl = $("#emptyReload", host); if (rl) rl.addEventListener("click", function () { location.reload(); });
       return;
     }
 
@@ -242,6 +251,13 @@
   }
 
   function emptyState() {
+    if (!isAdmin()) {
+      return '<div class="empty"><div class="big">🏆</div>' +
+        '<h3>Game On V12</h3>' +
+        '<p class="note">Standings haven\'t loaded yet. Please check back shortly.</p>' +
+        '<div class="btnrow" style="justify-content:center;margin-top:16px">' +
+        '<button class="btn" id="emptyReload">Reload</button></div></div>';
+    }
     var cfg = S.config();
     var hasId = !!cfg.classicLeagueId;
     return '<div class="empty"><div class="big">🏆</div>' +
