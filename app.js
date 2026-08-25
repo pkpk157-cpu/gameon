@@ -1043,10 +1043,10 @@
     if (!state.statsGw || all.indexOf(+state.statsGw) === -1) state.statsGw = all[all.length - 1];
 
     var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="stBack">' + svg("back", 16) + ' Back</button></div>';
-    h += '<div class="card"><div class="bd"><div class="pgwline">' +
+    h += '<div class="pgwline" style="margin-bottom:4px">' +
       '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
         return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
-      }).join("") + '</select></div></div></div>';
+      }).join("") + '</select></div>';
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
