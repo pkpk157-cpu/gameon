@@ -150,16 +150,61 @@
     return !!lsGet("go12.admin");
   }
 
-  function openProfile() {
+  // The gear opens *you*: who you are first, then your things, then the
+  // league's, then preferences, and only then anything administrative.
+  function openProfile(opts) {
     var ds = S.dataset();
     var admin = isAdmin();
     var theme = getTheme();
-    var updated = ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString()) : "Standings not loaded yet";
+    var me = state.me && ds ? K.managerMap(ds)[+state.me] : null;
+    var editing = (opts && opts.edit) || !me;
+    var roster = ds && ds.managers ? ds.managers.slice().sort(function (x, y) {
+      return String(x.entryName || "").localeCompare(String(y.entryName || ""));
+    }) : [];
 
-    var h = '';
-    h += '<div class="profile-hd"><div class="av">' + svg("gear", 24) + '</div>' +
-      '<div><div class="who">Game On V12</div><div class="sub">' + esc(updated) + '</div></div></div>';
+    // 1 — identity
+    var h = '<div class="profile-hd">';
+    if (me) {
+      h += '<div class="av">' + esc((me.entryName || "?").trim().slice(0, 1).toUpperCase()) + '</div>' +
+        '<div class="idwrap"><div class="who">' + esc(me.entryName) + '</div>' +
+        '<div class="sub">' + esc(me.playerName) + '</div></div>' +
+        '<button class="linkbtn" id="pfEdit">' + (editing ? "Cancel" : "Change") + '</button>';
+    } else {
+      h += '<div class="av">' + svg("person", 22) + '</div>' +
+        '<div class="idwrap"><div class="who">Who are you?</div>' +
+        '<div class="sub">Pick your team to see it highlighted</div></div>';
+    }
+    h += '</div>';
 
+    if (editing) {
+      h += '<datalist id="meOpts">' + roster.map(function (m) {
+        return '<option value="' + esc(mgrLabel(m)) + '"></option>';
+      }).join("") + '</datalist>';
+      h += '<div class="field" style="margin-bottom:14px">' +
+        '<div style="display:flex;gap:8px"><input class="in" id="pfMe" list="meOpts" autocomplete="off" ' +
+        'spellcheck="false" placeholder="Type your team or name" value="' +
+        esc(me ? mgrLabel(me) : "") + '">' +
+        '<button class="btn primary" id="pfMeSave">Save</button></div>' +
+        '<div class="note" style="margin-top:6px">Highlights you across every tab. ' +
+        'Leave it empty to clear.</div></div>';
+    }
+
+    // 2 — your things
+    if (me) {
+      h += '<div class="menu"><div class="lab-sm">You</div>' +
+        menuItem("pfMine", "person", "My profile") +
+        menuItem("pfMyCompare", "h2h", "Compare me with someone") +
+        '</div>';
+    }
+
+    // 3 — the league
+    h += '<div class="menu"><div class="lab-sm">League</div>' +
+      menuItem("pfStats", "classic", "Stats & highlights") +
+      menuItem("pfCompare", "h2h", "Head to head") +
+      menuItem("pfRules", "book", "Game rules") +
+      '</div>';
+
+    // 4 — preferences
     h += '<div class="menu"><div class="lab-sm">Appearance</div>' +
       '<div class="seg" id="pfTheme">' +
       segBtn("system", "auto", "System", theme) +
@@ -167,62 +212,58 @@
       segBtn("dark", "moon", "Dark", theme) +
       '</div></div>';
 
-    var me = state.me && ds ? K.managerMap(ds)[+state.me] : null;
-    h += '<div class="menu">' +
-      (me ? menuItem("pfMine", "person", "My team · " + me.entryName) : "") +
-      menuItem("pfStats", "classic", "Stats & highlights") +
-      menuItem("pfCompare", "h2h", "Head to head") + menuItem("pfRules", "book", "Game rules");
+    // 5 — admin, for whoever runs the league
     if (admin) {
-      h += menuItem("pfRefresh", "refresh", "Refresh from FPL") +
-        menuItem("pfSettings", "gear", "League settings & admin") +
+      h += '<div class="menu"><div class="lab-sm">Admin</div>' +
+        menuItem("pfRefresh", "refresh", "Refresh from FPL") +
+        menuItem("pfSettings", "gear", "League settings") +
         '<div class="divider"></div>' +
         menuItem("pfExport", "download", "Export data file") +
-        menuItem("pfImport", "upload", "Import data file");
+        menuItem("pfImport", "upload", "Import data file") +
+        '</div>';
     }
-    h += '</div>';
 
-    // Which team is mine — chosen by name, since we already know all of them.
-    var roster = ds && ds.managers ? ds.managers.slice().sort(function (x, y) {
-      return String(x.entryName || "").localeCompare(String(y.entryName || ""));
-    }) : [];
-    h += '<datalist id="meOpts">' + roster.map(function (m) {
-      return '<option value="' + esc(mgrLabel(m)) + '"></option>';
-    }).join("") + '</datalist>';
-    h += '<label class="field" style="margin-top:12px"><span class="lab">My team</span>' +
-      '<div style="display:flex;gap:8px"><input class="in" id="pfMe" list="meOpts" autocomplete="off" ' +
-      'spellcheck="false" placeholder="Type your team or name" value="' +
-      esc(me ? mgrLabel(me) : "") + '">' +
-      '<button class="btn" id="pfMeSave">Save</button></div></label>' +
-      '<div class="note" style="margin-top:2px">Highlights you across every tab' +
-      (me ? '' : ' and unlocks a shortcut to your profile') + '. Leave it empty to clear.</div>' +
-      (admin ? '<div class="note warn" style="margin-top:8px">Admin mode is on for this device.</div>' : '');
+    // 6 — where the numbers came from
+    h += '<div class="pffoot">' +
+      (ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString() +
+             " · " + num(ds.managers.length) + " managers")
+          : "Standings not loaded yet") +
+      (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
+      '</div>';
 
     $("#profileBody").innerHTML = h;
     $("#profileBack").classList.add("show");
 
     $all("#pfTheme button").forEach(function (b) {
-      b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile(); });
+      b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile({ edit: editing }); });
     });
-    $("#pfStats").addEventListener("click", function () { closeProfile(); location.hash = "stats"; });
-    $("#pfCompare").addEventListener("click", function () { closeProfile(); location.hash = "compare"; });
-    $("#pfRules").addEventListener("click", function () { closeProfile(); location.hash = "rules"; });
+    function go(hash) { closeProfile(); location.hash = hash; }
+    $("#pfStats").addEventListener("click", function () { go("stats"); });
+    $("#pfCompare").addEventListener("click", function () { go("compare"); });
+    $("#pfRules").addEventListener("click", function () { go("rules"); });
     if (me) {
-      $("#pfMine").addEventListener("click", function () {
-        closeProfile(); location.hash = "profile/" + state.me;
+      $("#pfMine").addEventListener("click", function () { go("profile/" + state.me); });
+      $("#pfMyCompare").addEventListener("click", function () {
+        state.cmpA = state.me; go("compare");
       });
+      $("#pfEdit").addEventListener("click", function () { openProfile({ edit: !editing }); });
     }
-    $("#pfMeSave").addEventListener("click", function () {
-      var txt = $("#pfMe").value.trim();
-      if (!txt) { state.me = null; lsSet(ME_KEY, null); toast("Cleared"); render(); openProfile(); return; }
-      var found = resolveMgr(txt, roster);
-      if (!found) { toast("No team matches that name"); return; }
-      state.me = found.id; lsSet(ME_KEY, state.me);
-      toast("Saved — you're highlighted"); render(); openProfile();
-    });
+    if (editing) {
+      var save = function () {
+        var txt = $("#pfMe").value.trim();
+        if (!txt) { state.me = null; lsSet(ME_KEY, null); toast("Cleared"); render(); openProfile({ edit: true }); return; }
+        var found = resolveMgr(txt, roster);
+        if (!found) { toast("No team matches that name"); return; }
+        state.me = found.id; lsSet(ME_KEY, state.me);
+        toast("Saved — you're highlighted"); render(); openProfile();
+      };
+      $("#pfMeSave").addEventListener("click", save);
+      $("#pfMe").addEventListener("keydown", function (e) { if (e.key === "Enter") save(); });
+    }
 
     if (admin) {
       $("#pfRefresh").addEventListener("click", function () { closeProfile(); startRefresh(); });
-      $("#pfSettings").addEventListener("click", function () { closeProfile(); location.hash = "settings"; });
+      $("#pfSettings").addEventListener("click", function () { go("settings"); });
       $("#pfExport").addEventListener("click", function () {
         var bundle = S.exportBundle();
         if (!bundle.dataset) { toast("Nothing to export — refresh first"); return; }
@@ -1217,6 +1258,11 @@
     var h = '<div class="statlead">' + esc(H.gwName) +
       (H.live ? ' <span class="pill live">Live</span>' : '') + '</div>';
     h += '<div class="hgrid">';
+    if (H.potw) {
+      h += hcard("Player of the week", num(H.potw.pts), H.potw.name, null,
+        H.potw.team + (H.potw.ownedPct !== null && H.potw.ownedPct !== undefined
+          ? " · " + H.potw.ownedPct + "% of the league" : ""));
+    }
     h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player);
     h += hcard("League average", num(g.average), g.count + " managers", null,
       g.median !== null ? ("median " + num(g.median)) : "");
@@ -1290,6 +1336,9 @@
     h += hlist("Most captained", sq.mostCaptained, function (x) {
       return { name: x.name, tag: x.team, val: num(x.caps) };
     });
+    h += hlist("Most vice-captained", sq.mostVice, function (x) {
+      return { name: x.name, tag: x.team, val: num(x.vices) };
+    });
     h += hlist("Top scorers owned", sq.topScorers, function (x) {
       return { name: x.name, tag: x.team, val: num(x.pts) };
     });
@@ -1297,6 +1346,20 @@
       return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) };
     }, "Owned by under 10% of the league.");
     h += '</div></div>';
+
+    if (sq.movedIn && (sq.movedIn.length || sq.movedOut.length)) {
+      h += '<div class="section-title"><h2>In and out</h2><div class="rule"></div></div>';
+      h += '<div class="note" style="margin:-4px 2px 10px">' + num(sq.churn) +
+        ' changes to squads since the previous gameweek.</div>';
+      h += '<div class="card"><div class="bd hcols">';
+      h += hlist("Brought in", sq.movedIn, function (x) {
+        return { name: x.name, tag: x.team, val: num(x.count) };
+      });
+      h += hlist("Moved out", sq.movedOut, function (x) {
+        return { name: x.name, tag: x.team, val: num(x.count) };
+      });
+      h += '</div></div>';
+    }
     return h;
   }
 
@@ -1324,6 +1387,13 @@
       h += '</div>';
     } else {
       h += '<div class="callout">Squad values appear after the next data refresh.</div>';
+    }
+    if (v && v.top && v.top.length) {
+      h += '<div class="card"><div class="bd">';
+      h += hlist("Most valuable teams", v.top, function (x) {
+        return { id: x.id, name: x.name, tag: "", val: mval(x.value) };
+      }, v.richest.value === v.poorest.value ? "Every squad is still at its starting value." : "");
+      h += '</div></div>';
     }
     if (sq && sq.bestValue.length) {
       h += '<div class="card"><div class="bd hcols">';

@@ -886,6 +886,7 @@
       var vs = 0, bs = 0;
       withVal.forEach(function (r) { vs += r.value; bs += r.bank; });
       value = {
+        top: withVal.slice().sort(function (a, b) { return b.value - a.value; }).slice(0, 5),
         richest: best(withVal, "value"), poorest: worst(withVal, "value"),
         average: Math.round(vs / withVal.length), averageBank: Math.round(bs / withVal.length),
         mostBanked: best(withVal, "bank"), count: withVal.length
@@ -896,7 +897,7 @@
     var squads = null;
     if (pk) {
       var ids = Object.keys(pk), n = ids.length;
-      var own = {}, cap = {}, chips = {};
+      var own = {}, cap = {}, vice = {}, chips = {};
       ids.forEach(function (mid) {
         var sq = pk[mid];
         if (sq.c) chips[sq.c] = (chips[sq.c] || 0) + 1;
@@ -905,6 +906,7 @@
           if (!own[el]) own[el] = 0;
           own[el]++;
           if (t[2]) cap[el] = (cap[el] || 0) + 1;
+          if (t[3]) vice[el] = (vice[el] || 0) + 1;
         });
       });
       var ownedList = Object.keys(own).map(function (el) {
@@ -913,6 +915,7 @@
         m.ownedPct = n ? Math.round((own[el] / n) * 1000) / 10 : 0;
         m.pts = lp[el] || 0;
         m.caps = cap[el] || 0;
+        m.vices = vice[el] || 0;
         m.value = m.price ? Math.round((m.pts / (m.price / 10)) * 100) / 100 : 0;
         m.eo = (eot && eot.eo[el]) || 0;
         return m;
@@ -941,8 +944,43 @@
         };
       });
 
+      // What the league moved in and out since last gameweek. Comparing
+      // squads means chip weeks (wildcard, free hit) show up as churn too,
+      // which is what actually changed hands.
+      var movedIn = null, movedOut = null, churn = 0;
+      var prevPk = picksAt(ds, gw - 1);
+      if (prevPk) {
+        var inC = {}, outC = {};
+        Object.keys(pk).forEach(function (mid) {
+          var pv = prevPk[mid];
+          if (!pv) return;
+          var now = {}, before = {};
+          (pk[mid].p || []).forEach(function (t) { now[t[0]] = 1; });
+          (pv.p || []).forEach(function (t) { before[t[0]] = 1; });
+          Object.keys(now).forEach(function (el) {
+            if (!before[el]) { inC[el] = (inC[el] || 0) + 1; churn++; }
+          });
+          Object.keys(before).forEach(function (el) {
+            if (!now[el]) outC[el] = (outC[el] || 0) + 1;
+          });
+        });
+        function churnList(map) {
+          return Object.keys(map).map(function (el) {
+            var m2 = meta(el);
+            m2.count = map[el];
+            m2.pts = lp[el] || 0;
+            return m2;
+          }).sort(function (a, b) { return b.count - a.count; }).slice(0, 5);
+        }
+        movedIn = churnList(inC);
+        movedOut = churnList(outC);
+      }
+
       squads = {
         managers: n, chips: chips,
+        movedIn: movedIn, movedOut: movedOut, churn: churn,
+        mostVice: ownedList.slice().filter(function (x) { return x.vices > 0; })
+          .sort(function (a, b) { return b.vices - a.vices; }).slice(0, 5),
         templateXi: templateXi,
         distinctCaptains: capList.length,
         ownershipLeaders: ownedList.slice().sort(function (a, b) { return b.eo - a.eo; }).slice(0, 5),
@@ -956,6 +994,25 @@
         bestValue: priced.sort(function (a, b) { return b.value - a.value; }).slice(0, 5),
         priciest: ownedList.slice().sort(function (a, b) { return b.price - a.price; }).slice(0, 5)
       };
+    }
+
+    /* ---- the gameweek's best player, whoever owns him ---- */
+    var potw = null;
+    if (lp && Object.keys(lp).length) {
+      var bestEl = null, bestPts = -1;
+      Object.keys(lp).forEach(function (el) {
+        if (lp[el] > bestPts) { bestPts = lp[el]; bestEl = el; }
+      });
+      if (bestEl !== null && bestPts > 0) {
+        potw = meta(bestEl);
+        potw.pts = bestPts;
+        // how much of this league had him
+        if (squads) {
+          var mine = squads.mostOwned.concat(squads.topScorers, squads.differentials)
+            .filter(function (x) { return +x.el === +bestEl; })[0];
+          potw.ownedPct = mine ? mine.ownedPct : null;
+        }
+      }
     }
 
     /* ---- season so far ---- */
@@ -1051,7 +1108,8 @@
     var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw),
              live: gwEv ? !!(gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false,
-             gwStats: gwStats, value: value, squads: squads, season: season, past: past };
+             gwStats: gwStats, value: value, squads: squads, season: season,
+             past: past, potw: potw };
   };
 
   window.GO_COMPUTE = C;
