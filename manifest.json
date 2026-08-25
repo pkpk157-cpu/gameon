@@ -1,0 +1,15 @@
+{
+  "name": "FPL Game On V12 — League Tracker",
+  "short_name": "Game On V12",
+  "description": "Live tracker for the Game On V12 private FPL league: Classic standings, Monthly winners, Last Manager Standing, Game On UCL (H2H) and the Pyramid Battle.",
+  "start_url": ".",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0713",
+  "theme_color": "#120a22",
+  "categories": ["sports", "utilities"],
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

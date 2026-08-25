@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>FPL Game On V12 — League Tracker</title>
+<meta name="description" content="Live tracker for the Game On V12 private FPL league — Classic, Monthly, Last Manager Standing, UCL (H2H) and the Pyramid Battle." />
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#f5f6fb" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0e0b18" media="(prefers-color-scheme: dark)" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Game On V12" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<script>
+  /* Apply the saved theme before paint to avoid a flash. */
+  (function () {
+    try {
+      var t = JSON.parse(localStorage.getItem("go12.theme"));
+      if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="badge">⚽</div>
+      <div class="t"><b>Game On</b><span>V12 League</span></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="datastate" id="dataState"></div>
+    <button class="profilebtn" id="btnProfile" title="Profile & settings" aria-label="Profile and settings"></button>
+  </header>
+
+  <main class="wrap">
+    <section class="view" data-view="classic"></section>
+    <section class="view" data-view="monthly"></section>
+    <section class="view" data-view="lms"></section>
+    <section class="view" data-view="pyramid"></section>
+    <section class="view" data-view="h2h"></section>
+    <section class="view" data-view="rules"></section>
+    <section class="view" data-view="settings"></section>
+    <div class="foot">
+      Game On V12 · community tracker · data © the Fantasy Premier League.<br>
+      Not affiliated with the Premier League or FPL.
+    </div>
+  </main>
+
+  <nav class="navbar" id="navbar"></nav>
+
+  <div id="toast"></div>
+  <div class="modal-back" id="modalBack">
+    <div class="modal">
+      <div class="hd"><h3 id="modalTitle">—</h3><span class="x" id="modalClose">×</span></div>
+      <div class="bd" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="modal-back sheet" id="profileBack">
+    <div class="modal"><div class="bd" id="profileBody"></div></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="data.js"></script>
+  <script src="compute.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+    }
+  </script>
+</body>
+</html>
