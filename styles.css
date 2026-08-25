@@ -328,6 +328,21 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 label.field { display:block; margin-bottom:13px; }
 .selrow { display:flex; gap:12px; flex-wrap:wrap; }
 .selrow .field { flex:1 1 45%; min-width:150px; margin-bottom:12px; }
+select.in.narrow { width:auto; min-width:120px; max-width:150px; padding-right:30px; }
+
+/* month/season picker row: narrow dropdown + GW status chips beside it */
+.pickrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.pickmeta { min-width:0; }
+.gwchips { display:flex; flex-wrap:wrap; gap:4px; }
+.gwchip { font-size:10.5px; font-weight:700; min-width:22px; text-align:center; padding:2px 5px; border-radius:6px;
+  font-variant-numeric:tabular-nums; border:1px solid var(--line); color:var(--ink-soft); background:var(--chip); }
+.gwchip.done { color:#fff; background:var(--good); border-color:transparent; }
+.gwchip.live { color:var(--on-accent); background:var(--accent); border-color:transparent; }
+.gwchip.upcoming { color:var(--ink-faint); }
+.gwlegend { font-size:11px; color:var(--ink-faint); margin-top:6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.gwlegend .lg { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:2px; vertical-align:middle; }
+.gwlegend .lg.done { background:var(--good); } .gwlegend .lg.live { background:var(--accent); }
+.gwlegend .lg.upcoming { background:var(--chip); border:1px solid var(--line-strong); }
 label.field .lab { font-size:12px; color:var(--ink-soft); font-weight:600; margin-bottom:6px; display:block; }
 input.in, select.in, textarea.in {
   width:100%; background:var(--field); border:1px solid var(--glass-border); color:var(--ink);

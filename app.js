@@ -118,6 +118,28 @@
     var yr = (S.config().seasonStartYear || 2025) + (late[m.key] ? 1 : 0);
     return m.name.slice(0, 3) + "-" + ("0" + (yr % 100)).slice(-2);
   }
+  // gw -> "done" | "live" | "upcoming"
+  function gwStatusFn(ds) {
+    var st = {};
+    ((ds.bootstrap && ds.bootstrap.events) || []).forEach(function (e) {
+      st[e.id] = (e.finished && e.data_checked) ? "done" : (e.is_current ? "live" : "upcoming");
+    });
+    return function (gw) { return st[gw] || "upcoming"; };
+  }
+  // Colored GW chips + a compact legend/summary of done/live/upcoming counts.
+  function gwChips(gws, statusFn) {
+    var n = { done: 0, live: 0, upcoming: 0 };
+    var chips = gws.map(function (g) {
+      var s = statusFn(g); n[s]++;
+      return '<span class="gwchip ' + s + '" title="' + s + '">' + g + '</span>';
+    }).join("");
+    var parts = [];
+    if (n.done) parts.push('<span class="lg done"></span>' + n.done + ' done');
+    if (n.live) parts.push('<span class="lg live"></span>' + n.live + ' live');
+    if (n.upcoming) parts.push('<span class="lg upcoming"></span>' + n.upcoming + ' upcoming');
+    return '<div class="gwchips">' + chips + '</div>' +
+      '<div class="gwlegend">' + gws.length + ' GWs · ' + parts.join(" · ") + '</div>';
+  }
 
   function toast(msg) {
     var t = $("#toast"); t.textContent = msg; t.classList.add("show");
@@ -496,32 +518,29 @@
       : (active.length ? active[active.length - 1].key : months[0].key);
     state.monthKey = cur;
 
+    var statusFn = gwStatusFn(ds);
     var h = '';
-    h += '<label class="field"><span class="lab">Month</span><select class="in" id="monthSel">' +
+    h += '<div class="pickrow"><select class="in narrow" id="monthSel">' +
       months.map(function (m) {
         return '<option value="' + m.key + '"' + (m.key === cur ? " selected" : "") + '>' + esc(m.label || monthLabel(m)) + '</option>';
-      }).join("") + '</select></label>';
-
-    var M = months.filter(function (m) { return m.key === cur; })[0];
-    h += '<div id="monthPanel">' + monthPanel(M) + '</div>';
+      }).join("") + '</select>' +
+      '<div class="pickmeta" id="monthMeta"></div></div>';
+    h += '<div id="monthPanel"></div>';
 
     host.innerHTML = h;
-    $("#monthSel", host).addEventListener("change", function () {
-      state.monthKey = this.value;
-      location.hash = "monthly/" + this.value;
-    });
+    var draw = function () {
+      var M = months.filter(function (m) { return m.key === state.monthKey; })[0];
+      $("#monthMeta", host).innerHTML = gwChips(M.gws, statusFn);
+      $("#monthPanel", host).innerHTML = monthPanel(M);
+    };
+    $("#monthSel", host).addEventListener("change", function () { state.monthKey = this.value; draw(); });
+    draw();
   }
 
   function monthPanel(M) {
     if (!M) return '';
-    var statusPill = M.complete ? '<span class="pill gold">Final</span>'
-      : M.played > 0 ? '<span class="pill live">Live · GW ' + M.played + '/' + M.total + '</span>'
-      : '<span class="pill">Upcoming</span>';
-    var h = '<div class="section-title" style="margin-top:6px"><h2>' + esc(M.name) + '</h2><div class="rule"></div>' +
-      '<span class="chip">GW ' + M.gws.join(", ") + '</span></div>';
-    h += '<div style="margin-bottom:10px">' + statusPill + '</div>';
-
-    if (!M.rows.length) { return h + '<div class="callout">No gameweeks scored yet for ' + esc(M.name) + '.</div>'; }
+    if (!M.rows.length) { return '<div class="callout">No gameweeks scored yet for this month.</div>'; }
+    var h = '';
 
     h += '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Bench</th><th class="num">Prize</th></tr></thead><tbody>';
     h += M.rows.map(function (r) {
@@ -558,36 +577,6 @@
         '<div class="note">The Last Manager Standing</div></div></div>';
     }
 
-    // Gameweek results — a single GW dropdown (Live GW first, then finished),
-    // worst first. Elimination grid now lives on the info (rules) page.
-    var gwOpts = [];
-    if (lms.live) gwOpts.push({ key: "live", label: "GW " + lms.live.gw + " · Live", week: lms.live, live: true });
-    lms.perGw.slice().reverse().forEach(function (w) {
-      gwOpts.push({ key: String(w.gw), label: "GW " + w.gw, week: w, live: false });
-    });
-    if (gwOpts.length) {
-      var curKey = (state.lmsGw && gwOpts.some(function (o) { return o.key === state.lmsGw; })) ? state.lmsGw : gwOpts[0].key;
-      state.lmsGw = curKey;
-      var byKey = function (k) { return gwOpts.filter(function (o) { return o.key === k; })[0]; };
-      h += '<div class="section-title"><h2>Gameweek results</h2><div class="rule"></div></div>';
-      h += '<label class="field"><span class="lab">Gameweek</span><select class="in" id="lmsGwSel">' +
-        gwOpts.map(function (o) {
-          return '<option value="' + o.key + '"' + (o.key === curKey ? ' selected' : '') + '>' + esc(o.label) + '</option>';
-        }).join("") + '</select></label>';
-      var cur0 = byKey(curKey);
-      h += '<div id="lmsGwPanel">' + lmsGwTable(cur0.week, { live: cur0.live }) + '</div>';
-
-      host.innerHTML = h;
-      var sel = $("#lmsGwSel", host);
-      sel.addEventListener("change", function () {
-        state.lmsGw = this.value;
-        var o = byKey(this.value);
-        $("#lmsGwPanel", host).innerHTML = lmsGwTable(o.week, { live: o.live });
-      });
-      return;
-    }
-
-    h += '<div class="callout">No gameweeks scored yet.</div>';
     host.innerHTML = h;
   }
 
@@ -661,10 +650,9 @@
         '<td class="num">' + t.w + '</td><td class="num">' + t.d + '</td><td class="num">' + t.l + '</td>' +
         '<td class="num"><b>' + t.pts + '</b></td><td class="num">' + num(t.gwPts) + '</td></tr>';
     }).join("");
-    return '<div class="card"><div class="hd"><h3>' + esc(g.name) + '</h3><span class="sub">' + g.table.length + ' managers</span></div>' +
-      '<div class="tablewrap"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th><th class="num">GW pts</th></tr></thead><tbody>' +
+    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th><th class="num">GW pts</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>' +
-      '<div class="bd"><div class="note">Top 2 → UCL knockouts · 3rd–4th → UEL knockouts. Points from H2H results (3/1/0); ties by group-stage score.</div></div></div>';
+      '<div class="note" style="margin-top:8px">' + g.table.length + ' managers · Top 2 → UCL · 3rd–4th → UEL. Points 3/1/0; ties by group-stage score.</div>';
   }
 
   function renderBracket(ds, bracket, comp) {
@@ -760,21 +748,17 @@
         }).join("") + '</select></label>' +
       '</div>';
 
+    h += '<div class="pickmeta" id="pyrMeta"></div>';
     h += '<div id="pyrPanel"></div>';
 
     host.innerHTML = h;
+    var statusFn = gwStatusFn(ds);
 
     function draw() {
       var SEA = pyr.seasons.filter(function (s) { return s.key === state.seasonKey; })[0];
       var div = SEA.divisions.filter(function (d) { return d.key === state.pyrDiv; })[0];
-      var statusPill = SEA.complete ? '<span class="pill gold">Final</span>'
-        : SEA.played > 0 ? '<span class="pill live">GW ' + SEA.played + '/' + SEA.total + '</span>'
-        : '<span class="pill">Upcoming</span>';
-      var p = '<div class="section-title" style="margin-top:8px"><h2>' + esc(div.name) + '</h2><div class="rule"></div>' +
-        '<span class="chip">' + esc(SEA.name) + ' · GW ' + SEA.gws[0] + '–' + SEA.gws[SEA.gws.length - 1] + '</span></div>';
-      p += '<div style="margin-bottom:10px">' + statusPill + '</div>';
-      p += divisionCard(div, cfg);
-      $("#pyrPanel", host).innerHTML = p;
+      $("#pyrMeta", host).innerHTML = gwChips(SEA.gws, statusFn);
+      $("#pyrPanel", host).innerHTML = divisionCard(div, cfg);
     }
     $("#pyrSeason", host).addEventListener("change", function () { state.seasonKey = this.value; draw(); });
     $("#pyrDiv", host).addEventListener("change", function () { state.pyrDiv = this.value; draw(); });
