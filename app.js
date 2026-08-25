@@ -1130,7 +1130,13 @@
 
     /* ---- money ---- */
     h += '<div class="section-title"><h2>Value</h2><div class="rule"></div></div>';
-    if (v) {
+    if (v && v.richest.value === v.poorest.value) {
+      // Before anyone has transferred, every squad is still worth the same —
+      // naming a "richest" and "leanest" here would just look broken.
+      h += '<div class="hgrid">' +
+        hcard("Squad value", mval(v.average), "identical across " + v.count + " squads", null,
+          "no squad has changed value yet") + '</div>';
+    } else if (v) {
       h += '<div class="hgrid">';
       h += hcard("Richest squad", mval(v.richest.value), v.richest.name, v.richest.id,
         mval(v.richest.bank) + " in the bank");
