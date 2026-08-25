@@ -785,13 +785,106 @@
       '<div style="font-size:18px;font-weight:800;line-height:1.15">' + esc(big) + '</div>' +
       (sub ? '<div class="note" style="margin-top:3px">' + esc(sub) + '</div>' : '') + '</div>';
   }
-  // One player chip on the pitch: shirt badge, name, live points.
-  function pp(pl) {
+  /* ---- squad pitch (FPL-style) ----------------------------------------- */
+
+  // Outfield kits: [body, sleeve, stripe?] by FPL team short name.
+  var KITS = {
+    ARS: ["#ef0107", "#ffffff"], AVL: ["#670e36", "#95bfe5"],
+    BHA: ["#0057b8", "#0057b8", "#ffffff"], BOU: ["#da291c", "#111111", "#111111"],
+    BRE: ["#e30613", "#ffffff", "#ffffff"], BUR: ["#6c1d45", "#83d3f0"],
+    CHE: ["#034694", "#034694"], COV: ["#6ecef5", "#6ecef5"],
+    CRY: ["#1b458f", "#c4122e", "#c4122e"], EVE: ["#003399", "#003399"],
+    FUL: ["#f2f2f2", "#111111"], HUL: ["#f5a12d", "#111111", "#111111"],
+    IPS: ["#3a64a3", "#ffffff"], LEE: ["#f2f2f2", "#f2f2f2"],
+    LIV: ["#c8102e", "#c8102e"], MCI: ["#6cabdd", "#6cabdd"],
+    MUN: ["#da291c", "#da291c"], NEW: ["#241f20", "#241f20", "#ffffff"],
+    NFO: ["#dd0000", "#dd0000"], SHU: ["#ee2737", "#111111", "#111111"],
+    SOU: ["#d71920", "#ffffff", "#ffffff"], SUN: ["#eb172b", "#eb172b", "#ffffff"],
+    TOT: ["#f2f2f2", "#131f49"], WHU: ["#7a263a", "#1bb1e7"],
+    WOL: ["#fdb913", "#231f20"], LEI: ["#003090", "#003090"],
+    NOR: ["#fff200", "#00a650"], IPW: ["#3a64a3", "#ffffff"]
+  };
+  var GK_KITS = [["#c8f560", "#111111"], ["#ff7ac8", "#3a1030"], ["#1f9e8f", "#0c3f3a"], ["#2b2b3a", "#8a8a99"], ["#ff9d3c", "#5a2a00"]];
+  var _jid = 0;
+
+  function kitFor(team, type) {
+    if (type === 1) { // keepers wear their own thing — stable per club
+      var s = String(team || "");
+      var n = 0; for (var i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+      return GK_KITS[n % GK_KITS.length];
+    }
+    return KITS[team] || ["#8f8fa3", "#6f6f83"];
+  }
+
+  // A little shirt: body + contrast sleeves, optional vertical stripes.
+  function jersey(team, type) {
+    var k = kitFor(team, type), body = k[0], sleeve = k[1], stripe = k[2];
+    var id = "jk" + (++_jid);
+    var shirt = "M16,3 L11,4.6 L3,11 L8.6,18.2 L12.6,14.6 L12.6,39 L31.4,39 L31.4,14.6 " +
+                "L35.4,18.2 L41,11 L33,4.6 L28,3 C26.4,6.6 17.6,6.6 16,3 Z";
+    var out = '<svg class="jsy" viewBox="0 0 44 42" aria-hidden="true">';
+    if (stripe) out += '<defs><clipPath id="' + id + '"><path d="' + shirt + '"/></clipPath></defs>';
+    out += '<path d="' + shirt + '" fill="' + body + '"/>';
+    if (stripe) {
+      out += '<g clip-path="url(#' + id + ')">' +
+        '<rect x="14.2" y="0" width="3.4" height="42" fill="' + stripe + '"/>' +
+        '<rect x="20.3" y="0" width="3.4" height="42" fill="' + stripe + '"/>' +
+        '<rect x="26.4" y="0" width="3.4" height="42" fill="' + stripe + '"/></g>';
+    }
+    out += '<path d="M11,4.6 L3,11 L8.6,18.2 L12.6,14.6 L12.6,5.6 Z" fill="' + sleeve + '"/>' +
+           '<path d="M33,4.6 L41,11 L35.4,18.2 L31.4,14.6 L31.4,5.6 Z" fill="' + sleeve + '"/>' +
+           '<path d="' + shirt + '" fill="none" stroke="rgba(0,0,0,.30)" stroke-width="1.1"/>' +
+           '</svg>';
+    return out;
+  }
+
+  // One player: shirt card with a white name bar and a points bar underneath.
+  function pp(p, showPos) {
+    var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
+    if (p.star) badge += '<i class="pb star">★</i>';
     return '<div class="pcell">' +
-      '<div class="pshirt t-' + (pl.type || 0) + '">' + (pl.cap ? '<span class="pcap">C</span>' : '') + '</div>' +
-      '<div class="pname">' + esc(pl.name) + '</div>' +
-      '<div class="ppts">' + num(pl.pts) + '</div>' +
-      '</div>';
+      (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
+      '<div class="pcard">' + badge +
+        '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
+        '<div class="pname">' + esc(p.name) + '</div>' +
+        '<div class="ppts">' + num(p.pts) + '</div>' +
+      '</div></div>';
+  }
+
+  function pitchHtml(pit) {
+    var h = '<div class="pitch"><div class="pmark">' +
+      '<span class="goal"></span><span class="box18"></span><span class="box6"></span>' +
+      '<span class="spot"></span><span class="arc"></span><span class="halfway"></span>' +
+      '<span class="circle"></span></div>';
+    h += pit.lines.map(function (ln) {
+      if (!ln.players.length) return "";
+      return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false); }).join("") + '</div>';
+    }).join("");
+    h += '</div>';
+    if (pit.bench.length) {
+      h += '<div class="pbench">' + pit.bench.map(function (p) { return pp(p, true); }).join("") + '</div>';
+    }
+    return h;
+  }
+
+  function listHtml(pit) {
+    var rows = [];
+    pit.lines.forEach(function (ln) {
+      ln.players.forEach(function (p) { rows.push([p, false]); });
+    });
+    pit.bench.forEach(function (p) { rows.push([p, true]); });
+    var h = '<div class="tablewrap"><table class="t plist"><thead><tr><th></th><th>Player</th>' +
+            '<th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
+    h += rows.map(function (r) {
+      var p = r[0], onBench = r[1];
+      var mark = p.cap ? ' <span class="pill gold">C</span>' : (p.vice ? ' <span class="pill">V</span>' : "");
+      return '<tr' + (onBench ? ' class="benchrow2"' : '') + '>' +
+        '<td class="pcol">' + esc(p.pos) + '</td>' +
+        '<td>' + esc(p.name) + mark + (onBench ? ' <span class="note">bench</span>' : '') + '</td>' +
+        '<td>' + esc(p.team) + '</td>' +
+        '<td class="num"><b>' + num(p.pts) + '</b></td></tr>';
+    }).join("");
+    return h + '</tbody></table></div>';
   }
   function renderProfile(host, ds, id) {
     if (!id) { host.innerHTML = '<div class="callout">No manager selected.</div>'; return; }
@@ -819,20 +912,25 @@
     var pit = K.managerPitch(ds, id);
     if (pit) {
       var chipName = { bboost: "Bench Boost", "3xc": "Triple Captain", freehit: "Free Hit", wildcard: "Wildcard" };
-      var status = pit.live ? '<span class="pill live">Live</span>' : '<span class="pill">Final</span>';
-      h += '<div class="section-title"><h2>Squad · ' + esc(pit.gwName) + '</h2><div class="rule"></div></div>';
-      h += '<div class="card"><div class="bd" style="padding-bottom:6px">';
-      h += '<div class="pitchhead"><div class="pitchtot">' + num(pit.total) + ' <span>pts</span></div>' +
-        '<div>' + status + (pit.chip ? ' <span class="pill gold">' + esc(chipName[pit.chip] || pit.chip) + '</span>' : '') + '</div></div>';
-      h += '<div class="pitch">';
-      h += pit.lines.map(function (ln) {
-        return '<div class="pline">' + ln.players.map(pp).join("") + '</div>';
-      }).join("");
+      h += '<div class="section-title"><h2>Squad</h2><div class="rule"></div></div>';
+      h += '<div class="card pitchcard"><div class="bd">';
+      h += '<div class="pgwline">' + esc(pit.gwName) +
+        (pit.live ? ' <span class="pill live">Live</span>' : '') +
+        (pit.chip ? ' <span class="pill gold">' + esc(chipName[pit.chip] || pit.chip) + '</span>' : '') + '</div>';
+
+      h += '<div class="pstats">';
+      h += '<div class="pstat"><div class="v">' + (pit.average === null ? "—" : num(pit.average)) + '</div><div class="l">Average</div></div>';
+      h += '<div class="pstat main"><div class="v">' + num(pit.net) + '</div><div class="l">Total Pts' +
+        (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '') + '</div></div>';
+      h += pit.highest
+        ? '<div class="pstat hi" data-entry="' + pit.highest.id + '" role="button" tabindex="0"><div class="v">' +
+            num(pit.highest.pts) + '</div><div class="l">Highest <span class="arw">›</span></div></div>'
+        : '<div class="pstat"><div class="v">—</div><div class="l">Highest</div></div>';
       h += '</div>';
-      if (pit.bench.length) {
-        h += '<div class="benchrow"><div class="benchlbl">Bench</div><div class="pline bench">' +
-          pit.bench.map(pp).join("") + '</div></div>';
-      }
+
+      h += '<div class="pseg" id="pitchSeg"><button type="button" class="on" data-mode="pitch">Pitch</button>' +
+        '<button type="button" data-mode="list">List</button></div>';
+      h += '<div id="pitchPane">' + pitchHtml(pit) + '</div>';
       h += '</div></div>';
     }
 
@@ -862,6 +960,19 @@
     $("#profBack", host).addEventListener("click", function () {
       if (state.backView) location.hash = state.backView; else location.hash = "classic";
     });
+
+    // Pitch / List toggle.
+    var seg = $("#pitchSeg", host), pane = $("#pitchPane", host);
+    if (seg && pane && pit) {
+      seg.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-mode]");
+        if (!b) return;
+        Array.prototype.forEach.call(seg.querySelectorAll("button"), function (x) {
+          x.classList.toggle("on", x === b);
+        });
+        pane.innerHTML = b.getAttribute("data-mode") === "list" ? listHtml(pit) : pitchHtml(pit);
+      });
+    }
   }
 
   /* ====================================================================== */

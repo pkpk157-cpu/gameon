@@ -143,10 +143,10 @@ async function h2hAll(id) {
         try {
           const pk = await getJSON("/entry/" + m.id + "/event/" + lg + "/picks/");
           const list = pk.picks || [];
-          // Store squad: [element, multiplier, is_captain(0/1)] in pick order.
+          // Squad: [element, multiplier, is_captain, is_vice_captain] in pick order.
           picks[m.id] = {
             c: (pk.active_chip || ""),
-            p: list.map((p) => [p.element, p.multiplier, p.is_captain ? 1 : 0])
+            p: list.map((p) => [p.element, p.multiplier, p.is_captain ? 1 : 0, p.is_vice_captain ? 1 : 0])
           };
           if (inProgress) {
             let played = 0, total = 0;

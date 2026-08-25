@@ -255,7 +255,9 @@
               var list = pk.picks || [];
               ds.picks[id] = {
                 c: (pk.active_chip || ""),
-                p: list.map(function (p) { return [p.element, p.multiplier, p.is_captain ? 1 : 0]; })
+                p: list.map(function (p) {
+                  return [p.element, p.multiplier, p.is_captain ? 1 : 0, p.is_vice_captain ? 1 : 0];
+                })
               };
               if (inProgress) {
                 var played = 0, total = 0;

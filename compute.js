@@ -522,18 +522,18 @@
     var els = ds.elements, lp = ds.livePoints || {};
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
-    function build(el, mult, isCap) {
+    function build(el, mult, isCap, isVice) {
       var meta = els[el] || ["?", 0, ""];
       var base = lp[el] || 0;
-      return { el: el, name: meta[0], type: meta[1], team: meta[2],
-               pts: base * (mult || 1), base: base, cap: !!isCap, mult: mult || 0 };
+      return { el: el, name: meta[0], type: meta[1], team: meta[2], pos: POS[meta[1]] || "",
+               pts: base * (mult || 1), base: base,
+               cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
 
     var rows = { 1: [], 2: [], 3: [], 4: [] }, bench = [], total = 0;
     sq.p.forEach(function (p) {
-      var el = p[0], mult = p[1], isCap = p[2];
-      var pl = build(el, mult, isCap);
-      if (mult > 0) {
+      var pl = build(p[0], p[1], p[2], p[3]);
+      if (pl.mult > 0) {
         (rows[pl.type] || (rows[pl.type] = [])).push(pl);
         total += pl.pts;
       } else {
@@ -541,11 +541,34 @@
       }
     });
 
+    // Star the top scorer of the XI (ties: first one wins).
+    var best = null;
+    [1, 2, 3, 4].forEach(function (t) {
+      (rows[t] || []).forEach(function (p) { if (!best || p.pts > best.pts) best = p; });
+    });
+    if (best && best.pts > 0) best.star = true;
+
     var lines = [1, 2, 3, 4].map(function (t) { return { pos: POS[t], players: rows[t] || [] }; });
-    var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +ds.pitchGw; })[0];
+    var gw = ds.pitchGw;
+    var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
     var live = gwEv ? (gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false;
-    return { gw: ds.pitchGw, gwName: gwEv ? gwEv.name : ("GW " + ds.pitchGw), live: live,
-             chip: sq.c || "", lines: lines, bench: bench, total: total };
+
+    // League context for this gameweek: average and the best score.
+    var hrow = (ds.history[id] || {})[gw] || null;
+    var hits = hrow ? (hrow.h || 0) : 0;
+    var net = hrow && typeof hrow.p === "number" ? hrow.p : (total - hits);
+    var sum = 0, n = 0, top = null;
+    (ds.managers || []).forEach(function (m) {
+      var r = (ds.history[m.id] || {})[gw];
+      if (!r || typeof r.p !== "number") return;
+      sum += r.p; n++;
+      if (!top || r.p > top.pts) top = { id: m.id, name: m.entryName, pts: r.p };
+    });
+
+    return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live,
+             chip: sq.c || "", lines: lines, bench: bench,
+             total: total, hits: hits, net: net,
+             average: n ? Math.round(sum / n) : null, highest: top };
   };
 
   window.GO_COMPUTE = C;
