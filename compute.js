@@ -526,6 +526,56 @@
     return (+gw === +ds.pitchGw) ? ds.livePoints : {};
   }
 
+  /* Effective ownership across THIS league for one gameweek: the summed
+     multiplier a player carries over every squad, as a percentage of squads.
+     Started by everyone = 100%, captained by everyone = 200%, benched = 0.
+     Also yields the league's average XI ownership and squad price, so a
+     single squad can be read against the field. Scanning every squad is
+     cheap but not free, so the last result is kept. */
+  var _eo = { key: null, val: null };
+  function eoTable(ds, gw) {
+    if (!ds) return null;
+    var key = (ds.updatedAt || "") + "|" + gw;
+    if (_eo.key === key) return _eo.val;
+    var pk = picksAt(ds, gw);
+    if (!pk) return null;
+    var els = ds.elements || {};
+    var ids = Object.keys(pk), n = ids.length;
+    if (!n) return null;
+
+    var mult = {};
+    ids.forEach(function (mid) {
+      (pk[mid].p || []).forEach(function (t) {
+        if (t[1] > 0) mult[t[0]] = (mult[t[0]] || 0) + t[1];
+      });
+    });
+    var eo = {};
+    Object.keys(mult).forEach(function (el) {
+      eo[el] = Math.round((mult[el] / n) * 1000) / 10;
+    });
+
+    var eoSum = 0, valSum = 0, counted = 0;
+    ids.forEach(function (mid) {
+      var picks = pk[mid].p || [];
+      var xi = 0, xiEo = 0, val = 0;
+      picks.forEach(function (t) {
+        var m = els[t[0]];
+        val += (m && m[3]) || 0;
+        if (t[1] > 0) { xi++; xiEo += eo[t[0]] || 0; }
+      });
+      if (!xi) return;
+      eoSum += xiEo / xi; valSum += val; counted++;
+    });
+
+    var out = {
+      eo: eo, managers: n,
+      leagueAvgEo: counted ? Math.round((eoSum / counted) * 10) / 10 : 0,
+      leagueAvgValue: counted ? Math.round(valSum / counted) : 0
+    };
+    _eo = { key: key, val: out };
+    return out;
+  }
+
   // Gameweeks we hold squads for, oldest first.
   C.squadGws = function (ds) {
     if (!ds || !ds.picks) return [];
@@ -547,11 +597,13 @@
     var els = ds.elements, lp = liveAt(ds, gw);
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
+    var eot = eoTable(ds, gw);
     function build(el, mult, isCap, isVice) {
-      var meta = els[el] || ["?", 0, ""];
+      var meta = els[el] || ["?", 0, "", 0, 0];
       var base = lp[el] || 0;
       return { el: el, name: meta[0], type: meta[1], team: meta[2], pos: POS[meta[1]] || "",
                pts: base * (mult || 1), base: base,
+               price: meta[3] || 0, eo: (eot && eot.eo[el]) || 0,
                cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
 
@@ -589,10 +641,29 @@
       if (!top || r.p > top.pts) top = { id: m.id, name: m.entryName, pts: r.p };
     });
 
+    // Ownership and price for the squad as a whole. Effective ownership is
+    // averaged over the XI (the bench cannot score), while squad value counts
+    // all fifteen at today's prices.
+    var xi = [], everyone = bench.slice();
+    lines.forEach(function (l) { l.players.forEach(function (p) { xi.push(p); everyone.push(p); }); });
+    var eoSum = 0, valSum = 0, topEo = null, topPrice = null;
+    xi.forEach(function (p) {
+      eoSum += p.eo;
+      if (topEo === null || p.eo > topEo) topEo = p.eo;
+    });
+    everyone.forEach(function (p) {
+      valSum += p.price;
+      if (topPrice === null || p.price > topPrice) topPrice = p.price;
+    });
+
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live,
              chip: sq.c || "", lines: lines, bench: bench,
              total: total, hits: hits, net: net,
-             average: n ? Math.round(sum / n) : null, highest: top };
+             average: n ? Math.round(sum / n) : null, highest: top,
+             avgEo: xi.length ? Math.round((eoSum / xi.length) * 10) / 10 : 0,
+             topEo: topEo || 0, squadValue: valSum, topPrice: topPrice || 0,
+             leagueAvgEo: eot ? eot.leagueAvgEo : 0,
+             leagueAvgValue: eot ? eot.leagueAvgValue : 0 };
   };
 
   // Side-by-side comparison of two managers for a gameweek, plus season totals

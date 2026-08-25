@@ -845,31 +845,39 @@
     return out;
   }
 
-  // One player: shirt card with a white name bar and a points bar underneath.
-  function pp(p, showPos) {
+  // What each player card shows: gameweek points, effective ownership, price.
+  var METRICS = { pts: "Points", eo: "Ownership", val: "Value" };
+  function metricOf(p, metric) {
+    if (metric === "eo") return p.eo + "%";
+    if (metric === "val") return "£" + (Math.round(p.price) / 10).toFixed(1) + "m";
+    return num(p.pts);
+  }
+
+  // One player: shirt card with a white name bar and a value bar underneath.
+  function pp(p, showPos, metric) {
     var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
-    if (p.star) badge += '<i class="pb star">★</i>';
+    if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star">★</i>';
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
       '<div class="pcard">' + badge +
         '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
         '<div class="pname">' + esc(p.name) + '</div>' +
-        '<div class="ppts">' + num(p.pts) + '</div>' +
+        '<div class="ppts' + (metric && metric !== "pts" ? ' alt' : '') + '">' + esc(metricOf(p, metric)) + '</div>' +
       '</div></div>';
   }
 
-  function pitchHtml(pit) {
+  function pitchHtml(pit, metric) {
     var h = '<div class="pitch"><div class="pmark">' +
       '<span class="goal"></span><span class="box18"></span><span class="box6"></span>' +
       '<span class="spot"></span><span class="arc"></span><span class="halfway"></span>' +
       '<span class="circle"></span></div>';
     h += pit.lines.map(function (ln) {
       if (!ln.players.length) return "";
-      return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false); }).join("") + '</div>';
+      return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false, metric); }).join("") + '</div>';
     }).join("");
     h += '</div>';
     if (pit.bench.length) {
-      h += '<div class="pbench">' + pit.bench.map(function (p) { return pp(p, true); }).join("") + '</div>';
+      h += '<div class="pbench">' + pit.bench.map(function (p) { return pp(p, true, metric); }).join("") + '</div>';
     }
     return h;
   }
@@ -878,7 +886,36 @@
 
   // The whole squad block: gameweek picker, the three stats, Pitch/List and the
   // squad itself. Re-rendered in place whenever the gameweek or mode changes.
-  function mountPitch(box, ds, id, gw, mode) {
+  // The three stats above a squad change with the metric being shown.
+  function pitchStats(pit, metric) {
+    var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null;
+    if (metric === "eo") {
+      leftLabel = "League avg"; left = pit.leagueAvgEo + "%";
+      midLabel = "Average EO"; mid = pit.avgEo + "%";
+      rightLabel = "Most owned"; right = pit.topEo + "%";
+    } else if (metric === "val") {
+      leftLabel = "League avg"; left = mval(pit.leagueAvgValue);
+      midLabel = "Squad value"; mid = mval(pit.squadValue);
+      rightLabel = "Priciest"; right = mval(pit.topPrice);
+    } else {
+      leftLabel = "Average"; left = pit.average === null ? "—" : num(pit.average);
+      midLabel = "Total Pts" + (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '');
+      mid = num(pit.net);
+      rightLabel = 'Highest <span class="arw">›</span>';
+      right = pit.highest ? num(pit.highest.pts) : "—";
+      hiId = pit.highest ? pit.highest.id : null;
+    }
+    var rightOpen = hiId
+      ? '<div class="pstat hi" data-entry="' + hiId + '" role="button" tabindex="0">'
+      : '<div class="pstat">';
+    return '<div class="pstats">' +
+      '<div class="pstat"><div class="v">' + esc(left) + '</div><div class="l">' + leftLabel + '</div></div>' +
+      '<div class="pstat main"><div class="v">' + esc(mid) + '</div><div class="l">' + midLabel + '</div></div>' +
+      rightOpen + '<div class="v">' + esc(right) + '</div><div class="l">' + rightLabel + '</div></div>' +
+      '</div>';
+  }
+
+  function mountPitch(box, ds, id, gw, mode, metric) {
     var gws = K.squadGws(ds);
     if (!gws.length) return;
     gw = gw || gws[gws.length - 1];
@@ -889,7 +926,8 @@
       return;
     }
     mode = mode === "list" ? "list" : "pitch";
-    state.pitchGw = +gw; state.pitchMode = mode; // remember while browsing
+    if (!METRICS[metric]) metric = "pts";
+    state.pitchGw = +gw; state.pitchMode = mode; state.pitchMetric = metric;
 
     var h = '<div class="pgwline">';
     h += '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
@@ -899,46 +937,55 @@
       (pit.chip ? ' <span class="pill gold">' + esc(CHIP_NAME[pit.chip] || pit.chip) + '</span>' : '');
     h += '</div>';
 
-    h += '<div class="pstats">';
-    h += '<div class="pstat"><div class="v">' + (pit.average === null ? "—" : num(pit.average)) + '</div><div class="l">Average</div></div>';
-    h += '<div class="pstat main"><div class="v">' + num(pit.net) + '</div><div class="l">Total Pts' +
-      (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '') + '</div></div>';
-    h += pit.highest
-      ? '<div class="pstat hi" data-entry="' + pit.highest.id + '" role="button" tabindex="0"><div class="v">' +
-          num(pit.highest.pts) + '</div><div class="l">Highest <span class="arw">›</span></div></div>'
-      : '<div class="pstat"><div class="v">—</div><div class="l">Highest</div></div>';
-    h += '</div>';
+    h += pitchStats(pit, metric);
 
+    h += '<div class="psegrow">';
     h += '<div class="pseg"><button type="button"' + (mode === "pitch" ? ' class="on"' : '') + ' data-mode="pitch">Pitch</button>' +
       '<button type="button"' + (mode === "list" ? ' class="on"' : '') + ' data-mode="list">List</button></div>';
-    h += mode === "list" ? listHtml(pit) : pitchHtml(pit);
+    h += '<div class="pseg sm">' + Object.keys(METRICS).map(function (k) {
+      return '<button type="button"' + (metric === k ? ' class="on"' : '') + ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
+    }).join("") + '</div>';
+    h += '</div>';
+
+    h += mode === "list" ? listHtml(pit, metric) : pitchHtml(pit, metric);
     box.innerHTML = h;
 
     $("#pitchGwSel", box).addEventListener("change", function () {
-      mountPitch(box, ds, id, +this.value, mode);
+      mountPitch(box, ds, id, +this.value, mode, metric);
     });
-    $(".pseg", box).addEventListener("click", function (e) {
-      var b = e.target.closest("button[data-mode]");
-      if (b) mountPitch(box, ds, id, gw, b.getAttribute("data-mode"));
+    $(".psegrow", box).addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-mode], button[data-metric]");
+      if (!b) return;
+      if (b.hasAttribute("data-mode")) mountPitch(box, ds, id, gw, b.getAttribute("data-mode"), metric);
+      else mountPitch(box, ds, id, gw, mode, b.getAttribute("data-metric"));
     });
   }
 
-  function listHtml(pit) {
+  function listHtml(pit, metric) {
     var rows = [];
     pit.lines.forEach(function (ln) {
       ln.players.forEach(function (p) { rows.push([p, false]); });
     });
     pit.bench.forEach(function (p) { rows.push([p, true]); });
+    // The list always carries all three numbers; the toggle just picks which
+    // one is emphasised.
     var h = '<div class="tablewrap"><table class="t plist"><thead><tr><th></th><th>Player</th>' +
-            '<th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
+            '<th>Team</th><th class="num">Pts</th><th class="num">EO</th><th class="num">Price</th>' +
+            '</tr></thead><tbody>';
     h += rows.map(function (r) {
       var p = r[0], onBench = r[1];
       var mark = p.cap ? ' <span class="pill gold">C</span>' : (p.vice ? ' <span class="pill">V</span>' : "");
+      function cell(kind, val) {
+        return '<td class="num' + (metric === kind || (!metric && kind === "pts") ? ' lead' : '') + '">' + esc(val) + '</td>';
+      }
       return '<tr' + (onBench ? ' class="benchrow2"' : '') + '>' +
         '<td class="pcol">' + esc(p.pos) + '</td>' +
         '<td>' + esc(p.name) + mark + (onBench ? ' <span class="note">bench</span>' : '') + '</td>' +
         '<td>' + esc(p.team) + '</td>' +
-        '<td class="num"><b>' + num(p.pts) + '</b></td></tr>';
+        cell("pts", num(p.pts)) +
+        cell("eo", p.eo + "%") +
+        cell("val", "£" + (Math.round(p.price) / 10).toFixed(1) + "m") +
+        '</tr>';
     }).join("");
     return h + '</tbody></table></div>';
   }
@@ -999,7 +1046,7 @@
     });
 
     var box = $("#pitchBox", host);
-    if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode);
+    if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode, state.pitchMetric);
   }
 
   /* ====================================================================== */
@@ -1288,9 +1335,13 @@
         '<div class="sc' + (b.gwPts > a.gwPts ? ' win' : '') + '">' + (b.gwPts === null ? "—" : num(b.gwPts)) + '</div></div>' +
       '</div>';
 
+    var cm = METRICS[state.cmpMetric] ? state.cmpMetric : "pts";
+    h += '<div class="psegrow"><div class="pseg sm" id="cmpMetric">' + Object.keys(METRICS).map(function (k) {
+      return '<button type="button"' + (cm === k ? ' class="on"' : '') + ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
+    }).join("") + '</div></div>';
     h += '<div class="cmppitch">' +
-      '<div class="col">' + (a.pitch ? pitchHtml(a.pitch) : '<div class="callout">No squad</div>') + '</div>' +
-      '<div class="col">' + (b.pitch ? pitchHtml(b.pitch) : '<div class="callout">No squad</div>') + '</div>' +
+      '<div class="col">' + (a.pitch ? pitchHtml(a.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
+      '<div class="col">' + (b.pitch ? pitchHtml(b.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
       '</div></div></div>';
 
     h += '<div class="section-title"><h2>Compared</h2><div class="rule"></div></div>';
@@ -1327,6 +1378,10 @@
     box.innerHTML = h;
     $("#cmpGwSel", box).addEventListener("change", function () {
       state.cmpGw = +this.value; drawCompare(ds);
+    });
+    $("#cmpMetric", box).addEventListener("click", function (e) {
+      var t = e.target.closest("button[data-metric]");
+      if (t) { state.cmpMetric = t.getAttribute("data-metric"); drawCompare(ds); }
     });
   }
 

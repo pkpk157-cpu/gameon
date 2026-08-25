@@ -576,3 +576,15 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
 .hrow .hp { font-size:12.5px; font-weight:800; font-variant-numeric:tabular-nums; }
 .chiprow { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .section-title .pill { flex:none; }
+
+/* ---- metric toggle (points / ownership / value) ------------------------ */
+.psegrow { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center; margin-bottom:12px; }
+.psegrow .pseg { margin:0; }
+.pseg.sm button { font-size:11.5px; padding:5px 13px; }
+/* the value bar switches colour away from the points purple */
+.ppts.alt { background:#0d5c63; }
+.pbench .ppts.alt { background:#0d5c63; }
+/* list mode: the chosen metric is the emphasised column */
+table.t.plist td.num { color:var(--ink-faint); font-weight:600; }
+table.t.plist td.num.lead { color:var(--ink); font-weight:800; }
+table.t.plist th.num { font-size:10.5px; }
