@@ -1237,7 +1237,8 @@
         return { id: x.id, name: x.name, tag: x.bestRank.season, val: num(x.bestRank.rank) };
       }, "Overall FPL rank.");
       h += hlist("Highest season score", pa.topScores, function (x) {
-        return { id: x.id, name: x.name, tag: x.bestPts.season, val: num(x.bestPts.total) };
+        return { id: x.id, name: x.name, val: num(x.bestPts.total),
+                 tag: x.bestPts.season + (x.bestPts.rank ? " · rank " + num(x.bestPts.rank) : "") };
       });
       h += hlist("Most seasons played", pa.veterans, function (x) {
         return { id: x.id, name: x.name, tag: "", val: num(x.seasons) };
@@ -1271,10 +1272,22 @@
       '<td class="cmid">' + esc(label) + (hint ? '<div class="note">' + esc(hint) + '</div>' : '') + '</td>' +
       cmpCell(b, bw) + '</tr>';
   }
-  function diffChip(p) {
-    return '<div class="dchip"><span class="dn">' + esc(p.name) + '</span>' +
-      '<span class="dt">' + esc(p.team) + '</span>' +
-      '<span class="dp">' + num(p.pts) + '</span></div>';
+  // One player in the side-by-side squad table.
+  function sqCell(p, metric) {
+    if (!p) return '<td class="sqp empty"><div class="sqin"></div></td>';
+    var mark = p.cap ? '<i class="pb cap sq">C</i>' : (p.vice ? '<i class="pb vice sq">V</i>' : "");
+    // The flex row lives on an inner div: making the cell itself a flex
+    // container would drop it out of the table and stack the two columns.
+    return '<td class="sqp' + (p.benched ? ' benched' : '') + '"><div class="sqin">' +
+      '<span class="sq-pos">' + esc(p.pos) + '</span>' +
+      '<span class="sq-nm">' + esc(p.name) + mark + '</span>' +
+      '<span class="sq-v">' + esc(metricOf(p, metric)) + '</span></div></td>';
+  }
+  // A past season for one manager: rank on top, points beneath.
+  function seasonCell(s) {
+    if (!s) return '<td class="num"><span class="txt">—</span></td>';
+    return '<td class="num"><div class="sr">' + (s.rank ? num(s.rank) : "—") + '</div>' +
+      '<div class="sp">' + (typeof s.total === "number" ? num(s.total) + " pts" : "") + '</div></td>';
   }
 
   function renderCompare(host, ds) {
@@ -1339,40 +1352,75 @@
     h += '<div class="psegrow"><div class="pseg sm" id="cmpMetric">' + Object.keys(METRICS).map(function (k) {
       return '<button type="button"' + (cm === k ? ' class="on"' : '') + ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
     }).join("") + '</div></div>';
+    function chipTag(side) {
+      return side.pitch && side.pitch.chip
+        ? '<div class="colchip"><span class="pill gold">' + esc(CHIP_NAME[side.pitch.chip] || side.pitch.chip) + '</span></div>'
+        : '<div class="colchip"></div>';
+    }
     h += '<div class="cmppitch">' +
-      '<div class="col">' + (a.pitch ? pitchHtml(a.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
-      '<div class="col">' + (b.pitch ? pitchHtml(b.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
+      '<div class="col">' + chipTag(a) + (a.pitch ? pitchHtml(a.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
+      '<div class="col">' + chipTag(b) + (b.pitch ? pitchHtml(b.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
       '</div></div></div>';
 
-    h += '<div class="section-title"><h2>Compared</h2><div class="rule"></div></div>';
+    /* ---- this season ---- */
+    h += '<div class="section-title"><h2>This season</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="tablewrap"><table class="t cmptable"><thead><tr>' +
       '<th class="num">' + esc(a.name) + '</th><th class="cmid"></th><th class="num">' + esc(b.name) + '</th>' +
       '</tr></thead><tbody>';
-    h += cmpRow("GW" + R.gw + " points", a.gwPts, b.gwPts);
     h += cmpRow("Season total", a.total, b.total);
     h += cmpRow("League position", a.rank || null, b.rank || null, "", true);
     h += cmpRow("Gameweeks won", R.record.w, R.record.l, R.record.d ? (R.record.d + " drawn") : "");
     h += cmpRow("Best gameweek", a.best ? a.best.p : null, b.best ? b.best.p : null,
       (a.best && b.best) ? ("GW" + a.best.gw + " vs GW" + b.best.gw) : "");
-    h += cmpRow("Points hits (season)", a.hits, b.hits, "lower is better", true);
+    h += cmpRow("Points hits", a.hits, b.hits, "lower is better", true);
     h += cmpRow("Points on bench", a.bench, b.bench, "lower is better", true);
+    h += cmpRow("GW" + R.gw + " points", a.gwPts, b.gwPts);
     h += cmpRow("GW" + R.gw + " hit", a.gwHits, b.gwHits, "", true);
     var ac = a.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
     var bc = b.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
     h += cmpRow("Chips played", ac || "none", bc || "none");
     h += '</tbody></table></div></div>';
 
-    if (R.aOnly.length || R.bOnly.length) {
-      h += '<div class="section-title"><h2>Differentials · GW' + R.gw + '</h2><div class="rule"></div></div>';
+    /* ---- all fifteen, shared players on the same row ---- */
+    if (R.squadRows.length) {
+      h += '<div class="section-title"><h2>Squads · GW' + R.gw + '</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="bd">';
       h += '<div class="note" style="margin-bottom:10px">' + R.shared.length + ' player' +
-        (R.shared.length === 1 ? '' : 's') + ' in common.</div>';
-      h += '<div class="diffgrid">';
-      h += '<div><div class="lab-sm">' + esc(a.name) + ' only</div>' +
-        (R.aOnly.length ? R.aOnly.map(diffChip).join("") : '<div class="note">—</div>') + '</div>';
-      h += '<div><div class="lab-sm">' + esc(b.name) + ' only</div>' +
-        (R.bOnly.length ? R.bOnly.map(diffChip).join("") : '<div class="note">—</div>') + '</div>';
-      h += '</div></div></div>';
+        (R.shared.length === 1 ? '' : 's') + ' in common, highlighted.</div>';
+      h += '<table class="t sqtable"><tbody>';
+      h += R.squadRows.map(function (r) {
+        return '<tr' + (r.shared ? ' class="same"' : '') + '>' +
+          sqCell(r.a, cm) + sqCell(r.b, cm) + '</tr>';
+      }).join("");
+      h += '</tbody></table></div></div>';
+    }
+
+    /* ---- past seasons ---- */
+    h += '<div class="section-title"><h2>Hall of fame</h2><div class="rule"></div></div>';
+    if (a.seasonCount || b.seasonCount) {
+      h += '<div class="card"><div class="tablewrap"><table class="t cmptable"><thead><tr>' +
+        '<th class="num">' + esc(a.name) + '</th><th class="cmid"></th><th class="num">' + esc(b.name) + '</th>' +
+        '</tr></thead><tbody>';
+      h += cmpRow("Seasons played", a.seasonCount, b.seasonCount);
+      h += cmpRow("Best finish", a.bestRank ? a.bestRank.rank : null, b.bestRank ? b.bestRank.rank : null,
+        "overall FPL rank · lower is better", true);
+      h += cmpRow("Best season", a.bestPts ? a.bestPts.total : null, b.bestPts ? b.bestPts.total : null,
+        (a.bestPts && b.bestPts) ? (a.bestPts.season + " vs " + b.bestPts.season) : "");
+      h += cmpRow("Average season", a.avgSeason, b.avgSeason, "points per season");
+      h += cmpRow("Career points", a.career || null, b.career || null);
+      h += '</tbody></table></div>';
+
+      // Season by season: rank and points for each.
+      h += '<div class="tablewrap"><table class="t cmptable seasons"><thead><tr>' +
+        '<th class="num">Rank · Pts</th><th class="cmid">Season</th><th class="num">Rank · Pts</th>' +
+        '</tr></thead><tbody>';
+      h += R.seasonRows.map(function (s) {
+        return '<tr>' + seasonCell(s.a) +
+          '<td class="cmid">' + esc(s.season) + '</td>' + seasonCell(s.b) + '</tr>';
+      }).join("");
+      h += '</tbody></table></div></div>';
+    } else {
+      h += '<div class="callout">Neither manager has played a previous FPL season.</div>';
     }
 
     box.innerHTML = h;

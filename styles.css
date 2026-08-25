@@ -588,3 +588,27 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
 table.t.plist td.num { color:var(--ink-faint); font-weight:600; }
 table.t.plist td.num.lead { color:var(--ink); font-weight:800; }
 table.t.plist th.num { font-size:10.5px; }
+
+/* ---- head to head: chip tag above each squad --------------------------- */
+.cmppitch .colchip { min-height:22px; text-align:center; margin-bottom:4px; }
+
+/* ---- head to head: all fifteen side by side ---------------------------- */
+table.t.sqtable { width:100%; table-layout:fixed; }
+table.t.sqtable td { padding:0; border-bottom:1px solid var(--line); white-space:normal; }
+td.sqp { padding:0; width:50%; vertical-align:middle; }
+.sqin { display:flex; align-items:center; gap:6px; padding:6px 8px; min-height:34px; }
+td.sqp.empty { background:repeating-linear-gradient(135deg, transparent 0 6px, var(--chip) 6px 12px); }
+td.sqp .sq-pos { flex:none; width:26px; font-size:9px; font-weight:800; color:var(--ink-faint); letter-spacing:.3px; }
+td.sqp .sq-nm { flex:1; min-width:0; font-size:11.5px; font-weight:700;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+td.sqp .sq-v { flex:none; font-size:11.5px; font-weight:800; font-variant-numeric:tabular-nums; }
+td.sqp.benched .sq-nm, td.sqp.benched .sq-v { opacity:.55; }
+.pb.sq { position:static; display:inline-block; margin-left:4px; vertical-align:middle;
+  width:13px; height:13px; line-height:13px; font-size:8px; box-shadow:none; }
+table.t.sqtable tr.same td { background:color-mix(in srgb, var(--accent) 11%, transparent); }
+table.t.sqtable tr.same td.sqp .sq-nm { color:var(--ink); }
+
+/* ---- head to head: season by season ------------------------------------ */
+table.t.cmptable.seasons td.num { font-size:13px; }
+table.t.cmptable.seasons .sr { font-weight:800; }
+table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--ink-faint); }

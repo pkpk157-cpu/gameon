@@ -607,22 +607,21 @@
                cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
 
-    var rows = { 1: [], 2: [], 3: [], 4: [] }, bench = [], total = 0;
-    sq.p.forEach(function (p) {
+    // Picks arrive in position order: the first eleven are the XI, the rest
+    // the bench. Multiplier decides scoring, not placement — under Bench Boost
+    // the bench scores too but still belongs on the bench.
+    var rows = { 1: [], 2: [], 3: [], 4: [] }, bench = [], total = 0, scoring = [];
+    sq.p.forEach(function (p, i) {
       var pl = build(p[0], p[1], p[2], p[3]);
-      if (pl.mult > 0) {
-        (rows[pl.type] || (rows[pl.type] = [])).push(pl);
-        total += pl.pts;
-      } else {
-        bench.push(pl);
-      }
+      pl.benched = i >= 11;
+      if (pl.benched) bench.push(pl);
+      else (rows[pl.type] || (rows[pl.type] = [])).push(pl);
+      if (pl.mult > 0) { total += pl.base * pl.mult; scoring.push(pl); }
     });
 
-    // Star the top scorer of the XI (ties: first one wins).
+    // Star the squad's top scorer (ties: first one wins).
     var best = null;
-    [1, 2, 3, 4].forEach(function (t) {
-      (rows[t] || []).forEach(function (p) { if (!best || p.pts > best.pts) best = p; });
-    });
+    scoring.forEach(function (p) { if (!best || p.pts > best.pts) best = p; });
     if (best && best.pts > 0) best.star = true;
 
     var lines = [1, 2, 3, 4].map(function (t) { return { pos: POS[t], players: rows[t] || [] }; });
@@ -644,10 +643,12 @@
     // Ownership and price for the squad as a whole. Effective ownership is
     // averaged over the XI (the bench cannot score), while squad value counts
     // all fifteen at today's prices.
-    var xi = [], everyone = bench.slice();
-    lines.forEach(function (l) { l.players.forEach(function (p) { xi.push(p); everyone.push(p); }); });
+    var everyone = bench.slice();
+    lines.forEach(function (l) { l.players.forEach(function (p) { everyone.push(p); }); });
     var eoSum = 0, valSum = 0, topEo = null, topPrice = null;
-    xi.forEach(function (p) {
+    // Averaged over the players who actually count this week — which under
+    // Bench Boost is all fifteen.
+    scoring.forEach(function (p) {
       eoSum += p.eo;
       if (topEo === null || p.eo > topEo) topEo = p.eo;
     });
@@ -660,7 +661,7 @@
              chip: sq.c || "", lines: lines, bench: bench,
              total: total, hits: hits, net: net,
              average: n ? Math.round(sum / n) : null, highest: top,
-             avgEo: xi.length ? Math.round((eoSum / xi.length) * 10) / 10 : 0,
+             avgEo: scoring.length ? Math.round((eoSum / scoring.length) * 10) / 10 : 0,
              topEo: topEo || 0, squadValue: valSum, topPrice: topPrice || 0,
              leagueAvgEo: eot ? eot.leagueAvgEo : 0,
              leagueAvgValue: eot ? eot.leagueAvgValue : 0 };
@@ -697,13 +698,28 @@
       var row = (hist[gw] || null);
       var last = null;
       played.forEach(function (g) { if (hist[g] && typeof hist[g].t === "number") last = hist[g].t; });
+
+      // Past FPL seasons, for the all-time comparison.
+      var seasons = ((ds.pastSeasons && ds.pastSeasons[id]) || []).slice();
+      var pBestRank = null, pBestPts = null, career = 0;
+      seasons.forEach(function (s) {
+        if (s.rank && (pBestRank === null || s.rank < pBestRank.rank)) pBestRank = s;
+        if (typeof s.total === "number") {
+          career += s.total;
+          if (pBestPts === null || s.total > pBestPts.total) pBestPts = s;
+        }
+      });
+
       return {
         id: id, name: nm(mm, id), player: pl(mm, id),
         pitch: C.managerPitch(ds, id, gw),
         gwPts: row && typeof row.p === "number" ? row.p : null,
         gwHits: row ? (row.h || 0) : 0,
         gwBench: row ? (row.b || 0) : 0,
-        total: last, hits: hits, bench: bench, best: best, worst: worst, chips: chips
+        total: last, hits: hits, bench: bench, best: best, worst: worst, chips: chips,
+        seasons: seasons, seasonCount: seasons.length,
+        bestRank: pBestRank, bestPts: pBestPts, career: career,
+        avgSeason: seasons.length ? Math.round(career / seasons.length) : null
       };
     }
 
@@ -737,10 +753,33 @@
     Object.keys(sa).forEach(function (k) { (sb[k] ? shared : aOnly).push(sa[k]); });
     Object.keys(sb).forEach(function (k) { if (!sa[k]) bOnly.push(sb[k]); });
     function byPts(x, y) { return y.pts - x.pts; }
+    // Position first, then points — so the two columns read like team sheets.
+    function bySheet(x, y) { return (x.type - y.type) || (y.pts - x.pts); }
+    shared.sort(bySheet); aOnly.sort(bySheet); bOnly.sort(bySheet);
+
+    // Every player, with the ones both managers own on a shared row.
+    var squadRows = shared.map(function (p) {
+      return { a: p, b: sb[p.el], shared: true };
+    });
+    var most = Math.max(aOnly.length, bOnly.length);
+    for (var i = 0; i < most; i++) {
+      squadRows.push({ a: aOnly[i] || null, b: bOnly[i] || null, shared: false });
+    }
+
+    // Past seasons either manager played, newest first.
+    var seen = {};
+    A.seasons.concat(B.seasons).forEach(function (s) { seen[s.season] = true; });
+    var seasonRows = Object.keys(seen).sort().reverse().map(function (name) {
+      function find(list) {
+        return list.filter(function (s) { return s.season === name; })[0] || null;
+      }
+      return { season: name, a: find(A.seasons), b: find(B.seasons) };
+    });
 
     var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), a: A, b: B, record: rec,
-             shared: shared.sort(byPts), aOnly: aOnly.sort(byPts), bOnly: bOnly.sort(byPts) };
+             shared: shared, aOnly: aOnly, bOnly: bOnly,
+             squadRows: squadRows, seasonRows: seasonRows };
   };
 
   /* ---- league stats & highlights ---------------------------------------
@@ -890,8 +929,8 @@
         if (!list.length) return;
         var bestRank = null, bestPts = null;
         list.forEach(function (s) {
-          if (s.rank && (bestRank === null || s.rank < bestRank.rank)) bestRank = { rank: s.rank, season: s.season };
-          if (typeof s.total === "number" && (bestPts === null || s.total > bestPts.total)) bestPts = { total: s.total, season: s.season };
+          if (s.rank && (bestRank === null || s.rank < bestRank.rank)) bestRank = { rank: s.rank, season: s.season, total: s.total };
+          if (typeof s.total === "number" && (bestPts === null || s.total > bestPts.total)) bestPts = { total: s.total, season: s.season, rank: s.rank };
         });
         pr.push({ id: +id, name: nm(mm, +id), seasons: list.length, bestRank: bestRank, bestPts: bestPts });
       });
