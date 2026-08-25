@@ -612,3 +612,40 @@ table.t.sqtable tr.same td.sqp .sq-nm { color:var(--ink); }
 table.t.cmptable.seasons td.num { font-size:13px; }
 table.t.cmptable.seasons .sr { font-weight:800; }
 table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--ink-faint); }
+
+/* ---- top bar: back arrow + team/manager subtitle ----------------------- */
+.backbtn { flex:none; width:32px; height:32px; padding:0; border-radius:50%; cursor:pointer;
+  border:1px solid var(--glass-border); background:var(--glass-2); color:var(--ink);
+  display:grid; place-items:center; }
+.backbtn::before { content:""; width:9px; height:9px; margin-left:3px;
+  border-left:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(45deg); }
+.backbtn:hover { border-color:var(--accent); color:var(--accent); }
+.barwrap { min-width:0; }
+.barsub { font-size:11.5px; font-weight:600; color:var(--ink-faint); line-height:1.2; margin-top:1px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.topbar .bartitle { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ---- profile: compact competition cards ------------------------------- */
+.youline { margin-bottom:2px; }
+.pcards { display:grid; grid-template-columns:repeat(auto-fit, minmax(112px, 1fr)); gap:8px; margin-bottom:4px; }
+.pc { padding:9px 10px; border-radius:var(--radius-xs);
+  background:var(--glass); border:1px solid var(--glass-border);
+  box-shadow:inset 0 1px 0 var(--glass-hi); }
+.pc .pcl { font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--ink-faint); }
+.pc .pcv { font-size:17px; font-weight:800; line-height:1.15; margin:2px 0 1px; font-variant-numeric:tabular-nums; }
+.pc .pcs { font-size:10px; color:var(--ink-faint); line-height:1.3;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ---- profile: the four chips ------------------------------------------ */
+.chipgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(112px, 1fr)); gap:8px; }
+.chipcard { padding:9px 10px; border-radius:var(--radius-xs); text-align:center;
+  border:1px dashed var(--line-strong); color:var(--ink-faint); background:var(--chip); }
+.chipcard .cn { font-size:11px; font-weight:700; line-height:1.2; }
+.chipcard .cg { font-size:10.5px; font-weight:700; margin-top:2px; }
+.chipcard.used { border-style:solid; background:color-mix(in srgb, var(--accent) 13%, transparent);
+  border-color:color-mix(in srgb, var(--accent) 45%, transparent); color:var(--ink); }
+.chipcard.used .cg { color:var(--accent); }
+
+/* ---- head to head: type-ahead manager fields -------------------------- */
+.mgrin { width:100%; }
+.mgrin.bad { border-color:var(--bad); }

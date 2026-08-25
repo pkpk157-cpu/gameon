@@ -576,6 +576,32 @@
     return out;
   }
 
+  // Every chip, with the gameweeks a manager played it. Prefers the history's
+  // own chip record; older datasets fall back to scanning stored squads.
+  var CHIP_TYPES = [
+    { key: "wildcard", label: "Wildcard" },
+    { key: "bboost", label: "Bench Boost" },
+    { key: "3xc", label: "Triple Captain" },
+    { key: "freehit", label: "Free Hit" }
+  ];
+  C.managerChips = function (ds, id) {
+    id = +id;
+    var used = {};
+    var rec = ds && ds.chips && ds.chips[id];
+    if (rec && rec.length) {
+      rec.forEach(function (c) { (used[c.n] || (used[c.n] = [])).push(c.gw); });
+    } else {
+      C.squadGws(ds).forEach(function (g) {
+        var pk = picksAt(ds, g), sq = pk && pk[id];
+        if (sq && sq.c) (used[sq.c] || (used[sq.c] = [])).push(g);
+      });
+    }
+    return CHIP_TYPES.map(function (t) {
+      var gws = (used[t.key] || []).slice().sort(function (a, b) { return a - b; });
+      return { key: t.key, label: t.label, gws: gws, used: gws.length > 0 };
+    });
+  };
+
   // Gameweeks we hold squads for, oldest first.
   C.squadGws = function (ds) {
     if (!ds || !ds.picks) return [];

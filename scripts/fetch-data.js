@@ -93,6 +93,7 @@ async function h2hAll(id) {
   console.log("Fetching manager histories…");
   const history = {};
   const pastSeasons = {};
+  const chips = {};
   const hist = await pool(managers, async (m) => {
     const h = await getJSON("/entry/" + m.id + "/history/");
     const gw = {};
@@ -102,6 +103,9 @@ async function h2hAll(id) {
                       v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
     });
     history[m.id] = gw;
+    if (h.chips && h.chips.length) {
+      chips[m.id] = h.chips.map((c) => ({ n: c.name, gw: c.event }));
+    }
     if (h.past && h.past.length) {
       pastSeasons[m.id] = h.past.map((p) => ({ season: p.season_name, rank: p.rank, total: p.total_points }));
     }
@@ -193,7 +197,7 @@ async function h2hAll(id) {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
-    elements, pitchGw, picksV: 2, livePoints, picks
+    elements, pitchGw, picksV: 2, livePoints, picks, chips
   };
   fs.writeFileSync("data.json", JSON.stringify({ generatedAt: dataset.updatedAt, dataset }));
   console.log("Wrote data.json — " + managers.length + " managers, " + H2H.length +

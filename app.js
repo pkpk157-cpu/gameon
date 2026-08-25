@@ -240,6 +240,10 @@
     $("#btnProfile").innerHTML = svg("gear", 20);
     $("#btnProfile").setAttribute("title", "Settings");
     $("#btnProfile").addEventListener("click", openProfile);
+    $("#barBack").addEventListener("click", function () {
+      if (state.view === "rules" && state.rulesBack) { location.hash = state.rulesBack; return; }
+      goBack();
+    });
     $("#barInfo").innerHTML = svg("info", 18);
     $("#modalClose").addEventListener("click", closeModal);
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
@@ -305,13 +309,30 @@
     compare: { t: "Head to head" },
     stats:   { t: "Stats & highlights" }
   };
+  // Sub-views carry a back arrow in the bar; a profile also puts the manager's
+  // team and name there, so the page body never repeats them.
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
-    $("#barTitle").textContent = m.t;
+    var title = m.t, sub = "";
+    if (state.view === "profile" && state.profileId) {
+      var ds = S.dataset();
+      var who = ds && K.managerMap(ds)[+state.profileId];
+      if (who) { title = who.entryName; sub = who.playerName; }
+    }
+    $("#barTitle").textContent = title;
+    var subEl = $("#barSub");
+    subEl.textContent = sub;
+    subEl.style.display = sub ? "" : "none";
+
+    var back = $("#barBack");
+    back.style.display = SUB_VIEWS.indexOf(state.view) === -1 ? "none" : "";
+
     var info = $("#barInfo");
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
     else { info.style.display = "none"; info.removeAttribute("data-rules"); }
   }
+  function goBack() { location.hash = state.backView || "classic"; }
 
   function updateDataState() { /* data freshness now lives in the profile sheet */ }
 
@@ -685,7 +706,9 @@
       if (R) return renderCompRules(host, R);
     }
 
-    // General overview (reached from the profile menu).
+    // General overview (reached from the settings menu) — no competition to
+    // return to, so the bar's back arrow falls through to the last tab.
+    state.rulesBack = null;
     var h = '<div class="section-title"><h2>General Rules</h2><div class="rule"></div>' +
       '<span class="chip">Fair play</span></div>';
     cfg.rules.forEach(function (r) {
@@ -698,15 +721,14 @@
   }
 
   function renderCompRules(host, R) {
-    var h = '<div class="btnrow" style="margin-bottom:4px"><button class="btn ghost" id="rulesBack">' + svg("back", 16) + ' Back</button></div>';
-    h += '<div class="section-title"><h2>' + esc(R.name) + '</h2><div class="rule"></div><span class="chip">Rules</span></div>';
+    state.rulesBack = R.back;
+    var h = '<div class="section-title"><h2>' + esc(R.name) + '</h2><div class="rule"></div><span class="chip">Rules</span></div>';
     R.blocks.forEach(function (b) {
       h += '<div class="card"><div class="hd"><h3>' + esc(b.h) + '</h3></div>' +
         '<div class="bd"><div class="note" style="color:var(--ink-soft);font-size:13.5px;line-height:1.65">' + b.body + '</div></div></div>';
     });
     if (R.extra) { h += R.extra; }
     host.innerHTML = h;
-    $("#rulesBack", host).addEventListener("click", function () { location.hash = R.back; });
   }
 
   function compRules(topic, cfg) {
@@ -787,10 +809,11 @@
   /* ====================================================================== */
   /* PROFILE (per-manager, opened by tapping a name)                        */
   /* ====================================================================== */
-  function profStat(label, big, sub) {
-    return '<div class="stat" style="text-align:left"><div class="l" style="margin:0 0 6px">' + esc(label) + '</div>' +
-      '<div style="font-size:18px;font-weight:800;line-height:1.15">' + esc(big) + '</div>' +
-      (sub ? '<div class="note" style="margin-top:3px">' + esc(sub) + '</div>' : '') + '</div>';
+  // Compact competition card on a profile.
+  function pcard(label, big, sub) {
+    return '<div class="pc"><div class="pcl">' + esc(label) + '</div>' +
+      '<div class="pcv">' + esc(big) + '</div>' +
+      (sub ? '<div class="pcs">' + esc(sub) + '</div>' : '') + '</div>';
   }
   /* ---- squad pitch (FPL-style) ----------------------------------------- */
 
@@ -992,24 +1015,37 @@
   function renderProfile(host, ds, id) {
     if (!id) { host.innerHTML = '<div class="callout">No manager selected.</div>'; return; }
     var P = K.managerProfile(ds, id);
-    var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="profBack">' + svg("back", 16) + ' Back</button></div>';
-    h += '<div class="card"><div class="bd"><div class="profhero">' +
-      '<div class="profav">' + esc((P.entryName || "?").trim().slice(0, 1).toUpperCase()) + '</div>' +
-      '<div><h2 style="margin:0;font-size:20px">' + esc(P.entryName) + '</h2>' +
-      '<div class="note">' + esc(P.playerName) + (isMe(id) ? ' · <span class="pill gold">You</span>' : '') + '</div></div>' +
-      '</div></div></div>';
+    // The manager's team and name live in the top bar, so they are not
+    // repeated here. One compact card per competition.
+    var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : '';
 
     h += '<div class="section-title"><h2>This season</h2><div class="rule"></div></div>';
-    h += '<div class="grid cols-2">';
-    h += profStat("Classic", P.classic ? ("#" + P.classic.computedRank) : "—",
+    h += '<div class="pcards">';
+    h += pcard("Classic", P.classic ? ("#" + P.classic.computedRank) : "—",
       P.classic ? (num(P.classic.total) + " pts" + (P.classic.prize ? " · " + money(P.classic.prize) : "")) : "");
-    var lmsTxt = P.lms.state === "in" ? "Still in" : (P.lms.state === "out" ? ("Out · GW" + P.lms.gw) : "—");
-    h += profStat("Last Manager", lmsTxt, P.lms.state === "in" ? "surviving" : "");
+    var lastM = P.monthly.length ? P.monthly[P.monthly.length - 1] : null;
+    h += pcard("Monthly", lastM ? ("#" + lastM.pos) : "—",
+      lastM ? ((lastM.label || lastM.name) + " · " + num(lastM.score) + " pts" +
+        (lastM.prize ? " · " + money(lastM.prize) : "")) : "no month scored yet");
+    var lmsTxt = P.lms.state === "in" ? "In" : (P.lms.state === "out" ? "Out" : "—");
+    h += pcard("Last Manager", lmsTxt,
+      P.lms.state === "in" ? "still surviving" : (P.lms.state === "out" ? ("eliminated GW" + P.lms.gw) : ""));
     var pyl = P.pyramid.length ? P.pyramid[P.pyramid.length - 1] : null;
-    h += profStat("Pyramid", pyl ? ("#" + pyl.pos + " " + pyl.division) : "—", pyl ? (pyl.season + " · " + num(pyl.score) + " pts") : "");
-    h += profStat("UCL", P.h2h ? ("#" + P.h2h.pos + " " + P.h2h.group) : "—",
-      P.h2h ? (P.h2h.w + "W " + P.h2h.d + "D " + P.h2h.l + "L · " + P.h2h.pts + " pts" + (P.h2h.dest ? " · " + P.h2h.dest : "")) : "");
+    h += pcard("Pyramid", pyl ? ("#" + pyl.pos) : "—",
+      pyl ? (pyl.division + " · " + pyl.season + " · " + num(pyl.score) + " pts") : "");
+    h += pcard("UCL", P.h2h ? ("#" + P.h2h.pos) : "—",
+      P.h2h ? (P.h2h.group + " · " + P.h2h.w + "W " + P.h2h.d + "D " + P.h2h.l + "L · " + P.h2h.pts + " pts") : "");
     h += '</div>';
+
+    // All four chips, with the gameweek each was played.
+    var chips = K.managerChips(ds, id);
+    h += '<div class="section-title"><h2>Chips</h2><div class="rule"></div></div>';
+    h += '<div class="chipgrid">' + chips.map(function (c) {
+      return '<div class="chipcard' + (c.used ? ' used' : '') + '">' +
+        '<div class="cn">' + esc(c.label) + '</div>' +
+        '<div class="cg">' + (c.used ? c.gws.map(function (g) { return "GW" + g; }).join(", ") : "unused") + '</div>' +
+        '</div>';
+    }).join("") + '</div>';
 
     // Squad on a football pitch, steppable through every gameweek played.
     var gws = K.squadGws(ds);
@@ -1040,11 +1076,6 @@
     }
 
     host.innerHTML = h;
-    $("#barTitle").textContent = P.entryName || "Profile";
-    $("#profBack", host).addEventListener("click", function () {
-      if (state.backView) location.hash = state.backView; else location.hash = "classic";
-    });
-
     var box = $("#pitchBox", host);
     if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode, state.pitchMetric);
   }
@@ -1089,15 +1120,13 @@
     if (!all.length) { host.innerHTML = '<div class="callout">No gameweeks played yet.</div>'; return; }
     if (!state.statsGw || all.indexOf(+state.statsGw) === -1) state.statsGw = all[all.length - 1];
 
-    var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="stBack">' + svg("back", 16) + ' Back</button></div>';
-    h += '<div class="pgwline" style="margin-bottom:4px">' +
+    var h = '<div class="pgwline" style="margin-bottom:4px">' +
       '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
         return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
       }).join("") + '</select></div>';
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
-    $("#stBack", host).addEventListener("click", function () { location.hash = state.backView || "classic"; });
     $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
     drawStats(ds);
   }
@@ -1272,6 +1301,21 @@
       '<td class="cmid">' + esc(label) + (hint ? '<div class="note">' + esc(hint) + '</div>' : '') + '</td>' +
       cmpCell(b, bw) + '</tr>';
   }
+  function mgrLabel(m) { return m.entryName + " \u2014 " + m.playerName; }
+  // Match typed text to a manager: exact label, then a prefix on either name,
+  // then any substring. Returns null when nothing matches.
+  function resolveMgr(text, mgrs) {
+    var t = String(text || "").trim().toLowerCase();
+    if (!t) return null;
+    function pick(test) { return mgrs.filter(test)[0] || null; }
+    return pick(function (m) { return mgrLabel(m).toLowerCase() === t; })
+        || pick(function (m) {
+             return String(m.entryName || "").toLowerCase().indexOf(t) === 0 ||
+                    String(m.playerName || "").toLowerCase().indexOf(t) === 0;
+           })
+        || pick(function (m) { return mgrLabel(m).toLowerCase().indexOf(t) !== -1; });
+  }
+
   // One player in the side-by-side squad table.
   function sqCell(p, metric) {
     if (!p) return '<td class="sqp empty"><div class="sqin"></div></td>';
@@ -1308,21 +1352,40 @@
     }
     if (!state.cmpGw || gws.indexOf(+state.cmpGw) === -1) state.cmpGw = gws[gws.length - 1];
 
-    function sel(idAttr, chosen) {
-      return '<select class="in" id="' + idAttr + '">' + mgrs.map(function (m) {
-        return '<option value="' + m.id + '"' + (+m.id === +chosen ? ' selected' : '') + '>' +
-          esc(m.entryName) + ' — ' + esc(m.playerName) + '</option>';
-      }).join("") + '</select>';
+    // 245 names is too many to scroll, so these are type-ahead fields backed
+    // by a shared datalist rather than dropdowns.
+    function field(idAttr, chosen) {
+      var cur = mgrs.filter(function (m) { return +m.id === +chosen; })[0];
+      return '<input class="in mgrin" id="' + idAttr + '" list="mgrOpts" autocomplete="off" ' +
+        'spellcheck="false" placeholder="Type a team or manager" value="' +
+        esc(cur ? mgrLabel(cur) : "") + '">';
     }
-    var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="cmpBack">' + svg("back", 16) + ' Back</button></div>';
-    h += '<div class="card"><div class="bd cmppick">' + sel("cmpA", state.cmpA) +
-      '<div class="vs">vs</div>' + sel("cmpB", state.cmpB) + '</div></div>';
+    var h = '<datalist id="mgrOpts">' + mgrs.map(function (m) {
+      return '<option value="' + esc(mgrLabel(m)) + '"></option>';
+    }).join("") + '</datalist>';
+    h += '<div class="card"><div class="bd cmppick">' + field("cmpA", state.cmpA) +
+      '<div class="vs">vs</div>' + field("cmpB", state.cmpB) + '</div></div>';
     h += '<div id="cmpBox"></div>';
     host.innerHTML = h;
 
-    $("#cmpBack", host).addEventListener("click", function () { location.hash = state.backView || "classic"; });
-    $("#cmpA", host).addEventListener("change", function () { state.cmpA = +this.value; drawCompare(ds); });
-    $("#cmpB", host).addEventListener("change", function () { state.cmpB = +this.value; drawCompare(ds); });
+    function bindPick(sel, key) {
+      var el = $(sel, host);
+      el.addEventListener("focus", function () { this.select(); });
+      el.addEventListener("change", function () {
+        var found = resolveMgr(this.value, mgrs);
+        if (found) {
+          state[key] = found.id;
+          this.value = mgrLabel(found);
+          el.classList.remove("bad");
+          drawCompare(ds);
+        } else {
+          el.classList.add("bad");
+          toast("No manager matches that name");
+        }
+      });
+    }
+    bindPick("#cmpA", "cmpA");
+    bindPick("#cmpB", "cmpB");
     drawCompare(ds);
   }
 
