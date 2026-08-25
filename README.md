@@ -19,8 +19,9 @@ score (hits included) + bench points** — so all tabs stay consistent.
 1. Open `gameon/` on any static host (GitHub Pages works out of the box), or
    locally with `python3 -m http.server` and visit `/gameon/`.
 2. Go to **Settings** and enter your **Classic League ID** (the number in the
-   FPL league URL). Optionally add H2H league IDs, a joining fee, and your own
-   entry ID to highlight yourself.
+   FPL league URL). Optionally add H2H league IDs and a joining fee.
+   Participants pick their own team by name under the gear menu, which
+   highlights them across every tab and adds a shortcut to their profile.
 3. Tap **↻ Refresh from FPL**. The app pulls the roster and every manager's
    history, then fills in all tabs.
 

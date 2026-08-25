@@ -778,7 +778,6 @@
     var shared = [], aOnly = [], bOnly = [];
     Object.keys(sa).forEach(function (k) { (sb[k] ? shared : aOnly).push(sa[k]); });
     Object.keys(sb).forEach(function (k) { if (!sa[k]) bOnly.push(sb[k]); });
-    function byPts(x, y) { return y.pts - x.pts; }
     // Position first, then points — so the two columns read like team sheets.
     function bySheet(x, y) { return (x.type - y.type) || (y.pts - x.pts); }
     shared.sort(bySheet); aOnly.sort(bySheet); bOnly.sort(bySheet);

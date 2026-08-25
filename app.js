@@ -24,7 +24,8 @@
     book: '<path d="M5 4.5A2 2 0 0 1 7 3h11v15H7a2 2 0 0 0-2 2V4.5Z"/><path d="M5 18.5A2 2 0 0 0 7 21h11"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M20 12a8 8 0 0 0-.12-1.36l1.9-1.48-2-3.46-2.24.9a7.9 7.9 0 0 0-2.36-1.36L14.7 3h-4L10.3 5.3a7.9 7.9 0 0 0-2.36 1.36l-2.24-.9-2 3.46 1.9 1.48A8 8 0 0 0 5.48 12a8 8 0 0 0 .12 1.36l-1.9 1.48 2 3.46 2.24-.9a7.9 7.9 0 0 0 2.36 1.36l.4 2.34h4l.4-2.34a7.9 7.9 0 0 0 2.36-1.36l2.24.9 2-3.46-1.9-1.48A8 8 0 0 0 20 12Z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5M12 7.8h.01"/>',
-    back: '<path d="M15 5l-7 7 7 7"/>'
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>'
   };
   function svg(name, size) {
     return '<svg viewBox="0 0 24 24" width="' + (size || 24) + '" height="' + (size || 24) +
@@ -166,7 +167,10 @@
       segBtn("dark", "moon", "Dark", theme) +
       '</div></div>';
 
-    h += '<div class="menu">' + menuItem("pfStats", "classic", "Stats & highlights") +
+    var me = state.me && ds ? K.managerMap(ds)[+state.me] : null;
+    h += '<div class="menu">' +
+      (me ? menuItem("pfMine", "person", "My team · " + me.entryName) : "") +
+      menuItem("pfStats", "classic", "Stats & highlights") +
       menuItem("pfCompare", "h2h", "Head to head") + menuItem("pfRules", "book", "Game rules");
     if (admin) {
       h += menuItem("pfRefresh", "refresh", "Refresh from FPL") +
@@ -177,11 +181,20 @@
     }
     h += '</div>';
 
-    // My FPL team ID — every participant can set this to highlight themselves.
-    h += '<label class="field" style="margin-top:12px"><span class="lab">My FPL team ID</span>' +
-      '<div style="display:flex;gap:8px"><input class="in" id="pfMe" value="' + esc(state.me || "") + '" placeholder="e.g. 267043" inputmode="numeric">' +
+    // Which team is mine — chosen by name, since we already know all of them.
+    var roster = ds && ds.managers ? ds.managers.slice().sort(function (x, y) {
+      return String(x.entryName || "").localeCompare(String(y.entryName || ""));
+    }) : [];
+    h += '<datalist id="meOpts">' + roster.map(function (m) {
+      return '<option value="' + esc(mgrLabel(m)) + '"></option>';
+    }).join("") + '</datalist>';
+    h += '<label class="field" style="margin-top:12px"><span class="lab">My team</span>' +
+      '<div style="display:flex;gap:8px"><input class="in" id="pfMe" list="meOpts" autocomplete="off" ' +
+      'spellcheck="false" placeholder="Type your team or name" value="' +
+      esc(me ? mgrLabel(me) : "") + '">' +
       '<button class="btn" id="pfMeSave">Save</button></div></label>' +
-      '<div class="note" style="margin-top:2px">Highlights your name across all tabs. Find your ID in your FPL team URL: /entry/<b>NUMBER</b>/.</div>' +
+      '<div class="note" style="margin-top:2px">Highlights you across every tab' +
+      (me ? '' : ' and unlocks a shortcut to your profile') + '. Leave it empty to clear.</div>' +
       (admin ? '<div class="note warn" style="margin-top:8px">Admin mode is on for this device.</div>' : '');
 
     $("#profileBody").innerHTML = h;
@@ -193,10 +206,18 @@
     $("#pfStats").addEventListener("click", function () { closeProfile(); location.hash = "stats"; });
     $("#pfCompare").addEventListener("click", function () { closeProfile(); location.hash = "compare"; });
     $("#pfRules").addEventListener("click", function () { closeProfile(); location.hash = "rules"; });
+    if (me) {
+      $("#pfMine").addEventListener("click", function () {
+        closeProfile(); location.hash = "profile/" + state.me;
+      });
+    }
     $("#pfMeSave").addEventListener("click", function () {
-      var v = parseInt($("#pfMe").value, 10);
-      state.me = isNaN(v) ? null : v; lsSet(ME_KEY, state.me);
-      toast(state.me ? "Saved — you're highlighted" : "Cleared"); render();
+      var txt = $("#pfMe").value.trim();
+      if (!txt) { state.me = null; lsSet(ME_KEY, null); toast("Cleared"); render(); openProfile(); return; }
+      var found = resolveMgr(txt, roster);
+      if (!found) { toast("No team matches that name"); return; }
+      state.me = found.id; lsSet(ME_KEY, state.me);
+      toast("Saved — you're highlighted"); render(); openProfile();
     });
 
     if (admin) {
@@ -397,6 +418,29 @@
   /* ====================================================================== */
   function stat(k, l) { return '<div class="stat"><div class="k">' + esc(k) + '</div><div class="l">' + esc(l) + '</div></div>'; }
 
+  // Hide table rows that do not match a query. Works on whatever a panel has
+  // rendered, so it survives the panel being redrawn.
+  function filterRows(container, q) {
+    if (!container) return;
+    q = String(q || "").toLowerCase().trim();
+    var shown = 0, rows = container.querySelectorAll("tbody tr");
+    Array.prototype.forEach.call(rows, function (tr) {
+      var hit = !q || tr.textContent.toLowerCase().indexOf(q) !== -1;
+      tr.style.display = hit ? "" : "none";
+      if (hit) shown++;
+    });
+    var note = container.querySelector(".nohits");
+    if (q && !shown && !note) {
+      note = document.createElement("div");
+      note.className = "callout nohits";
+      note.textContent = "No manager matches that search.";
+      container.appendChild(note);
+    } else if ((!q || shown) && note) { note.remove(); }
+  }
+  function searchBox(id) {
+    return '<input class="in srch" id="' + id + '" type="search" autocomplete="off" placeholder="Search\u2026">';
+  }
+
   /* ====================================================================== */
   /* CLASSIC                                                                */
   /* ====================================================================== */
@@ -439,13 +483,6 @@
     }).join("");
   }
 
-  function podiumCard(cls, medal, r, place) {
-    return '<div class="p ' + cls + '"><div class="medal">' + medal + '</div>' +
-      '<div class="amt">' + money(r.prize) + '</div>' +
-      '<div class="who">' + esc(r.entryName) + '</div>' +
-      '<div class="sub">' + esc(r.playerName) + ' · ' + num(r.total) + ' pts</div></div>';
-  }
-
   function prizeReferenceCard() {
     var p = S.config().classicPrizes;
     var rows = '';
@@ -476,7 +513,7 @@
     h += '<div class="pickrow"><select class="in narrow" id="monthSel">' +
       months.map(function (m) {
         return '<option value="' + m.key + '"' + (m.key === cur ? " selected" : "") + '>' + esc(m.label || monthLabel(m)) + '</option>';
-      }).join("") + '</select>' +
+      }).join("") + '</select>' + searchBox("monthSearch") +
       '<div class="pickmeta" id="monthMeta"></div></div>';
     h += '<div id="monthPanel"></div>';
 
@@ -485,8 +522,12 @@
       var M = months.filter(function (m) { return m.key === state.monthKey; })[0];
       $("#monthMeta", host).innerHTML = gwChips(M.gws, statusFn);
       $("#monthPanel", host).innerHTML = monthPanel(M);
+      filterRows($("#monthPanel", host), $("#monthSearch", host).value);
     };
     $("#monthSel", host).addEventListener("change", function () { state.monthKey = this.value; draw(); });
+    $("#monthSearch", host).addEventListener("input", function () {
+      filterRows($("#monthPanel", host), this.value);
+    });
     draw();
   }
 
@@ -549,15 +590,20 @@
     h += '<div class="pickrow"><select class="in narrow" id="lmsGwSel">' +
       gwOpts.map(function (o) {
         return '<option value="' + o.key + '"' + (o.key === curKey ? ' selected' : '') + '>' + esc(o.label) + '</option>';
-      }).join("") + '</select></div>';
+      }).join("") + '</select>' + searchBox("lmsSearch") + '</div>';
     h += '<div id="lmsGwPanel"></div>';
 
     host.innerHTML = h;
     var drawLms = function () {
       var o = byKey(state.lmsGw);
-      $("#lmsGwPanel", host).innerHTML = lmsGwTable(o.week, { live: o.live });
+      var panel = $("#lmsGwPanel", host);
+      panel.innerHTML = lmsGwTable(o.week, { live: o.live });
+      filterRows(panel, $("#lmsSearch", host).value);
     };
     $("#lmsGwSel", host).addEventListener("change", function () { state.lmsGw = this.value; drawLms(); });
+    $("#lmsSearch", host).addEventListener("input", function () {
+      filterRows($("#lmsGwPanel", host), this.value);
+    });
     drawLms();
   }
 
