@@ -395,7 +395,6 @@ select.in { appearance:none; }
 .menu .lab-sm { font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--ink-faint); padding:8px 10px 4px; font-weight:600; }
 
 /* ---------- footer ---------- */
-.foot { text-align:center; color:var(--ink-faint); font-size:12px; padding:26px 16px 10px; line-height:1.6; }
 
 /* ---- dropdown caret (all selects) ---- */
 select.in { background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat:no-repeat; background-position:right 11px center; padding-right:32px; }
@@ -412,7 +411,6 @@ td.name[data-entry]:hover .who { color:var(--accent); text-decoration-color:var(
 :root { --topbar-h:56px; --nav-h:66px; }
 main.wrap.fill { display:flex; flex-direction:column; padding-top:16px; padding-bottom:0; overflow:hidden;
   height:calc(100vh - var(--topbar-h) - var(--nav-h)); height:calc(100dvh - var(--topbar-h) - var(--nav-h)); }
-main.wrap.fill .foot { display:none; }
 main.wrap.fill .view.active { flex:1; min-height:0; display:flex; flex-direction:column; }
 main.wrap.fill #monthPanel, main.wrap.fill #pyrPanel, main.wrap.fill #grpPanel, main.wrap.fill #lmsGwPanel { display:contents; }
 main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }

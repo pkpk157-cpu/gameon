@@ -118,21 +118,40 @@
     return idbSet(DATASET_KEY, ds).catch(function () { return false; });
   };
 
-  // Load dataset from IndexedDB, else fall back to a committed ./data.json.
+  // Load the dataset, preferring whichever copy is newer: the one the updater
+  // published or one this device stored earlier. Reading the stored copy first
+  // and stopping there would freeze a device on it forever — it would never
+  // see another gameweek. The stored copy still covers being offline.
   STORE.load = function () {
-    return idbGet(DATASET_KEY).then(function (ds) {
-      if (ds) { _dataset = ds; return ds; }
-      return fetch("./data.json", { cache: "no-store" })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (bundle) {
-          if (!bundle) return null;
+    var stored = null;
+    return idbGet(DATASET_KEY)
+      .catch(function () { return null; })
+      .then(function (ds) {
+        stored = ds || null;
+        // no-cache, not no-store: still revalidates on every load, but an
+          // unchanged file comes back as a 304 instead of re-downloading the
+          // whole dataset — which matters when 245 people open this all day.
+          return fetch("./data.json", { cache: "no-cache" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      })
+      .then(function (bundle) {
+        var published = bundle ? (bundle.dataset || bundle) : null;
+        if (published && bundle) {
           if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
           if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
-          _dataset = bundle.dataset || bundle; // allow bare dataset too
-          return _dataset;
-        })
-        .catch(function () { return null; });
-    });
+        }
+        var pick = published;
+        if (stored && published) {
+          // an admin's own fresher pull should not be undone by an older publish
+          pick = (Date.parse(stored.updatedAt || 0) > Date.parse(published.updatedAt || 0)) ? stored : published;
+        } else if (stored) {
+          pick = stored; // offline, or data.json unreachable
+        }
+        _dataset = pick || null;
+        return _dataset;
+      })
+      .catch(function () { _dataset = stored; return _dataset; });
   };
 
   /* ---- Export / import a single shareable bundle ------------------------ */

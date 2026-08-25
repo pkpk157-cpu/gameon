@@ -228,6 +228,7 @@
       (ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString() +
              " · " + num(ds.managers.length) + " managers")
           : "Standings not loaded yet") +
+      '<br>Created by <b>PK</b>' +
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
       '</div>';
 
@@ -586,7 +587,6 @@
         '<td class="num">' + (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
     h += '</tbody></table></div>';
-    h += '<div class="note" style="margin-top:8px">Monthly score includes hits. Ties shown by bench points; deeper tie-breaks (goals/CS/assists) can be set in Admin.</div>';
     return h;
   }
 
@@ -714,8 +714,7 @@
         '<td class="num"><b>' + t.pts + '</b></td><td class="num">' + num(t.gwPts) + '</td></tr>';
     }).join("");
     return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th><th class="num">GW pts</th></tr></thead><tbody>' +
-      rows + '</tbody></table></div>' +
-      '<div class="note" style="margin-top:8px">' + g.table.length + ' managers · Top 2 → UCL · 3rd–4th → UEL. Points 3/1/0; ties by group-stage score.</div>';
+      rows + '</tbody></table></div>';
   }
 
   /* ====================================================================== */
@@ -804,6 +803,13 @@
     });
     h += '<div class="section-title"><h2>Monthly prizes</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
     h += '<div class="section-title"><h2>Pyramid prizes (per mini-season)</h2><div class="rule"></div></div>' + pyramidPrizeCard(cfg);
+    // The attribution the tab pages used to carry lives here now.
+    h += '<div class="section-title"><h2>About</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="bd"><div class="note" style="line-height:1.7">' +
+      'Game On V12 is a community tracker built for this league by <b>PK</b>.<br>' +
+      'Player and scoring data © the Fantasy Premier League. ' +
+      'Not affiliated with, endorsed by, or connected to the Premier League or FPL.' +
+      '</div></div></div>';
     host.innerHTML = h;
   }
 
@@ -827,7 +833,7 @@
       { h: "Tie breakers", body: rule(2) } ] };
     if (topic === "monthly") return { name: "Monthly Winners", back: "monthly", extra: prizesBlock(monthlyPrizeCard(cfg)), blocks: [
       { h: "How it works", body: "Each month scores only the gameweeks that fall in that month, and <b>includes hits</b>. The top 3 each month (August–May) win." },
-      { h: "Tie breakers", body: rule(7) } ] };
+      { h: "Tie breakers", body: rule(7) + "<br><br>The table separates level scores by bench points; deeper tie-breaks (goals, clean sheets, assists) can be set by the organiser." } ] };
     if (topic === "lms") return { name: "Last Manager Standing", back: "lms", extra: prizesBlock(lmsPrizeCard(cfg)) + lmsGridCard(cfg), blocks: [
       { h: "Scoring", body: rule(3) },
       { h: "Eliminations", body: "Each gameweek the lowest scorers among the survivors are eliminated. The number out per GW is fixed (see the elimination grid). The last manager left standing is champion." },
