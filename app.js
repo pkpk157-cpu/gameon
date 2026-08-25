@@ -1464,10 +1464,20 @@
       '<span class="sq-v">' + esc(metricOf(p, metric)) + '</span></div></td>';
   }
   // A past season for one manager: rank on top, points beneath.
-  function seasonCell(s) {
+  function seasonCell(s, win) {
     if (!s) return '<td class="num"><span class="txt">—</span></td>';
-    return '<td class="num"><div class="sr">' + (s.rank ? num(s.rank) : "—") + '</div>' +
+    return '<td class="num' + (win ? ' win' : '') + '"><div class="sr">' + (s.rank ? num(s.rank) : "—") + '</div>' +
       '<div class="sp">' + (typeof s.total === "number" ? num(s.total) + " pts" : "") + '</div></td>';
+  }
+  // Who had the better season: overall rank decides, points only if a rank is
+  // missing. Nobody wins a season they did not both play.
+  function seasonWinner(a, b) {
+    if (!a || !b) return [false, false];
+    if (a.rank && b.rank && a.rank !== b.rank) return [a.rank < b.rank, b.rank < a.rank];
+    if (typeof a.total === "number" && typeof b.total === "number" && a.total !== b.total) {
+      return [a.total > b.total, b.total > a.total];
+    }
+    return [false, false];
   }
 
   function renderCompare(host, ds) {
@@ -1614,8 +1624,9 @@
         '<th class="num">Rank · Pts</th><th class="cmid">Season</th><th class="num">Rank · Pts</th>' +
         '</tr></thead><tbody>';
       h += R.seasonRows.map(function (s) {
-        return '<tr>' + seasonCell(s.a) +
-          '<td class="cmid">' + esc(s.season) + '</td>' + seasonCell(s.b) + '</tr>';
+        var w = seasonWinner(s.a, s.b);
+        return '<tr>' + seasonCell(s.a, w[0]) +
+          '<td class="cmid">' + esc(s.season) + '</td>' + seasonCell(s.b, w[1]) + '</tr>';
       }).join("");
       h += '</tbody></table></div></div>';
     } else {

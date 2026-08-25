@@ -681,3 +681,6 @@ main.wrap.fill .section-title { flex:none; }
 /* inline search box that sits beside a picker */
 .in.srch { flex:1 1 130px; min-width:110px; max-width:220px; }
 .nohits { margin-top:10px; }
+/* the better season of the two reads green, rank and points together */
+table.t.cmptable.seasons td.num.win .sr { color:var(--good); }
+table.t.cmptable.seasons td.num.win .sp { color:color-mix(in srgb, var(--good) 65%, var(--ink-faint)); }
