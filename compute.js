@@ -321,12 +321,16 @@
       byName[norm(m.playerName)] = m.id;
       byFlat[flat(m.playerName)] = m.id;
     });
+    var aliases = {}; // normalized roster name -> explicit entry id
+    var rawAliases = p.rosterAliases || {};
+    Object.keys(rawAliases).forEach(function (k) { aliases[norm(k)] = rawAliases[k]; });
     var out = {}, matched = 0;
     Object.keys(named).forEach(function (div) {
       out[div] = [];
       named[div].forEach(function (nm) {
         var id = byName[norm(nm)];
         if (id == null) id = byFlat[flat(nm)];
+        if (id == null && aliases[norm(nm)] != null) id = aliases[norm(nm)];
         if (id != null) out[div].push(id);
       });
       matched += out[div].length;
@@ -388,7 +392,8 @@
       // Accurate: real FPL H2H standings for each group league (actual results).
       groups = leagueIds.map(function (id, gi) {
         var d = (ds.h2h && ds.h2h[id]) || {};
-        var res = (d.results || []).slice().sort(function (a, b) { return (a.rank || 999) - (b.rank || 999); });
+        var res = (d.results || []).filter(function (r) { return r.entry; }) // drop FPL "AVERAGE" phantom
+          .slice().sort(function (a, b) { return (a.rank || 999) - (b.rank || 999); });
         var table = res.map(function (r, i) {
           return { id: r.entry, name: r.entry_name, player: r.player_name,
                    w: r.matches_won, d: r.matches_drawn, l: r.matches_lost,

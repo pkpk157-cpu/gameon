@@ -130,6 +130,9 @@
       ],
       promoteCount: 5,   // top 5 of each division go up next mini-season
       relegateCount: 5,  // bottom 5 of each division go down next mini-season
+      // Fix any roster name that doesn't match a manager's FPL name:
+      //   { "Aman Arora": 1234567 }  (roster name -> FPL entry id)
+      rosterAliases: {},
       // Season-1 division rosters (from the league one-pager). Manager names
       // are resolved to FPL entry ids against the classic-league roster.
     seasonOneRosterNames: {
