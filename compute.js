@@ -45,6 +45,12 @@
     });
     return out;
   };
+  // The in-progress gameweek (current but not yet finalised), or null.
+  C.liveGwId = function (ds) {
+    if (!ds || !ds.bootstrap) return null;
+    var e = ds.bootstrap.events.filter(function (e) { return e.is_current && !(e.finished && e.data_checked); })[0];
+    return e ? e.id : null;
+  };
   C.currentGw = function (ds) {
     if (!ds || !ds.bootstrap) return null;
     var cur = null, next = null;
@@ -96,6 +102,7 @@
     var evDate = {};
     if (ds.bootstrap) ds.bootstrap.events.forEach(function (e) { if (e.deadline_time) evDate[e.id] = new Date(e.deadline_time); });
     var canDerive = conf.autoMonths !== false && Object.keys(evDate).length > 0;
+    var live = C.liveGwId(ds);
 
     return conf.months.map(function (month) {
       var gws = month.gws, yearForLabel = null;
@@ -110,7 +117,8 @@
       var yr = (yearForLabel != null) ? yearForLabel : ((conf.seasonStartYear || 2025) + (late[month.key] ? 1 : 0));
       var label = month.name.slice(0, 3) + "-" + ("0" + (yr % 100)).slice(-2);
 
-      var playedGws = gws.filter(function (g) { return fset[g]; });
+      // Include the live GW so monthly totals reflect the latest sync.
+      var playedGws = gws.filter(function (g) { return fset[g] || g === live; });
       var complete = gws.length > 0 && gws.every(function (g) { return fset[g]; });
       var rows = ds.managers.map(function (m) {
         return {
@@ -261,6 +269,7 @@
     var p = cfg().pyramid;
     var divisions = p.divisions.map(function (d) { return d.key; });
     var finished = {}; C.finishedGws(ds).forEach(function (g) { finished[g] = true; });
+    var pLive = C.liveGwId(ds); // include the live GW in mini-season totals
     var over = (ov().pyramid && ov().pyramid.rosters) || {}; // { s1: { elite:[ids] } }
 
     // Base S1 rosters: admin override (ids) > named roster from config
@@ -277,7 +286,7 @@
         // Derive from previous season unless an override exists.
         rosters[key] = over[key] || applyPromotionRelegation(rosters[p.seasons[si - 1].key], seasonResults[si - 1], p);
       }
-      var playedGws = season.gws.filter(function (g) { return finished[g]; });
+      var playedGws = season.gws.filter(function (g) { return finished[g] || g === pLive; });
       var complete = season.gws.every(function (g) { return finished[g]; });
 
       var divResults = p.divisions.map(function (div) {
