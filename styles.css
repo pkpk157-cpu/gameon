@@ -455,8 +455,10 @@ main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }
 .pmark .circle { top:50%; width:118px; height:118px; margin-top:-59px; border-radius:50%; }
 .pitch > .prow { position:relative; z-index:1; display:flex; justify-content:center; gap:4px; flex:1; align-items:center; }
 
-/* one player */
-.pcell { width:22%; max-width:92px; min-width:62px; }
+/* one player — cells share the row so a Bench Boost XI (up to six across)
+   shrinks to fit instead of spilling over the touchline */
+.pcell { width:22%; max-width:92px; min-width:0; }
+.pitch > .prow > .pcell { flex:1 1 0; }
 .pposlbl { text-align:center; font-size:10px; font-weight:800; letter-spacing:.6px;
   color:var(--ink-faint); text-transform:uppercase; margin-bottom:4px; }
 .pcard { position:relative; border-radius:7px; overflow:hidden; background:rgba(6,60,32,.42);
