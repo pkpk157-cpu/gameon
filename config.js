@@ -23,13 +23,16 @@
        with the *encoded* FPL URL. You can change the proxy in Settings if one
        goes down. A couple of known-working templates are listed below. */
     proxy: {
-      // Active template. %s / {url} both accepted (see api.js).
-      template: "https://api.allorigins.win/raw?url={url}",
+      // Active template. {url} = URL-encoded FPL url, {urlraw} = raw. For the
+      // most reliable option for a whole league, deploy the included Cloudflare
+      // Worker (see worker.js) and paste its URL in Settings → Data source.
+      template: "https://api.codetabs.com/v1/proxy/?quest={url}",
       alternatives: [
+        "https://api.codetabs.com/v1/proxy/?quest={url}",
         "https://api.allorigins.win/raw?url={url}",
         "https://corsproxy.io/?url={url}",
-        "https://thingproxy.freeboard.io/fetch/{urlraw}", // {urlraw} = not encoded
-        "" // empty = call FPL directly (works only if you host your own proxy at that origin)
+        "https://thingproxy.freeboard.io/fetch/{urlraw}",
+        "" // empty = call FPL directly / your own same-origin proxy
       ]
     },
 
