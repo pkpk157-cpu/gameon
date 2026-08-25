@@ -785,6 +785,14 @@
       '<div style="font-size:18px;font-weight:800;line-height:1.15">' + esc(big) + '</div>' +
       (sub ? '<div class="note" style="margin-top:3px">' + esc(sub) + '</div>' : '') + '</div>';
   }
+  // One player chip on the pitch: shirt badge, name, live points.
+  function pp(pl) {
+    return '<div class="pcell">' +
+      '<div class="pshirt t-' + (pl.type || 0) + '">' + (pl.cap ? '<span class="pcap">C</span>' : '') + '</div>' +
+      '<div class="pname">' + esc(pl.name) + '</div>' +
+      '<div class="ppts">' + num(pl.pts) + '</div>' +
+      '</div>';
+  }
   function renderProfile(host, ds, id) {
     if (!id) { host.innerHTML = '<div class="callout">No manager selected.</div>'; return; }
     var P = K.managerProfile(ds, id);
@@ -806,6 +814,27 @@
     h += profStat("UCL", P.h2h ? ("#" + P.h2h.pos + " " + P.h2h.group) : "—",
       P.h2h ? (P.h2h.w + "W " + P.h2h.d + "D " + P.h2h.l + "L · " + P.h2h.pts + " pts" + (P.h2h.dest ? " · " + P.h2h.dest : "")) : "");
     h += '</div>';
+
+    // Live squad on a football pitch (baked per gameweek).
+    var pit = K.managerPitch(ds, id);
+    if (pit) {
+      var chipName = { bboost: "Bench Boost", "3xc": "Triple Captain", freehit: "Free Hit", wildcard: "Wildcard" };
+      var status = pit.live ? '<span class="pill live">Live</span>' : '<span class="pill">Final</span>';
+      h += '<div class="section-title"><h2>Squad · ' + esc(pit.gwName) + '</h2><div class="rule"></div></div>';
+      h += '<div class="card"><div class="bd" style="padding-bottom:6px">';
+      h += '<div class="pitchhead"><div class="pitchtot">' + num(pit.total) + ' <span>pts</span></div>' +
+        '<div>' + status + (pit.chip ? ' <span class="pill gold">' + esc(chipName[pit.chip] || pit.chip) + '</span>' : '') + '</div></div>';
+      h += '<div class="pitch">';
+      h += pit.lines.map(function (ln) {
+        return '<div class="pline">' + ln.players.map(pp).join("") + '</div>';
+      }).join("");
+      h += '</div>';
+      if (pit.bench.length) {
+        h += '<div class="benchrow"><div class="benchlbl">Bench</div><div class="pline bench">' +
+          pit.bench.map(pp).join("") + '</div></div>';
+      }
+      h += '</div></div>';
+    }
 
     if (P.monthly.length) {
       h += '<div class="section-title"><h2>Monthly</h2><div class="rule"></div></div>';

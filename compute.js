@@ -512,5 +512,41 @@
     };
   };
 
+  // A manager's squad for the baked "pitch" gameweek, laid out by position with
+  // live points per player. Returns null when no squad data is available.
+  C.managerPitch = function (ds, id) {
+    id = +id;
+    if (!ds || !ds.picks || !ds.elements) return null;
+    var sq = ds.picks[id];
+    if (!sq || !sq.p || !sq.p.length) return null;
+    var els = ds.elements, lp = ds.livePoints || {};
+    var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+
+    function build(el, mult, isCap) {
+      var meta = els[el] || ["?", 0, ""];
+      var base = lp[el] || 0;
+      return { el: el, name: meta[0], type: meta[1], team: meta[2],
+               pts: base * (mult || 1), base: base, cap: !!isCap, mult: mult || 0 };
+    }
+
+    var rows = { 1: [], 2: [], 3: [], 4: [] }, bench = [], total = 0;
+    sq.p.forEach(function (p) {
+      var el = p[0], mult = p[1], isCap = p[2];
+      var pl = build(el, mult, isCap);
+      if (mult > 0) {
+        (rows[pl.type] || (rows[pl.type] = [])).push(pl);
+        total += pl.pts;
+      } else {
+        bench.push(pl);
+      }
+    });
+
+    var lines = [1, 2, 3, 4].map(function (t) { return { pos: POS[t], players: rows[t] || [] }; });
+    var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +ds.pitchGw; })[0];
+    var live = gwEv ? (gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false;
+    return { gw: ds.pitchGw, gwName: gwEv ? gwEv.name : ("GW " + ds.pitchGw), live: live,
+             chip: sq.c || "", lines: lines, bench: bench, total: total };
+  };
+
   window.GO_COMPUTE = C;
 })();

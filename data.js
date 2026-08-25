@@ -158,7 +158,8 @@
     }
 
     var ds = { updatedAt: new Date().toISOString(), season: cfg.seasonLabel,
-               bootstrap: null, league: null, managers: [], history: {}, h2h: {}, pastSeasons: {} };
+               bootstrap: null, league: null, managers: [], history: {}, h2h: {}, pastSeasons: {},
+               elements: null, pitchGw: null, livePoints: null, picks: null };
 
     report({ phase: "bootstrap", message: "Loading gameweeks…" });
     return API.bootstrap()
@@ -170,6 +171,13 @@
                      is_next: e.is_next, deadline_time: e.deadline_time };
           })
         };
+        // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
+        var teamShort = {};
+        (bs.teams || []).forEach(function (t) { teamShort[t.id] = t.short_name; });
+        ds.elements = {};
+        (bs.elements || []).forEach(function (el) {
+          ds.elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || ""];
+        });
         report({ phase: "league", message: "Loading league roster…" });
         return API.classicLeagueAll(cfg.classicLeagueId, function (n) {
           report({ phase: "league", message: "Loaded " + n + " managers…", done: n });
@@ -219,37 +227,49 @@
         });
       })
       .then(function () {
-        // Live "players played" for the in-progress gameweek (LMS x/12 column).
-        // Uses event/{gw}/live (minutes) + entry/{id}/event/{gw}/picks. Only the
-        // LMS survivors are fetched, so the cost shrinks as the season goes on.
-        var liveEv = (ds.bootstrap.events || []).filter(function (e) {
-          return e.is_current && !(e.finished && e.data_checked);
-        })[0];
-        if (!liveEv) return;
-        var lg = liveEv.id;
-        report({ phase: "live", message: "Loading live gameweek…" });
+        // Current-gameweek squads: powers the LMS "players played" column and
+        // the live football-pitch on each manager's profile. Uses
+        // event/{gw}/live (minutes + points) + entry/{id}/event/{gw}/picks for
+        // every manager, so any profile can show its squad.
+        var events = ds.bootstrap.events || [];
+        var curEv = events.filter(function (e) { return e.is_current; })[0]
+                 || events.filter(function (e) { return e.is_next; })[0];
+        if (!curEv) return;
+        var lg = curEv.id;
+        ds.pitchGw = lg;
+        var inProgress = curEv.is_current && !(curEv.finished && curEv.data_checked);
+        report({ phase: "live", message: "Loading current gameweek…" });
         return API.live(lg).then(function (live) {
           var mins = {};
+          ds.livePoints = {};
           (live.elements || []).forEach(function (el) {
-            mins[el.id] = (el.stats && el.stats.minutes) || 0;
+            var st = el.stats || {};
+            mins[el.id] = st.minutes || 0;
+            ds.livePoints[el.id] = st.total_points || 0;
           });
-          var targets;
-          try { targets = window.GO_COMPUTE.lms(ds).survivors.map(function (s) { return s.id; }); }
-          catch (e) { targets = ds.managers.map(function (m) { return m.id; }); }
-          report({ phase: "live", done: 0, total: targets.length, message: "Loading live squads…" });
+          ds.picks = {};
+          var targets = ds.managers.map(function (m) { return m.id; });
+          report({ phase: "live", done: 0, total: targets.length, message: "Loading squads…" });
           return API.pool(targets, function (id) {
             return API.entryPicks(id, lg).then(function (pk) {
-              var played = 0, total = 0;
-              (pk.picks || []).forEach(function (p) {
-                if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
-              });
-              if (!ds.history[id]) ds.history[id] = {};
-              if (!ds.history[id][lg]) ds.history[id][lg] = { p: 0, h: 0, b: 0, t: 0 };
-              ds.history[id][lg].pl = played;
-              ds.history[id][lg].plt = total || 12;
+              var list = pk.picks || [];
+              ds.picks[id] = {
+                c: (pk.active_chip || ""),
+                p: list.map(function (p) { return [p.element, p.multiplier, p.is_captain ? 1 : 0]; })
+              };
+              if (inProgress) {
+                var played = 0, total = 0;
+                list.forEach(function (p) {
+                  if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
+                });
+                if (!ds.history[id]) ds.history[id] = {};
+                if (!ds.history[id][lg]) ds.history[id][lg] = { p: 0, h: 0, b: 0, t: 0 };
+                ds.history[id][lg].pl = played;
+                ds.history[id][lg].plt = total || 12;
+              }
             }).catch(function () {});
           }, 5, function (done, total) {
-            report({ phase: "live", done: done, total: total, message: "Live squads " + done + "/" + total + "…" });
+            report({ phase: "live", done: done, total: total, message: "Squads " + done + "/" + total + "…" });
           });
         }).catch(function () { /* live is best-effort */ });
       })

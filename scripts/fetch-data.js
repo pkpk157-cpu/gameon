@@ -110,26 +110,54 @@ async function h2hAll(id) {
   const h2h = {};
   await pool(H2H, async (id) => { h2h[id] = await h2hAll(id); }, 4);
 
-  // Live "players played" for an in-progress gameweek.
-  const liveEv = events.find((e) => e.is_current && !(e.finished && e.data_checked));
-  if (liveEv) {
-    const lg = liveEv.id;
-    console.log("Live GW " + lg + " — fetching squads for players-played…");
+  // Current-gameweek squads: powers the LMS "players played" column and the
+  // live football-pitch on each manager's profile. We fetch every manager's
+  // picks for the current GW once and reuse them for both.
+  let elements = null, pitchGw = null, livePoints = null, picks = null;
+  const curEv = events.find((e) => e.is_current) || events.find((e) => e.is_next);
+  if (curEv) {
+    const lg = curEv.id;
+    pitchGw = lg;
+    const inProgress = curEv.is_current && !(curEv.finished && curEv.data_checked);
+    console.log("Current GW " + lg + " — fetching squads for pitch + players-played…");
     try {
+      // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
+      const teamShort = {};
+      (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; });
+      elements = {};
+      (bs.elements || []).forEach((el) => {
+        elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || ""];
+      });
+
       const live = await getJSON("/event/" + lg + "/live/");
       const mins = {};
-      (live.elements || []).forEach((el) => { mins[el.id] = (el.stats && el.stats.minutes) || 0; });
+      livePoints = {};
+      (live.elements || []).forEach((el) => {
+        const st = el.stats || {};
+        mins[el.id] = st.minutes || 0;
+        livePoints[el.id] = st.total_points || 0;
+      });
+
+      picks = {};
       await pool(managers, async (m) => {
         try {
           const pk = await getJSON("/entry/" + m.id + "/event/" + lg + "/picks/");
-          let played = 0, total = 0;
-          (pk.picks || []).forEach((p) => {
-            if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
-          });
-          if (!history[m.id]) history[m.id] = {};
-          if (!history[m.id][lg]) history[m.id][lg] = { p: 0, h: 0, b: 0, t: 0 };
-          history[m.id][lg].pl = played;
-          history[m.id][lg].plt = total || 12;
+          const list = pk.picks || [];
+          // Store squad: [element, multiplier, is_captain(0/1)] in pick order.
+          picks[m.id] = {
+            c: (pk.active_chip || ""),
+            p: list.map((p) => [p.element, p.multiplier, p.is_captain ? 1 : 0])
+          };
+          if (inProgress) {
+            let played = 0, total = 0;
+            list.forEach((p) => {
+              if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
+            });
+            if (!history[m.id]) history[m.id] = {};
+            if (!history[m.id][lg]) history[m.id][lg] = { p: 0, h: 0, b: 0, t: 0 };
+            history[m.id][lg].pl = played;
+            history[m.id][lg].plt = total || 12;
+          }
         } catch (e) { /* skip this manager */ }
       }, 6);
     } catch (e) { console.log("  live/picks step failed (non-fatal): " + e.message); }
@@ -138,9 +166,10 @@ async function h2hAll(id) {
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
-    managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0
+    managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
+    elements, pitchGw, livePoints, picks
   };
   fs.writeFileSync("data.json", JSON.stringify({ generatedAt: dataset.updatedAt, dataset }));
   console.log("Wrote data.json — " + managers.length + " managers, " + H2H.length +
-    " H2H leagues, live GW " + (liveEv ? liveEv.id : "none") + ", failed " + (hist.failed || 0));
+    " H2H leagues, pitch GW " + (pitchGw || "none") + ", failed " + (hist.failed || 0));
 })().catch((e) => { console.error("FATAL:", e); process.exit(1); });
