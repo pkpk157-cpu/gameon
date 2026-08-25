@@ -1,0 +1,48 @@
+# Auto-updates data.json from the FPL API and redeploys Pages.
+# In the dedicated `gameon` repo, place this at: .github/workflows/update-data.yml
+# Runs on a schedule + on demand. GitHub's runners reach the FPL API directly,
+# so no proxy is needed. Commits data.json AND deploys Pages in one job (a
+# GITHUB_TOKEN commit does not trigger the separate Pages workflow, so we
+# deploy here directly).
+name: Update FPL data
+on:
+  schedule:
+    - cron: "0 */2 * * *"   # every 2 hours (UTC)
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Fetch FPL data
+        run: node scripts/fetch-data.js
+      - name: Commit data.json if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain data.json)" ]; then
+            git add data.json
+            git commit -m "Update FPL data ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git push
+          else
+            echo "No data change"
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+      - id: deployment
+        uses: actions/deploy-pages@v4
