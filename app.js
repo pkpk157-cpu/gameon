@@ -15,7 +15,6 @@
     lms: '<path d="M12 3s4 3.5 4 8a4 4 0 0 1-8 0c0-1.6.8-3 1.5-4"/><path d="M12 21a6 6 0 0 0 6-6c0-1-.2-2-.6-2.9"/><path d="M12 21a6 6 0 0 1-6-6"/>',
     pyramid: '<path d="M12 4 4 19h16L12 4Z"/><path d="M7.7 12.5h8.6M6 16h12"/>',
     h2h: '<circle cx="12" cy="12" r="8.5"/><path d="m12 7 3 2.2-1.1 3.5h-3.8L9 9.2 12 7Z"/><path d="m12 7 .0-3M9 9.2 6.2 7.6M14.9 9.2l2.9-1.6M13.9 12.7l1.9 2.5M10.1 12.7 8.2 15.2"/>',
-    person: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/>',
     moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',
     auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/>',
@@ -25,9 +24,7 @@
     book: '<path d="M5 4.5A2 2 0 0 1 7 3h11v15H7a2 2 0 0 0-2 2V4.5Z"/><path d="M5 18.5A2 2 0 0 0 7 21h11"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M20 12a8 8 0 0 0-.12-1.36l1.9-1.48-2-3.46-2.24.9a7.9 7.9 0 0 0-2.36-1.36L14.7 3h-4L10.3 5.3a7.9 7.9 0 0 0-2.36 1.36l-2.24-.9-2 3.46 1.9 1.48A8 8 0 0 0 5.48 12a8 8 0 0 0 .12 1.36l-1.9 1.48 2 3.46 2.24-.9a7.9 7.9 0 0 0 2.36 1.36l.4 2.34h4l.4-2.34a7.9 7.9 0 0 0 2.36-1.36l2.24.9 2-3.46-1.9-1.48A8 8 0 0 0 20 12Z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5M12 7.8h.01"/>',
-    back: '<path d="M15 5l-7 7 7 7"/>',
-    chev: '<path d="M6 9l6 6 6-6"/>',
-    close: '<path d="M6 6l12 12M18 6 6 18"/>'
+    back: '<path d="M15 5l-7 7 7 7"/>'
   };
   function svg(name, size) {
     return '<svg viewBox="0 0 24 24" width="' + (size || 24) + '" height="' + (size || 24) +
@@ -89,12 +86,6 @@
   };
 
   /* Section title with an info button that opens the competition's rules page. */
-  function titleBar(name, topic, chip) {
-    return '<div class="section-title"><h2>' + esc(name) + '</h2>' +
-      '<button class="infobtn" data-rules="' + topic + '" title="Rules" aria-label="' + esc(name) + ' rules">' + svg("info", 17) + '</button>' +
-      '<div class="rule"></div>' + (chip ? '<span class="chip">' + chip + '</span>' : '') + '</div>';
-  }
-
   var TABS = [
     { id: "classic", label: "Classic", icon: "classic" },
     { id: "monthly", label: "Monthly", icon: "monthly" },
@@ -279,7 +270,7 @@
     var h = (location.hash || "#classic").replace("#", "");
     var parts = h.split("/");
     var view = parts[0];
-    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "home", "profile"]);
+    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "profile"]);
     if (known.indexOf(view) === -1) view = "classic";
     if (view !== "profile" && view !== "rules" && view !== "settings") state.backView = view;
     state.view = view;
@@ -345,7 +336,6 @@
     }
 
     if (state.view === "profile") return renderProfile(host, ds, state.profileId);
-    if (state.view === "home") return renderHome(host, ds);
     if (state.view === "classic") return renderClassic(host, ds);
     if (state.view === "monthly") return renderMonthly(host, ds);
     if (state.view === "lms") return renderLms(host, ds);
@@ -377,81 +367,7 @@
   /* ====================================================================== */
   /* HOME                                                                   */
   /* ====================================================================== */
-  function renderHome(host, ds) {
-    var cfg = S.config();
-    var classic = K.classic(ds);
-    var lms = K.lms(ds);
-    var gw = K.currentGw(ds);
-    var finished = K.finishedGws(ds).length;
-    var leader = classic[0];
-    var pot = cfg.joiningFee ? cfg.joiningFee * ds.managers.length : null;
-
-    var h = '';
-    h += '<div class="grid cols-4">' +
-      stat(ds.managers.length, "Managers") +
-      stat(gw || "—", "Current GW") +
-      stat(finished + "/" + cfg.totalGameweeks, "GWs scored") +
-      stat(lms.survivorsCount, "LMS alive") +
-      '</div>';
-
-    if (pot) h += '<div class="grid cols-2" style="margin-top:14px">' +
-      stat(money(pot), "Prize pool (est.)") +
-      stat(money(cfg.joiningFee), "Joining fee") + '</div>';
-
-    // Snapshot cards
-    h += '<div class="section-title"><h2>Where things stand</h2><div class="rule"></div></div>';
-    h += '<div class="grid cols-2">';
-
-    h += linkCard("classic", "🏆 Classic League", leader
-      ? '<b>' + esc(leader.entryName) + '</b> leads with <b>' + num(leader.total) + '</b> pts'
-        + '<div class="note">' + esc(leader.playerName) + '</div>'
-      : 'No standings yet');
-
-    var lmsLine = lms.champion
-      ? '👑 <b>' + esc(lms.champion.name) + '</b> is the Last Manager Standing!'
-      : '<b>' + lms.survivorsCount + '</b> still alive · ' + finished + ' GWs played';
-    h += linkCard("lms", "🎯 Last Manager Standing", lmsLine);
-
-    var mExpand = K.monthly(ds).filter(function (m) { return m.played > 0; });
-    var curMonth = mExpand.length ? mExpand[mExpand.length - 1] : null;
-    h += linkCard("monthly", "📅 Monthly Race", curMonth && curMonth.rows.length
-      ? curMonth.name + ' leader: <b>' + esc(curMonth.rows[0].entryName) + '</b> (' + num(curMonth.rows[0].score) + ')'
-        + (curMonth.complete ? ' <span class="pill gold">final</span>' : ' <span class="pill live">live</span>')
-      : 'Awaiting first gameweek');
-
-    var pyr = K.pyramid(ds);
-    var s1 = pyr.seasons[0];
-    var eliteLeader = s1 && s1.divisions[0] && s1.divisions[0].rows[0];
-    h += linkCard("pyramid", "🔺 Pyramid Battle", eliteLeader
-      ? s1.name + ' · Elite top: <b>' + esc(eliteLeader.name) + '</b>'
-      : '4 divisions · 3 mini-seasons');
-
-    h += '</div>';
-
-    // Data freshness
-    var when = new Date(ds.updatedAt);
-    h += '<div class="section-title"><h2>Data</h2><div class="rule"></div></div>';
-    h += '<div class="card pad"><div class="bd">' +
-      '<div class="note">Last updated <b>' + when.toLocaleString() + '</b> from FPL' +
-      (ds._failed ? ' · <span class="note warn">' + ds._failed + ' manager histories failed to load — refresh again</span>' : '') +
-      '</div><div class="btnrow" style="margin-top:12px">' +
-      '<button class="btn primary" id="homeRefresh">↻ Refresh</button>' +
-      '<button class="btn" id="homeSettings">Settings</button></div></div></div>';
-
-    host.innerHTML = h;
-    $all(".linkcard", host).forEach(function (c) {
-      c.addEventListener("click", function () { location.hash = c.getAttribute("data-go"); });
-    });
-    $("#homeRefresh", host).addEventListener("click", startRefresh);
-    $("#homeSettings", host).addEventListener("click", function () { location.hash = "settings"; });
-  }
-
   function stat(k, l) { return '<div class="stat"><div class="k">' + esc(k) + '</div><div class="l">' + esc(l) + '</div></div>'; }
-  function linkCard(go, title, body) {
-    return '<div class="card linkcard" data-go="' + go + '" style="cursor:pointer">' +
-      '<div class="hd"><h3>' + title + '</h3><span class="sub">›</span></div>' +
-      '<div class="bd"><div class="note" style="color:var(--ink-soft);font-size:13.5px">' + body + '</div></div></div>';
-  }
 
   /* ====================================================================== */
   /* CLASSIC                                                                */
@@ -685,69 +601,6 @@
     return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th><th class="num">GW pts</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>' +
       '<div class="note" style="margin-top:8px">' + g.table.length + ' managers · Top 2 → UCL · 3rd–4th → UEL. Points 3/1/0; ties by group-stage score.</div>';
-  }
-
-  function renderBracket(ds, bracket, comp) {
-    var rounds = (bracket[comp] && bracket[comp].rounds) || [];
-    if (!rounds.length) return '';
-    var mm = K.managerMap(ds);
-    var sched = S.config().h2h.knockout;
-    var h = '<div class="section-title" style="margin-top:18px"><h2>' + comp + ' bracket</h2><div class="rule"></div></div><div class="bracket">';
-    rounds.forEach(function (rd, ri) {
-      var meta = sched[ri] || sched[sched.length - 1];
-      h += '<div class="bround"><h4>' + esc(rd.name || (meta ? meta.name : "Round " + (ri + 1))) + '</h4>';
-      (rd.ties || []).forEach(function (tie) {
-        var gws = meta ? meta.gws : [];
-        var aS = tie.a ? K.tieScore(ds, tie.a, gws).score : 0;
-        var bS = tie.b ? K.tieScore(ds, tie.b, gws).score : 0;
-        var aWin = tie.a && (aS >= bS), bWin = tie.b && (bS > aS);
-        h += '<div class="btie">' +
-          teamRow(tie.a, aS, aWin, mm) + teamRow(tie.b, bS, bWin, mm) + '</div>';
-      });
-      h += '</div>';
-    });
-    h += '</div>';
-    return h;
-    function teamRow(id, score, win, mm) {
-      var name = id ? ((mm[id] && mm[id].entryName) || ("#" + id)) : "—";
-      return '<div class="bteam' + (win ? ' win' : '') + '"><span>' + esc(name) + '</span><span class="s">' + (id ? num(score) : "") + '</span></div>';
-    }
-  }
-
-  function autoSeedBracket(ds) {
-    var h2h = K.h2h(ds);
-    var ucl = [], uel = [];
-    h2h.groups.forEach(function (g) {
-      if (g.table[0]) ucl.push(g.table[0].id);
-      if (g.table[1]) ucl.push(g.table[1].id);
-      if (g.table[2]) uel.push(g.table[2].id);
-      if (g.table[3]) uel.push(g.table[3].id);
-    });
-    var bracket = {
-      UCL: { rounds: seedRounds(ucl, ["Round of 32", "Round of 16", "Quarter Finals", "Semi Finals", "Final"]) },
-      UEL: { rounds: seedRounds(uel, ["Round of 32", "Round of 16", "Quarter Finals", "Semi Finals", "Final"]) }
-    };
-    S.setOverridePath(["h2h", "bracket"], bracket);
-    toast("Bracket seeded from group results");
-    render();
-  }
-  function seedRounds(ids, names) {
-    // First round: pair 1v last, 2v2nd-last (standard seeding). Later rounds empty (filled as results come, or manually).
-    var rounds = [];
-    var n = ids.length;
-    var first = [];
-    for (var i = 0; i < Math.floor(n / 2); i++) first.push({ a: ids[i], b: ids[n - 1 - i] });
-    rounds.push({ name: names[0], ties: first });
-    var count = first.length;
-    var idx = 1;
-    while (count > 1 && idx < names.length) {
-      count = Math.floor(count / 2);
-      var ties = [];
-      for (var j = 0; j < count; j++) ties.push({ a: null, b: null });
-      rounds.push({ name: names[idx], ties: ties });
-      idx++;
-    }
-    return rounds;
   }
 
   /* ====================================================================== */
@@ -1035,7 +888,6 @@
       '<button class="btn" data-ov="lmsElim">LMS manual eliminations</button>' +
       '<button class="btn" data-ov="pyramidRosters">Pyramid rosters</button>' +
       '<button class="btn" data-ov="h2hGroups">H2H groups</button>' +
-      '<button class="btn" data-ov="h2hBracket">H2H bracket</button>' +
       '</div>';
     h += '<div class="btnrow" style="margin-top:16px"><button class="btn danger" id="btnReset">Reset all settings & overrides</button></div>';
     h += '</div></div>';
@@ -1122,8 +974,6 @@
     else if (kind === "h2hGroups") { title = "H2H groups"; path = ["h2h", "groups"];
       value = (ov.h2h && ov.h2h.groups) || (ds ? K.h2h(ds).groups.map(function (g) { return { name: g.name, entries: g.table.map(function (t) { return t.id; }) }; }) : []);
       help = 'Array of { "name":"Group A", "entries":[entryIds] }. 16 groups of 15.'; }
-    else if (kind === "h2hBracket") { title = "H2H bracket"; path = ["h2h", "bracket"]; value = (ov.h2h && ov.h2h.bracket) || null;
-      help = 'Use "Auto-seed" on the Game On UCL tab first, then fine-tune here.'; }
     else return;
 
     if (path[0] === "_configMonths" || path[0] === "_configClassicPrizes") {

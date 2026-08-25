@@ -461,15 +461,6 @@
     return groups;
   }
 
-  // Aggregate score across a knockout tie's legs (for the bracket UI).
-  C.tieScore = function (ds, entryId, gws) {
-    var played = gws.filter(function (g) {
-      var e = ds.bootstrap.events.find(function (x) { return x.id === g; });
-      return e && e.finished && e.data_checked;
-    });
-    return { score: sumGws(ds, entryId, played) || 0, legs: played.length, of: gws.length };
-  };
-
   /* ---- small utils ------------------------------------------------------ */
   function nm(mm, id) { return (mm[id] && mm[id].entryName) || ("#" + id); }
   function pl(mm, id) { return (mm[id] && mm[id].playerName) || ""; }
