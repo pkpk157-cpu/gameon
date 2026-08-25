@@ -238,22 +238,29 @@
         var lg = curEv.id;
         ds.pitchGw = lg;
         var inProgress = curEv.is_current && !(curEv.finished && curEv.data_checked);
+        // Squads are stored per gameweek. An in-browser refresh only pulls the
+        // current one and keeps whatever earlier gameweeks we already hold;
+        // the server-side fetcher backfills the rest.
+        ds.picksV = 2;
+        var old = _dataset && _dataset.picksV === 2 ? _dataset : null;
+        ds.picks = old ? merge({}, old.picks || {}) : {};
+        ds.livePoints = old ? merge({}, old.livePoints || {}) : {};
         report({ phase: "live", message: "Loading current gameweek…" });
         return API.live(lg).then(function (live) {
           var mins = {};
-          ds.livePoints = {};
+          ds.livePoints[lg] = {};
           (live.elements || []).forEach(function (el) {
             var st = el.stats || {};
             mins[el.id] = st.minutes || 0;
-            ds.livePoints[el.id] = st.total_points || 0;
+            ds.livePoints[lg][el.id] = st.total_points || 0;
           });
-          ds.picks = {};
+          ds.picks[lg] = {};
           var targets = ds.managers.map(function (m) { return m.id; });
           report({ phase: "live", done: 0, total: targets.length, message: "Loading squads…" });
           return API.pool(targets, function (id) {
             return API.entryPicks(id, lg).then(function (pk) {
               var list = pk.picks || [];
-              ds.picks[id] = {
+              ds.picks[lg][id] = {
                 c: (pk.active_chip || ""),
                 p: list.map(function (p) {
                   return [p.element, p.multiplier, p.is_captain ? 1 : 0, p.is_vice_captain ? 1 : 0];

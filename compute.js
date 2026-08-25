@@ -512,14 +512,39 @@
     };
   };
 
-  // A manager's squad for the baked "pitch" gameweek, laid out by position with
-  // live points per player. Returns null when no squad data is available.
-  C.managerPitch = function (ds, id) {
+  /* ---- squads -----------------------------------------------------------
+     Squads are stored per gameweek (picksV 2). Older datasets held only the
+     current gameweek in a flat map, so both shapes are read here. */
+  function picksAt(ds, gw) {
+    if (!ds || !ds.picks) return null;
+    if (ds.picksV === 2) return ds.picks[gw] || null;
+    return (+gw === +ds.pitchGw) ? ds.picks : null;
+  }
+  function liveAt(ds, gw) {
+    if (!ds || !ds.livePoints) return {};
+    if (ds.picksV === 2) return ds.livePoints[gw] || {};
+    return (+gw === +ds.pitchGw) ? ds.livePoints : {};
+  }
+
+  // Gameweeks we hold squads for, oldest first.
+  C.squadGws = function (ds) {
+    if (!ds || !ds.picks) return [];
+    if (ds.picksV !== 2) return ds.pitchGw ? [+ds.pitchGw] : [];
+    return Object.keys(ds.picks).map(Number)
+      .filter(function (g) { return ds.picks[g] && Object.keys(ds.picks[g]).length; })
+      .sort(function (a, b) { return a - b; });
+  };
+
+  // A manager's squad for a gameweek, laid out by position with points per
+  // player. Defaults to the latest gameweek. Null when we have no squad.
+  C.managerPitch = function (ds, id, gw) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;
-    var sq = ds.picks[id];
+    gw = gw ? +gw : +ds.pitchGw;
+    var pk = picksAt(ds, gw);
+    var sq = pk && pk[id];
     if (!sq || !sq.p || !sq.p.length) return null;
-    var els = ds.elements, lp = ds.livePoints || {};
+    var els = ds.elements, lp = liveAt(ds, gw);
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
     function build(el, mult, isCap, isVice) {
@@ -549,7 +574,6 @@
     if (best && best.pts > 0) best.star = true;
 
     var lines = [1, 2, 3, 4].map(function (t) { return { pos: POS[t], players: rows[t] || [] }; });
-    var gw = ds.pitchGw;
     var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
     var live = gwEv ? (gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false;
 
@@ -569,6 +593,83 @@
              chip: sq.c || "", lines: lines, bench: bench,
              total: total, hits: hits, net: net,
              average: n ? Math.round(sum / n) : null, highest: top };
+  };
+
+  // Side-by-side comparison of two managers for a gameweek, plus season totals
+  // and their notional head-to-head record across every gameweek played.
+  C.compare = function (ds, aId, bId, gw) {
+    if (!ds || !aId || !bId) return null;
+    aId = +aId; bId = +bId;
+    gw = gw ? +gw : +ds.pitchGw;
+    var mm = managerMap(ds);
+    var played = C.finishedGws(ds);
+    var cur = C.currentGw(ds);
+    if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
+
+    function side(id) {
+      var hist = ds.history[id] || {};
+      var hits = 0, bench = 0, best = null, worst = null, chips = [];
+      played.forEach(function (g) {
+        var r = hist[g];
+        if (!r) return;
+        hits += r.h || 0;
+        bench += r.b || 0;
+        if (typeof r.p === "number") {
+          if (!best || r.p > best.p) best = { gw: g, p: r.p };
+          if (!worst || r.p < worst.p) worst = { gw: g, p: r.p };
+        }
+      });
+      C.squadGws(ds).forEach(function (g) {
+        var pk = picksAt(ds, g), sq = pk && pk[id];
+        if (sq && sq.c) chips.push({ gw: g, chip: sq.c });
+      });
+      var row = (hist[gw] || null);
+      var last = null;
+      played.forEach(function (g) { if (hist[g] && typeof hist[g].t === "number") last = hist[g].t; });
+      return {
+        id: id, name: nm(mm, id), player: pl(mm, id),
+        pitch: C.managerPitch(ds, id, gw),
+        gwPts: row && typeof row.p === "number" ? row.p : null,
+        gwHits: row ? (row.h || 0) : 0,
+        gwBench: row ? (row.b || 0) : 0,
+        total: last, hits: hits, bench: bench, best: best, worst: worst, chips: chips
+      };
+    }
+
+    var A = side(aId), B = side(bId);
+
+    // Classic-league standing for each.
+    C.classic(ds).forEach(function (r) {
+      if (+r.id === aId) A.rank = r.computedRank;
+      if (+r.id === bId) B.rank = r.computedRank;
+    });
+
+    // Notional head-to-head: who scored more, gameweek by gameweek.
+    var rec = { w: 0, d: 0, l: 0, gws: [] };
+    played.forEach(function (g) {
+      var x = (ds.history[aId] || {})[g], y = (ds.history[bId] || {})[g];
+      if (!x || !y || typeof x.p !== "number" || typeof y.p !== "number") return;
+      if (x.p > y.p) rec.w++; else if (x.p < y.p) rec.l++; else rec.d++;
+      rec.gws.push({ gw: g, a: x.p, b: y.p });
+    });
+
+    // Who owns whom this gameweek.
+    function squadIds(p) {
+      var s = {};
+      if (!p) return s;
+      p.lines.forEach(function (l) { l.players.forEach(function (x) { s[x.el] = x; }); });
+      p.bench.forEach(function (x) { s[x.el] = x; });
+      return s;
+    }
+    var sa = squadIds(A.pitch), sb = squadIds(B.pitch);
+    var shared = [], aOnly = [], bOnly = [];
+    Object.keys(sa).forEach(function (k) { (sb[k] ? shared : aOnly).push(sa[k]); });
+    Object.keys(sb).forEach(function (k) { if (!sa[k]) bOnly.push(sb[k]); });
+    function byPts(x, y) { return y.pts - x.pts; }
+
+    var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
+    return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), a: A, b: B, record: rec,
+             shared: shared.sort(byPts), aOnly: aOnly.sort(byPts), bOnly: bOnly.sort(byPts) };
   };
 
   window.GO_COMPUTE = C;

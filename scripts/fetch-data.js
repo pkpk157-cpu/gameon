@@ -110,64 +110,86 @@ async function h2hAll(id) {
   const h2h = {};
   await pool(H2H, async (id) => { h2h[id] = await h2hAll(id); }, 4);
 
-  // Current-gameweek squads: powers the LMS "players played" column and the
-  // live football-pitch on each manager's profile. We fetch every manager's
-  // picks for the current GW once and reuse them for both.
-  let elements = null, pitchGw = null, livePoints = null, picks = null;
+  // Squads for every gameweek played so far. These power the LMS "players
+  // played" column and the pitch on each manager's profile, which can be
+  // stepped back through the season. A finished gameweek's squads and points
+  // never change, so we reuse whatever the last run already wrote and only
+  // fetch the gameweeks we are missing (plus the live one, which moves).
+  let elements = null, pitchGw = null;
+  const livePoints = {}, picks = {};
+
+  // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
+  const teamShort = {};
+  (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; });
+  elements = {};
+  (bs.elements || []).forEach((el) => {
+    elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || ""];
+  });
+
+  let prev = {};
+  try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
+  const canReuse = prev.picksV === 2;
+  const prevPicks = canReuse ? (prev.picks || {}) : {};
+  const prevLive = canReuse ? (prev.livePoints || {}) : {};
+
   const curEv = events.find((e) => e.is_current) || events.find((e) => e.is_next);
   if (curEv) {
-    const lg = curEv.id;
-    pitchGw = lg;
-    const inProgress = curEv.is_current && !(curEv.finished && curEv.data_checked);
-    console.log("Current GW " + lg + " — fetching squads for pitch + players-played…");
-    try {
-      // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
-      const teamShort = {};
-      (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; });
-      elements = {};
-      (bs.elements || []).forEach((el) => {
-        elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || ""];
-      });
-
-      const live = await getJSON("/event/" + lg + "/live/");
-      const mins = {};
-      livePoints = {};
-      (live.elements || []).forEach((el) => {
-        const st = el.stats || {};
-        mins[el.id] = st.minutes || 0;
-        livePoints[el.id] = st.total_points || 0;
-      });
-
-      picks = {};
-      await pool(managers, async (m) => {
-        try {
-          const pk = await getJSON("/entry/" + m.id + "/event/" + lg + "/picks/");
-          const list = pk.picks || [];
-          // Squad: [element, multiplier, is_captain, is_vice_captain] in pick order.
-          picks[m.id] = {
-            c: (pk.active_chip || ""),
-            p: list.map((p) => [p.element, p.multiplier, p.is_captain ? 1 : 0, p.is_vice_captain ? 1 : 0])
-          };
-          if (inProgress) {
-            let played = 0, total = 0;
-            list.forEach((p) => {
-              if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
-            });
-            if (!history[m.id]) history[m.id] = {};
-            if (!history[m.id][lg]) history[m.id][lg] = { p: 0, h: 0, b: 0, t: 0 };
-            history[m.id][lg].pl = played;
-            history[m.id][lg].plt = total || 12;
-          }
-        } catch (e) { /* skip this manager */ }
-      }, 6);
-    } catch (e) { console.log("  live/picks step failed (non-fatal): " + e.message); }
+    pitchGw = curEv.id;
+    const want = events.filter((e) => e.id <= curEv.id).map((e) => e.id);
+    for (const gw of want) {
+      const ev = events.find((e) => e.id === gw);
+      const settled = !!(ev && ev.finished && ev.data_checked);
+      const cached = prevPicks[gw] && prevLive[gw] &&
+        Object.keys(prevPicks[gw]).length >= Math.floor(managers.length * 0.9);
+      if (settled && cached) {
+        picks[gw] = prevPicks[gw];
+        livePoints[gw] = prevLive[gw];
+        console.log("GW " + gw + " — reused " + Object.keys(picks[gw]).length + " cached squads");
+        continue;
+      }
+      const inProgress = !!(ev && ev.is_current && !settled);
+      console.log("GW " + gw + " — fetching squads…");
+      try {
+        const live = await getJSON("/event/" + gw + "/live/");
+        const mins = {}, pts = {};
+        (live.elements || []).forEach((el) => {
+          const st = el.stats || {};
+          mins[el.id] = st.minutes || 0;
+          pts[el.id] = st.total_points || 0;
+        });
+        const got = {};
+        await pool(managers, async (m) => {
+          try {
+            const pk = await getJSON("/entry/" + m.id + "/event/" + gw + "/picks/");
+            const list = pk.picks || [];
+            // Squad: [element, multiplier, is_captain, is_vice_captain] in pick order.
+            got[m.id] = {
+              c: (pk.active_chip || ""),
+              p: list.map((p) => [p.element, p.multiplier, p.is_captain ? 1 : 0, p.is_vice_captain ? 1 : 0])
+            };
+            if (inProgress) {
+              let played = 0, total = 0;
+              list.forEach((p) => {
+                if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
+              });
+              if (!history[m.id]) history[m.id] = {};
+              if (!history[m.id][gw]) history[m.id][gw] = { p: 0, h: 0, b: 0, t: 0 };
+              history[m.id][gw].pl = played;
+              history[m.id][gw].plt = total || 12;
+            }
+          } catch (e) { /* skip this manager */ }
+        }, 6);
+        if (Object.keys(got).length) { picks[gw] = got; livePoints[gw] = pts; }
+        console.log("  GW " + gw + " — " + Object.keys(got).length + " squads");
+      } catch (e) { console.log("  GW " + gw + " squads failed (non-fatal): " + e.message); }
+    }
   }
 
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
-    elements, pitchGw, livePoints, picks
+    elements, pitchGw, picksV: 2, livePoints, picks
   };
   fs.writeFileSync("data.json", JSON.stringify({ generatedAt: dataset.updatedAt, dataset }));
   console.log("Wrote data.json — " + managers.length + " managers, " + H2H.length +

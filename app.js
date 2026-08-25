@@ -166,7 +166,7 @@
       segBtn("dark", "moon", "Dark", theme) +
       '</div></div>';
 
-    h += '<div class="menu">' + menuItem("pfRules", "book", "Game rules");
+    h += '<div class="menu">' + menuItem("pfCompare", "h2h", "Head to head") + menuItem("pfRules", "book", "Game rules");
     if (admin) {
       h += menuItem("pfRefresh", "refresh", "Refresh from FPL") +
         menuItem("pfSettings", "gear", "League settings & admin") +
@@ -189,6 +189,7 @@
     $all("#pfTheme button").forEach(function (b) {
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile(); });
     });
+    $("#pfCompare").addEventListener("click", function () { closeProfile(); location.hash = "compare"; });
     $("#pfRules").addEventListener("click", function () { closeProfile(); location.hash = "rules"; });
     $("#pfMeSave").addEventListener("click", function () {
       var v = parseInt($("#pfMe").value, 10);
@@ -270,9 +271,9 @@
     var h = (location.hash || "#classic").replace("#", "");
     var parts = h.split("/");
     var view = parts[0];
-    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "profile"]);
+    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "profile", "compare"]);
     if (known.indexOf(view) === -1) view = "classic";
-    if (view !== "profile" && view !== "rules" && view !== "settings") state.backView = view;
+    if (["profile","rules","settings","compare"].indexOf(view) === -1) state.backView = view;
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
@@ -298,7 +299,8 @@
     h2h:     { t: "Game On UCL", topic: "h2h" },
     rules:   { t: "Rules" },
     settings:{ t: "Settings" },
-    profile: { t: "Profile" }
+    profile: { t: "Profile" },
+    compare: { t: "Head to head" }
   };
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
@@ -326,6 +328,7 @@
 
     if (state.view === "settings") return renderSettings(host);
     if (state.view === "rules") return renderRules(host);
+    if (state.view === "compare") return renderCompare(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();
@@ -867,6 +870,55 @@
     return h;
   }
 
+  var CHIP_NAME = { bboost: "Bench Boost", "3xc": "Triple Captain", freehit: "Free Hit", wildcard: "Wildcard" };
+
+  // The whole squad block: gameweek picker, the three stats, Pitch/List and the
+  // squad itself. Re-rendered in place whenever the gameweek or mode changes.
+  function mountPitch(box, ds, id, gw, mode) {
+    var gws = K.squadGws(ds);
+    if (!gws.length) return;
+    gw = gw || gws[gws.length - 1];
+    if (gws.indexOf(+gw) === -1) gw = gws[gws.length - 1];
+    var pit = K.managerPitch(ds, id, gw);
+    if (!pit) {
+      box.innerHTML = '<div class="callout">No squad recorded for this gameweek.</div>';
+      return;
+    }
+    mode = mode === "list" ? "list" : "pitch";
+    state.pitchGw = +gw; state.pitchMode = mode; // remember while browsing
+
+    var h = '<div class="pgwline">';
+    h += '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
+      return '<option value="' + g + '"' + (+g === +gw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
+    }).join("") + '</select>';
+    h += (pit.live ? ' <span class="pill live">Live</span>' : '') +
+      (pit.chip ? ' <span class="pill gold">' + esc(CHIP_NAME[pit.chip] || pit.chip) + '</span>' : '');
+    h += '</div>';
+
+    h += '<div class="pstats">';
+    h += '<div class="pstat"><div class="v">' + (pit.average === null ? "—" : num(pit.average)) + '</div><div class="l">Average</div></div>';
+    h += '<div class="pstat main"><div class="v">' + num(pit.net) + '</div><div class="l">Total Pts' +
+      (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '') + '</div></div>';
+    h += pit.highest
+      ? '<div class="pstat hi" data-entry="' + pit.highest.id + '" role="button" tabindex="0"><div class="v">' +
+          num(pit.highest.pts) + '</div><div class="l">Highest <span class="arw">›</span></div></div>'
+      : '<div class="pstat"><div class="v">—</div><div class="l">Highest</div></div>';
+    h += '</div>';
+
+    h += '<div class="pseg"><button type="button"' + (mode === "pitch" ? ' class="on"' : '') + ' data-mode="pitch">Pitch</button>' +
+      '<button type="button"' + (mode === "list" ? ' class="on"' : '') + ' data-mode="list">List</button></div>';
+    h += mode === "list" ? listHtml(pit) : pitchHtml(pit);
+    box.innerHTML = h;
+
+    $("#pitchGwSel", box).addEventListener("change", function () {
+      mountPitch(box, ds, id, +this.value, mode);
+    });
+    $(".pseg", box).addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-mode]");
+      if (b) mountPitch(box, ds, id, gw, b.getAttribute("data-mode"));
+    });
+  }
+
   function listHtml(pit) {
     var rows = [];
     pit.lines.forEach(function (ln) {
@@ -908,30 +960,11 @@
       P.h2h ? (P.h2h.w + "W " + P.h2h.d + "D " + P.h2h.l + "L · " + P.h2h.pts + " pts" + (P.h2h.dest ? " · " + P.h2h.dest : "")) : "");
     h += '</div>';
 
-    // Live squad on a football pitch (baked per gameweek).
-    var pit = K.managerPitch(ds, id);
-    if (pit) {
-      var chipName = { bboost: "Bench Boost", "3xc": "Triple Captain", freehit: "Free Hit", wildcard: "Wildcard" };
+    // Squad on a football pitch, steppable through every gameweek played.
+    var gws = K.squadGws(ds);
+    if (gws.length && K.managerPitch(ds, id, gws[gws.length - 1])) {
       h += '<div class="section-title"><h2>Squad</h2><div class="rule"></div></div>';
-      h += '<div class="card pitchcard"><div class="bd">';
-      h += '<div class="pgwline">' + esc(pit.gwName) +
-        (pit.live ? ' <span class="pill live">Live</span>' : '') +
-        (pit.chip ? ' <span class="pill gold">' + esc(chipName[pit.chip] || pit.chip) + '</span>' : '') + '</div>';
-
-      h += '<div class="pstats">';
-      h += '<div class="pstat"><div class="v">' + (pit.average === null ? "—" : num(pit.average)) + '</div><div class="l">Average</div></div>';
-      h += '<div class="pstat main"><div class="v">' + num(pit.net) + '</div><div class="l">Total Pts' +
-        (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '') + '</div></div>';
-      h += pit.highest
-        ? '<div class="pstat hi" data-entry="' + pit.highest.id + '" role="button" tabindex="0"><div class="v">' +
-            num(pit.highest.pts) + '</div><div class="l">Highest <span class="arw">›</span></div></div>'
-        : '<div class="pstat"><div class="v">—</div><div class="l">Highest</div></div>';
-      h += '</div>';
-
-      h += '<div class="pseg" id="pitchSeg"><button type="button" class="on" data-mode="pitch">Pitch</button>' +
-        '<button type="button" data-mode="list">List</button></div>';
-      h += '<div id="pitchPane">' + pitchHtml(pit) + '</div>';
-      h += '</div></div>';
+      h += '<div class="card pitchcard"><div class="bd" id="pitchBox"></div></div>';
     }
 
     if (P.monthly.length) {
@@ -961,18 +994,135 @@
       if (state.backView) location.hash = state.backView; else location.hash = "classic";
     });
 
-    // Pitch / List toggle.
-    var seg = $("#pitchSeg", host), pane = $("#pitchPane", host);
-    if (seg && pane && pit) {
-      seg.addEventListener("click", function (e) {
-        var b = e.target.closest("button[data-mode]");
-        if (!b) return;
-        Array.prototype.forEach.call(seg.querySelectorAll("button"), function (x) {
-          x.classList.toggle("on", x === b);
-        });
-        pane.innerHTML = b.getAttribute("data-mode") === "list" ? listHtml(pit) : pitchHtml(pit);
-      });
+    var box = $("#pitchBox", host);
+    if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode);
+  }
+
+  /* ====================================================================== */
+  /* HEAD TO HEAD — two managers side by side                               */
+  /* ====================================================================== */
+  function cmpCell(v, win) {
+    if (v === null || v === undefined) return '<td class="num">—</td>';
+    if (typeof v !== "number") { // text values (chips) read as prose, not a score
+      return '<td class="num"><span class="txt">' + esc(String(v)) + '</span></td>';
     }
+    return '<td class="num' + (win ? ' win' : '') + '">' + num(v) + '</td>';
+  }
+  function cmpRow(label, a, b, hint, lowerBetter) {
+    var an = (typeof a === "number") ? a : null, bn = (typeof b === "number") ? b : null;
+    var aw = false, bw = false;
+    if (an !== null && bn !== null && an !== bn) {
+      var aBetter = lowerBetter ? (an < bn) : (an > bn);
+      aw = aBetter; bw = !aBetter;
+    }
+    return '<tr>' + cmpCell(a, aw) +
+      '<td class="cmid">' + esc(label) + (hint ? '<div class="note">' + esc(hint) + '</div>' : '') + '</td>' +
+      cmpCell(b, bw) + '</tr>';
+  }
+  function diffChip(p) {
+    return '<div class="dchip"><span class="dn">' + esc(p.name) + '</span>' +
+      '<span class="dt">' + esc(p.team) + '</span>' +
+      '<span class="dp">' + num(p.pts) + '</span></div>';
+  }
+
+  function renderCompare(host, ds) {
+    if (!ds || !ds.managers || !ds.managers.length) {
+      host.innerHTML = '<div class="callout">Standings not loaded yet.</div>';
+      return;
+    }
+    var gws = K.squadGws(ds);
+    var mgrs = ds.managers.slice().sort(function (x, y) {
+      return String(x.entryName || "").localeCompare(String(y.entryName || ""));
+    });
+    // Defaults: you (or the leader) against the next manager in the table.
+    var byRank = ds.managers.slice().sort(function (x, y) { return (x.rank || 1e9) - (y.rank || 1e9); });
+    if (!state.cmpA) state.cmpA = state.me || (byRank[0] && byRank[0].id);
+    if (!state.cmpB) {
+      var other = byRank.filter(function (m) { return +m.id !== +state.cmpA; })[0];
+      state.cmpB = other && other.id;
+    }
+    if (!state.cmpGw || gws.indexOf(+state.cmpGw) === -1) state.cmpGw = gws[gws.length - 1];
+
+    function sel(idAttr, chosen) {
+      return '<select class="in" id="' + idAttr + '">' + mgrs.map(function (m) {
+        return '<option value="' + m.id + '"' + (+m.id === +chosen ? ' selected' : '') + '>' +
+          esc(m.entryName) + ' — ' + esc(m.playerName) + '</option>';
+      }).join("") + '</select>';
+    }
+    var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="cmpBack">' + svg("back", 16) + ' Back</button></div>';
+    h += '<div class="card"><div class="bd cmppick">' + sel("cmpA", state.cmpA) +
+      '<div class="vs">vs</div>' + sel("cmpB", state.cmpB) + '</div></div>';
+    h += '<div id="cmpBox"></div>';
+    host.innerHTML = h;
+
+    $("#cmpBack", host).addEventListener("click", function () { location.hash = state.backView || "classic"; });
+    $("#cmpA", host).addEventListener("change", function () { state.cmpA = +this.value; drawCompare(ds); });
+    $("#cmpB", host).addEventListener("change", function () { state.cmpB = +this.value; drawCompare(ds); });
+    drawCompare(ds);
+  }
+
+  function drawCompare(ds) {
+    var box = $("#cmpBox");
+    if (!box) return;
+    var gws = K.squadGws(ds);
+    var R = K.compare(ds, state.cmpA, state.cmpB, state.cmpGw);
+    if (!R) { box.innerHTML = '<div class="callout">Pick two managers.</div>'; return; }
+    var a = R.a, b = R.b;
+
+    var h = '<div class="card"><div class="bd">';
+    h += '<div class="pgwline"><select class="in gwsel" id="cmpGwSel" aria-label="Gameweek">' +
+      gws.map(function (g) {
+        return '<option value="' + g + '"' + (+g === +R.gw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
+      }).join("") + '</select></div>';
+
+    h += '<div class="cmphead">' +
+      '<div class="side"><div class="nm" data-entry="' + a.id + '">' + esc(a.name) + '</div>' +
+        '<div class="sc' + (a.gwPts > b.gwPts ? ' win' : '') + '">' + (a.gwPts === null ? "—" : num(a.gwPts)) + '</div></div>' +
+      '<div class="mid">GW' + R.gw + '</div>' +
+      '<div class="side"><div class="nm" data-entry="' + b.id + '">' + esc(b.name) + '</div>' +
+        '<div class="sc' + (b.gwPts > a.gwPts ? ' win' : '') + '">' + (b.gwPts === null ? "—" : num(b.gwPts)) + '</div></div>' +
+      '</div>';
+
+    h += '<div class="cmppitch">' +
+      '<div class="col">' + (a.pitch ? pitchHtml(a.pitch) : '<div class="callout">No squad</div>') + '</div>' +
+      '<div class="col">' + (b.pitch ? pitchHtml(b.pitch) : '<div class="callout">No squad</div>') + '</div>' +
+      '</div></div></div>';
+
+    h += '<div class="section-title"><h2>Compared</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="tablewrap"><table class="t cmptable"><thead><tr>' +
+      '<th class="num">' + esc(a.name) + '</th><th class="cmid"></th><th class="num">' + esc(b.name) + '</th>' +
+      '</tr></thead><tbody>';
+    h += cmpRow("GW" + R.gw + " points", a.gwPts, b.gwPts);
+    h += cmpRow("Season total", a.total, b.total);
+    h += cmpRow("League position", a.rank || null, b.rank || null, "", true);
+    h += cmpRow("Gameweeks won", R.record.w, R.record.l, R.record.d ? (R.record.d + " drawn") : "");
+    h += cmpRow("Best gameweek", a.best ? a.best.p : null, b.best ? b.best.p : null,
+      (a.best && b.best) ? ("GW" + a.best.gw + " vs GW" + b.best.gw) : "");
+    h += cmpRow("Points hits (season)", a.hits, b.hits, "lower is better", true);
+    h += cmpRow("Points on bench", a.bench, b.bench, "lower is better", true);
+    h += cmpRow("GW" + R.gw + " hit", a.gwHits, b.gwHits, "", true);
+    var ac = a.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
+    var bc = b.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
+    h += cmpRow("Chips played", ac || "none", bc || "none");
+    h += '</tbody></table></div></div>';
+
+    if (R.aOnly.length || R.bOnly.length) {
+      h += '<div class="section-title"><h2>Differentials · GW' + R.gw + '</h2><div class="rule"></div></div>';
+      h += '<div class="card"><div class="bd">';
+      h += '<div class="note" style="margin-bottom:10px">' + R.shared.length + ' player' +
+        (R.shared.length === 1 ? '' : 's') + ' in common.</div>';
+      h += '<div class="diffgrid">';
+      h += '<div><div class="lab-sm">' + esc(a.name) + ' only</div>' +
+        (R.aOnly.length ? R.aOnly.map(diffChip).join("") : '<div class="note">—</div>') + '</div>';
+      h += '<div><div class="lab-sm">' + esc(b.name) + ' only</div>' +
+        (R.bOnly.length ? R.bOnly.map(diffChip).join("") : '<div class="note">—</div>') + '</div>';
+      h += '</div></div></div>';
+    }
+
+    box.innerHTML = h;
+    $("#cmpGwSel", box).addEventListener("change", function () {
+      state.cmpGw = +this.value; drawCompare(ds);
+    });
   }
 
   /* ====================================================================== */
