@@ -166,7 +166,8 @@
       segBtn("dark", "moon", "Dark", theme) +
       '</div></div>';
 
-    h += '<div class="menu">' + menuItem("pfCompare", "h2h", "Head to head") + menuItem("pfRules", "book", "Game rules");
+    h += '<div class="menu">' + menuItem("pfStats", "classic", "Stats & highlights") +
+      menuItem("pfCompare", "h2h", "Head to head") + menuItem("pfRules", "book", "Game rules");
     if (admin) {
       h += menuItem("pfRefresh", "refresh", "Refresh from FPL") +
         menuItem("pfSettings", "gear", "League settings & admin") +
@@ -189,6 +190,7 @@
     $all("#pfTheme button").forEach(function (b) {
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile(); });
     });
+    $("#pfStats").addEventListener("click", function () { closeProfile(); location.hash = "stats"; });
     $("#pfCompare").addEventListener("click", function () { closeProfile(); location.hash = "compare"; });
     $("#pfRules").addEventListener("click", function () { closeProfile(); location.hash = "rules"; });
     $("#pfMeSave").addEventListener("click", function () {
@@ -271,9 +273,9 @@
     var h = (location.hash || "#classic").replace("#", "");
     var parts = h.split("/");
     var view = parts[0];
-    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "profile", "compare"]);
+    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "profile", "compare", "stats"]);
     if (known.indexOf(view) === -1) view = "classic";
-    if (["profile","rules","settings","compare"].indexOf(view) === -1) state.backView = view;
+    if (["profile","rules","settings","compare","stats"].indexOf(view) === -1) state.backView = view;
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
@@ -300,7 +302,8 @@
     rules:   { t: "Rules" },
     settings:{ t: "Settings" },
     profile: { t: "Profile" },
-    compare: { t: "Head to head" }
+    compare: { t: "Head to head" },
+    stats:   { t: "Stats & highlights" }
   };
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
@@ -329,6 +332,7 @@
     if (state.view === "settings") return renderSettings(host);
     if (state.view === "rules") return renderRules(host);
     if (state.view === "compare") return renderCompare(host, S.dataset());
+    if (state.view === "stats") return renderStats(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();
@@ -996,6 +1000,201 @@
 
     var box = $("#pitchBox", host);
     if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode);
+  }
+
+  /* ====================================================================== */
+  /* STATS & HIGHLIGHTS                                                     */
+  /* ====================================================================== */
+  // Squad values arrive in tenths of a million.
+  function mval(tenths) { return "£" + (Math.round(tenths) / 10).toFixed(1) + "m"; }
+
+  // A headline card: big number, caption, and who it belongs to.
+  function hcard(label, big, who, id, sub) {
+    return '<div class="hcard"' + (id ? ' data-entry="' + id + '" role="button" tabindex="0"' : '') + '>' +
+      '<div class="hl">' + esc(label) + '</div>' +
+      '<div class="hv">' + esc(big) + '</div>' +
+      (who ? '<div class="hw">' + esc(who) + '</div>' : '') +
+      (sub ? '<div class="hs">' + esc(sub) + '</div>' : '') + '</div>';
+  }
+  // A ranked mini-list of players or managers.
+  function hlist(title, items, fmt, note) {
+    if (!items || !items.length) return "";
+    return '<div class="hlist"><div class="lab-sm">' + esc(title) + '</div>' +
+      items.map(function (x, i) {
+        var f = fmt(x);
+        return '<div class="hrow"' + (f.id ? ' data-entry="' + f.id + '"' : '') + '>' +
+          '<span class="hi">' + (i + 1) + '</span>' +
+          '<span class="hn">' + esc(f.name) + (f.tag ? ' <span class="htag">' + esc(f.tag) + '</span>' : '') + '</span>' +
+          '<span class="hp">' + esc(f.val) + '</span></div>';
+      }).join("") +
+      (note ? '<div class="note" style="margin-top:6px">' + esc(note) + '</div>' : '') + '</div>';
+  }
+
+  function renderStats(host, ds) {
+    if (!ds || !ds.managers || !ds.managers.length) {
+      host.innerHTML = '<div class="callout">Standings not loaded yet.</div>';
+      return;
+    }
+    var all = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) {
+      return e.finished || e.is_current;
+    }).map(function (e) { return e.id; });
+    if (!all.length) all = K.squadGws(ds);
+    if (!all.length) { host.innerHTML = '<div class="callout">No gameweeks played yet.</div>'; return; }
+    if (!state.statsGw || all.indexOf(+state.statsGw) === -1) state.statsGw = all[all.length - 1];
+
+    var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="stBack">' + svg("back", 16) + ' Back</button></div>';
+    h += '<div class="card"><div class="bd"><div class="pgwline">' +
+      '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
+        return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
+      }).join("") + '</select></div></div></div>';
+    h += '<div id="stBox"></div>';
+    host.innerHTML = h;
+
+    $("#stBack", host).addEventListener("click", function () { location.hash = state.backView || "classic"; });
+    $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
+    drawStats(ds);
+  }
+
+  function drawStats(ds) {
+    var box = $("#stBox");
+    if (!box) return;
+    var H = K.highlights(ds, state.statsGw);
+    if (!H) { box.innerHTML = '<div class="callout">Nothing to show yet.</div>'; return; }
+    var g = H.gwStats, sq = H.squads, v = H.value, se = H.season, pa = H.past;
+    var h = "";
+
+    /* ---- the gameweek ---- */
+    h += '<div class="section-title"><h2>' + esc(H.gwName) + '</h2>' +
+      (H.live ? '<span class="pill live">Live</span>' : '') + '<div class="rule"></div></div>';
+    if (g) {
+      h += '<div class="hgrid">';
+      h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player);
+      h += hcard("League average", num(g.average), g.count + " managers", null,
+        g.median !== null ? ("median " + num(g.median)) : "");
+      h += hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player);
+      if (g.mostBench && g.mostBench.bench > 0) {
+        h += hcard("Most left on bench", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id, "points benched");
+      }
+      if (g.mostHits && g.mostHits.hits > 0) {
+        h += hcard("Biggest hit", "−" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
+          num(g.mostHits.transfers) + " transfers");
+      }
+      h += hcard("Transfers made", num(g.transfersTotal), "across the league", null,
+        "−" + num(g.hitTotal) + " pts in hits");
+      h += '</div>';
+    } else {
+      h += '<div class="callout">No scores recorded for this gameweek yet.</div>';
+    }
+
+    /* ---- picks ---- */
+    if (sq) {
+      h += '<div class="section-title"><h2>Picks</h2><div class="rule"></div></div>';
+      h += '<div class="hgrid">';
+      if (sq.bestCaptain) {
+        h += hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
+          sq.bestCaptain.caps + " of " + sq.managers + " captained");
+      }
+      if (sq.worstCaptain) {
+        h += hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
+          sq.worstCaptain.caps + " captained");
+      }
+      if (sq.differentials.length) {
+        var d0 = sq.differentials[0];
+        h += hcard("Best differential", num(d0.pts), d0.name, null, d0.ownedPct + "% of the league");
+      }
+      h += '</div>';
+
+      var chipKeys = Object.keys(sq.chips || {});
+      if (chipKeys.length) {
+        h += '<div class="card"><div class="bd"><div class="lab-sm">Chips played</div><div class="chiprow">' +
+          chipKeys.map(function (c) {
+            return '<span class="pill gold">' + esc(CHIP_NAME[c] || c) + ' · ' + sq.chips[c] + '</span>';
+          }).join("") + '</div></div></div>';
+      }
+
+      h += '<div class="card"><div class="bd hcols">';
+      h += hlist("Most owned", sq.mostOwned, function (x) {
+        return { name: x.name, tag: x.team, val: x.ownedPct + "%" };
+      });
+      h += hlist("Most captained", sq.mostCaptained, function (x) {
+        return { name: x.name, tag: x.team, val: num(x.caps) };
+      });
+      h += hlist("Top scorers owned", sq.topScorers, function (x) {
+        return { name: x.name, tag: x.team, val: num(x.pts) };
+      });
+      h += hlist("Differentials", sq.differentials, function (x) {
+        return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) };
+      }, "Owned by under 10% of the league.");
+      h += '</div></div>';
+    }
+
+    /* ---- money ---- */
+    h += '<div class="section-title"><h2>Value</h2><div class="rule"></div></div>';
+    if (v) {
+      h += '<div class="hgrid">';
+      h += hcard("Richest squad", mval(v.richest.value), v.richest.name, v.richest.id,
+        mval(v.richest.bank) + " in the bank");
+      h += hcard("League average", mval(v.average), v.count + " squads", null,
+        mval(v.averageBank) + " in the bank");
+      h += hcard("Leanest squad", mval(v.poorest.value), v.poorest.name, v.poorest.id,
+        mval(v.poorest.bank) + " in the bank");
+      h += '</div>';
+    } else {
+      h += '<div class="callout">Squad values appear after the next data refresh.</div>';
+    }
+    if (sq && sq.bestValue.length) {
+      h += '<div class="card"><div class="bd hcols">';
+      h += hlist("Best value this week", sq.bestValue, function (x) {
+        return { name: x.name, tag: mval(x.price), val: x.value + " /£m" };
+      }, "Points per million of the player's price.");
+      h += hlist("Priciest owned", sq.priciest, function (x) {
+        return { name: x.name, tag: x.team, val: mval(x.price) };
+      });
+      h += '</div></div>';
+    }
+
+    /* ---- the season ---- */
+    if (se) {
+      h += '<div class="section-title"><h2>Season so far</h2><div class="rule"></div></div>';
+      h += '<div class="hgrid">';
+      if (se.bestGw) {
+        h += hcard("Best gameweek", num(se.bestGw.p), se.bestGw.name, se.bestGw.id, "in GW" + se.bestGw.gw);
+      }
+      if (se.bestAvg) {
+        h += hcard("Best average", num(se.bestAvg.avg), se.bestAvg.name, se.bestAvg.id,
+          "over " + se.gws + " gameweek" + (se.gws === 1 ? "" : "s"));
+      }
+      if (se.mostHits && se.mostHits.hits > 0) {
+        h += hcard("Most hits taken", "−" + num(se.mostHits.hits), se.mostHits.name, se.mostHits.id, "all season");
+      }
+      if (se.mostBench && se.mostBench.bench > 0) {
+        h += hcard("Most benched", num(se.mostBench.bench), se.mostBench.name, se.mostBench.id, "points on the bench");
+      }
+      h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet");
+      h += '</div>';
+    }
+
+    /* ---- hall of fame ---- */
+    h += '<div class="section-title"><h2>Hall of fame</h2><div class="rule"></div></div>';
+    if (pa) {
+      h += '<div class="note" style="margin:-2px 2px 10px">Past FPL seasons, across the ' +
+        pa.players + ' managers who have played before.</div>';
+      h += '<div class="card"><div class="bd hcols">';
+      h += hlist("Best ever finish", pa.topRanks, function (x) {
+        return { id: x.id, name: x.name, tag: x.bestRank.season, val: num(x.bestRank.rank) };
+      }, "Overall FPL rank.");
+      h += hlist("Highest season score", pa.topScores, function (x) {
+        return { id: x.id, name: x.name, tag: x.bestPts.season, val: num(x.bestPts.total) };
+      });
+      h += hlist("Most seasons played", pa.veterans, function (x) {
+        return { id: x.id, name: x.name, tag: "", val: num(x.seasons) };
+      });
+      h += '</div></div>';
+    } else {
+      h += '<div class="callout">Past-season history appears after the next data refresh.</div>';
+    }
+
+    box.innerHTML = h;
   }
 
   /* ====================================================================== */

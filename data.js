@@ -176,7 +176,8 @@
         (bs.teams || []).forEach(function (t) { teamShort[t.id] = t.short_name; });
         ds.elements = {};
         (bs.elements || []).forEach(function (el) {
-          ds.elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || ""];
+          ds.elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
+                                el.now_cost || 0, parseFloat(el.selected_by_percent) || 0];
         });
         report({ phase: "league", message: "Loading league roster…" });
         return API.classicLeagueAll(cfg.classicLeagueId, function (n) {
@@ -197,7 +198,9 @@
             var gw = {};
             (h.current || []).forEach(function (c) {
               gw[c.event] = { p: c.points, h: c.event_transfers_cost || 0,
-                              b: c.points_on_bench || 0, t: c.total_points };
+                              b: c.points_on_bench || 0, t: c.total_points,
+                              v: c.value || 0, bk: c.bank || 0,
+                              tr: c.event_transfers || 0, r: c.overall_rank || 0 };
             });
             ds.history[m.id] = gw;
             if (h.past && h.past.length) {

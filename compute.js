@@ -672,5 +672,177 @@
              shared: shared.sort(byPts), aOnly: aOnly.sort(byPts), bOnly: bOnly.sort(byPts) };
   };
 
+  /* ---- league stats & highlights ---------------------------------------
+     Everything here is derived from data we already hold: per-gameweek
+     history rows (points, hits, bench, squad value) and the stored squads
+     (ownership, captaincy). Returns null when there is nothing to show. */
+  C.highlights = function (ds, gw) {
+    if (!ds || !ds.managers || !ds.managers.length) return null;
+    gw = gw ? +gw : +ds.pitchGw;
+    var mm = managerMap(ds);
+    var els = ds.elements || {};
+    var lp = liveAt(ds, gw);
+    var pk = picksAt(ds, gw);
+    var played = C.finishedGws(ds);
+    var cur = C.currentGw(ds);
+    if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
+
+    function meta(el) {
+      var m = els[el] || ["?", 0, "", 0, 0];
+      return { el: +el, name: m[0], type: m[1], team: m[2], price: m[3] || 0, ownedAll: m[4] || 0 };
+    }
+    function best(list, key) {
+      var out = null;
+      list.forEach(function (x) { if (out === null || x[key] > out[key]) out = x; });
+      return out;
+    }
+    function worst(list, key) {
+      var out = null;
+      list.forEach(function (x) { if (out === null || x[key] < out[key]) out = x; });
+      return out;
+    }
+
+    /* ---- this gameweek, from the history rows ---- */
+    var rows = [];
+    ds.managers.forEach(function (m) {
+      var r = (ds.history[m.id] || {})[gw];
+      if (!r || typeof r.p !== "number") return;
+      rows.push({ id: m.id, name: nm(mm, m.id), player: pl(mm, m.id),
+                  p: r.p, hits: r.h || 0, bench: r.b || 0,
+                  value: r.v || 0, bank: r.bk || 0, transfers: r.tr || 0 });
+    });
+    var gwStats = null;
+    if (rows.length) {
+      var sorted = rows.slice().sort(function (a, b) { return b.p - a.p; });
+      var sum = 0, hitTotal = 0, benchTotal = 0, trTotal = 0;
+      rows.forEach(function (r) { sum += r.p; hitTotal += r.hits; benchTotal += r.bench; trTotal += r.transfers; });
+      var mid = sorted[Math.floor(sorted.length / 2)];
+      gwStats = {
+        count: rows.length,
+        top: sorted[0], second: sorted[1] || null, low: sorted[sorted.length - 1],
+        average: Math.round(sum / rows.length), median: mid ? mid.p : null,
+        hitTotal: hitTotal, mostHits: best(rows, "hits"),
+        benchTotal: benchTotal, mostBench: best(rows, "bench"),
+        transfersTotal: trTotal, mostTransfers: best(rows, "transfers")
+      };
+    }
+
+    /* ---- squad value ---- */
+    var value = null;
+    var withVal = rows.filter(function (r) { return r.value > 0; });
+    if (withVal.length) {
+      var vs = 0, bs = 0;
+      withVal.forEach(function (r) { vs += r.value; bs += r.bank; });
+      value = {
+        richest: best(withVal, "value"), poorest: worst(withVal, "value"),
+        average: Math.round(vs / withVal.length), averageBank: Math.round(bs / withVal.length),
+        mostBanked: best(withVal, "bank"), count: withVal.length
+      };
+    }
+
+    /* ---- ownership & captaincy, from the stored squads ---- */
+    var squads = null;
+    if (pk) {
+      var ids = Object.keys(pk), n = ids.length;
+      var own = {}, cap = {}, chips = {};
+      ids.forEach(function (mid) {
+        var sq = pk[mid];
+        if (sq.c) chips[sq.c] = (chips[sq.c] || 0) + 1;
+        (sq.p || []).forEach(function (t) {
+          var el = t[0];
+          if (!own[el]) own[el] = 0;
+          own[el]++;
+          if (t[2]) cap[el] = (cap[el] || 0) + 1;
+        });
+      });
+      var ownedList = Object.keys(own).map(function (el) {
+        var m = meta(el);
+        m.owners = own[el];
+        m.ownedPct = n ? Math.round((own[el] / n) * 1000) / 10 : 0;
+        m.pts = lp[el] || 0;
+        m.caps = cap[el] || 0;
+        m.value = m.price ? Math.round((m.pts / (m.price / 10)) * 100) / 100 : 0;
+        return m;
+      });
+      var capList = ownedList.filter(function (x) { return x.caps > 0; });
+      // A differential: in fewer than one in ten squads in this league.
+      var diffs = ownedList.filter(function (x) { return x.ownedPct < 10 && x.pts > 0; });
+      var priced = ownedList.filter(function (x) { return x.price > 0 && x.pts > 0; });
+      squads = {
+        managers: n, chips: chips,
+        mostOwned: ownedList.slice().sort(function (a, b) { return b.owners - a.owners; }).slice(0, 5),
+        topScorers: ownedList.slice().sort(function (a, b) { return b.pts - a.pts; }).slice(0, 5),
+        mostCaptained: capList.slice().sort(function (a, b) { return b.caps - a.caps; }).slice(0, 5),
+        bestCaptain: capList.slice().sort(function (a, b) { return b.pts - a.pts; })[0] || null,
+        worstCaptain: capList.filter(function (x) { return x.caps >= Math.max(2, n * 0.03); })
+          .sort(function (a, b) { return a.pts - b.pts; })[0] || null,
+        differentials: diffs.sort(function (a, b) { return b.pts - a.pts; }).slice(0, 5),
+        bestValue: priced.sort(function (a, b) { return b.value - a.value; }).slice(0, 5),
+        priciest: ownedList.slice().sort(function (a, b) { return b.price - a.price; }).slice(0, 5)
+      };
+    }
+
+    /* ---- season so far ---- */
+    var season = null;
+    if (played.length) {
+      var bestGw = null, agg = [];
+      ds.managers.forEach(function (m) {
+        var h = ds.history[m.id] || {};
+        var tot = 0, hits = 0, bench = 0, cnt = 0, hi = null;
+        played.forEach(function (g) {
+          var r = h[g];
+          if (!r || typeof r.p !== "number") return;
+          tot += r.p; hits += r.h || 0; bench += r.b || 0; cnt++;
+          if (!hi || r.p > hi.p) hi = { gw: g, p: r.p };
+          if (!bestGw || r.p > bestGw.p) bestGw = { id: m.id, name: nm(mm, m.id), gw: g, p: r.p };
+        });
+        if (!cnt) return;
+        agg.push({ id: m.id, name: nm(mm, m.id), total: tot, hits: hits, bench: bench,
+                   avg: Math.round((tot / cnt) * 10) / 10, best: hi ? hi.p : 0 });
+      });
+      if (agg.length) {
+        season = {
+          gws: played.length, bestGw: bestGw,
+          mostHits: best(agg, "hits"), mostBench: best(agg, "bench"),
+          cleanest: agg.filter(function (a) { return a.hits === 0; }).length,
+          bestAvg: best(agg, "avg")
+        };
+      }
+    }
+
+    /* ---- past seasons (hall of fame) ---- */
+    var past = null;
+    if (ds.pastSeasons) {
+      var pr = [];
+      Object.keys(ds.pastSeasons).forEach(function (id) {
+        var list = ds.pastSeasons[id] || [];
+        if (!list.length) return;
+        var bestRank = null, bestPts = null;
+        list.forEach(function (s) {
+          if (s.rank && (bestRank === null || s.rank < bestRank.rank)) bestRank = { rank: s.rank, season: s.season };
+          if (typeof s.total === "number" && (bestPts === null || s.total > bestPts.total)) bestPts = { total: s.total, season: s.season };
+        });
+        pr.push({ id: +id, name: nm(mm, +id), seasons: list.length, bestRank: bestRank, bestPts: bestPts });
+      });
+      if (pr.length) {
+        var ranked = pr.filter(function (x) { return x.bestRank; })
+          .sort(function (a, b) { return a.bestRank.rank - b.bestRank.rank; });
+        var scored = pr.filter(function (x) { return x.bestPts; })
+          .sort(function (a, b) { return b.bestPts.total - a.bestPts.total; });
+        past = {
+          players: pr.length,
+          topRanks: ranked.slice(0, 5),
+          topScores: scored.slice(0, 5),
+          veterans: pr.slice().sort(function (a, b) { return b.seasons - a.seasons; }).slice(0, 5)
+        };
+      }
+    }
+
+    var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
+    return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw),
+             live: gwEv ? !!(gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false,
+             gwStats: gwStats, value: value, squads: squads, season: season, past: past };
+  };
+
   window.GO_COMPUTE = C;
 })();

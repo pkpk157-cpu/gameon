@@ -97,7 +97,9 @@ async function h2hAll(id) {
     const h = await getJSON("/entry/" + m.id + "/history/");
     const gw = {};
     (h.current || []).forEach((c) => {
-      gw[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points };
+      // v = squad value + bank (tenths of a million), tr = transfers, r = overall rank
+      gw[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points,
+                      v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
     });
     history[m.id] = gw;
     if (h.past && h.past.length) {
@@ -123,7 +125,9 @@ async function h2hAll(id) {
   (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; });
   elements = {};
   (bs.elements || []).forEach((el) => {
-    elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || ""];
+    // [name, position, club, price(tenths), owned% across all FPL]
+    elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
+                       el.now_cost || 0, parseFloat(el.selected_by_percent) || 0];
   });
 
   let prev = {};
