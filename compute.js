@@ -819,6 +819,7 @@
     var els = ds.elements || {};
     var lp = liveAt(ds, gw);
     var pk = picksAt(ds, gw);
+    var eot = eoTable(ds, gw);
     var played = C.finishedGws(ds);
     var cur = C.currentGw(ds);
     if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
@@ -853,14 +854,30 @@
       var sum = 0, hitTotal = 0, benchTotal = 0, trTotal = 0;
       rows.forEach(function (r) { sum += r.p; hitTotal += r.hits; benchTotal += r.bench; trTotal += r.transfers; });
       var mid = sorted[Math.floor(sorted.length / 2)];
+      var avg = Math.round(sum / rows.length);
       gwStats = {
         count: rows.length,
         top: sorted[0], second: sorted[1] || null, low: sorted[sorted.length - 1],
-        average: Math.round(sum / rows.length), median: mid ? mid.p : null,
+        average: avg, median: mid ? mid.p : null,
+        range: sorted[0].p - sorted[sorted.length - 1].p,
+        aboveAvg: rows.filter(function (r) { return r.p > avg; }).length,
         hitTotal: hitTotal, mostHits: best(rows, "hits"),
         benchTotal: benchTotal, mostBench: best(rows, "bench"),
-        transfersTotal: trTotal, mostTransfers: best(rows, "transfers")
+        transfersTotal: trTotal, mostTransfers: best(rows, "transfers"),
+        noTransfer: rows.filter(function (r) { return !r.transfers; }).length
       };
+      // League movement only means anything for the newest gameweek.
+      if (+gw === +cur) {
+        var moves = C.classic(ds).filter(function (r) { return r.move; });
+        if (moves.length) {
+          var up = moves.slice().sort(function (a, b) { return b.move - a.move; })[0];
+          var down = moves.slice().sort(function (a, b) { return a.move - b.move; })[0];
+          gwStats.climbers = moves.filter(function (r) { return r.move > 0; }).length;
+          gwStats.fallers = moves.filter(function (r) { return r.move < 0; }).length;
+          if (up && up.move > 0) gwStats.biggestClimb = { id: up.id, name: up.entryName, move: up.move };
+          if (down && down.move < 0) gwStats.biggestFall = { id: down.id, name: down.entryName, move: -down.move };
+        }
+      }
     }
 
     /* ---- squad value ---- */
@@ -898,14 +915,38 @@
         m.pts = lp[el] || 0;
         m.caps = cap[el] || 0;
         m.value = m.price ? Math.round((m.pts / (m.price / 10)) * 100) / 100 : 0;
+        m.eo = (eot && eot.eo[el]) || 0;
         return m;
       });
       var capList = ownedList.filter(function (x) { return x.caps > 0; });
       // A differential: in fewer than one in ten squads in this league.
       var diffs = ownedList.filter(function (x) { return x.ownedPct < 10 && x.pts > 0; });
       var priced = ownedList.filter(function (x) { return x.price > 0 && x.pts > 0; });
+      // The eleven most-owned players, as a notional league template side.
+      var byPos = { 1: [], 2: [], 3: [], 4: [] };
+      ownedList.forEach(function (x) { if (byPos[x.type]) byPos[x.type].push(x); });
+      [1, 2, 3, 4].forEach(function (t) {
+        byPos[t].sort(function (a, b) { return b.owners - a.owners; });
+      });
+      var SHAPE = { 1: 1, 2: 4, 3: 4, 4: 2 }, POSNAME = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+      var templateXi = [1, 2, 3, 4].map(function (t) {
+        return {
+          pos: POSNAME[t],
+          players: byPos[t].slice(0, SHAPE[t]).map(function (x) {
+            // Shaped like a squad player so the pitch can draw it; the card
+            // shows ownership rather than effective ownership here.
+            return { el: x.el, name: x.name, team: x.team, type: x.type, pos: POSNAME[t],
+                     pts: x.pts, price: x.price, eo: x.ownedPct,
+                     cap: false, vice: false, mult: 1, benched: false };
+          })
+        };
+      });
+
       squads = {
         managers: n, chips: chips,
+        templateXi: templateXi,
+        distinctCaptains: capList.length,
+        ownershipLeaders: ownedList.slice().sort(function (a, b) { return b.eo - a.eo; }).slice(0, 5),
         mostOwned: ownedList.slice().sort(function (a, b) { return b.owners - a.owners; }).slice(0, 5),
         topScorers: ownedList.slice().sort(function (a, b) { return b.pts - a.pts; }).slice(0, 5),
         mostCaptained: capList.slice().sort(function (a, b) { return b.caps - a.caps; }).slice(0, 5),
@@ -921,27 +962,51 @@
     /* ---- season so far ---- */
     var season = null;
     if (played.length) {
-      var bestGw = null, agg = [];
+      var bestGw = null, worstGw = null, agg = [];
       ds.managers.forEach(function (m) {
         var h = ds.history[m.id] || {};
-        var tot = 0, hits = 0, bench = 0, cnt = 0, hi = null;
+        var tot = 0, hits = 0, bench = 0, cnt = 0, hi = null, lo = null, tr = 0;
+        var firstRank = null, lastRank = null;
         played.forEach(function (g) {
           var r = h[g];
           if (!r || typeof r.p !== "number") return;
-          tot += r.p; hits += r.h || 0; bench += r.b || 0; cnt++;
+          tot += r.p; hits += r.h || 0; bench += r.b || 0; tr += r.tr || 0; cnt++;
           if (!hi || r.p > hi.p) hi = { gw: g, p: r.p };
+          if (!lo || r.p < lo.p) lo = { gw: g, p: r.p };
+          if (r.r) { if (firstRank === null) firstRank = r.r; lastRank = r.r; }
           if (!bestGw || r.p > bestGw.p) bestGw = { id: m.id, name: nm(mm, m.id), gw: g, p: r.p };
+          if (!worstGw || r.p < worstGw.p) worstGw = { id: m.id, name: nm(mm, m.id), gw: g, p: r.p };
         });
         if (!cnt) return;
         agg.push({ id: m.id, name: nm(mm, m.id), total: tot, hits: hits, bench: bench,
-                   avg: Math.round((tot / cnt) * 10) / 10, best: hi ? hi.p : 0 });
+                   transfers: tr, gws: cnt,
+                   avg: Math.round((tot / cnt) * 10) / 10,
+                   best: hi ? hi.p : 0, worst: lo ? lo.p : 0,
+                   spread: (hi && lo) ? (hi.p - lo.p) : 0,
+                   climb: (firstRank && lastRank) ? (firstRank - lastRank) : 0 });
       });
       if (agg.length) {
+        // Consistency only means something once there are a few gameweeks.
+        var steady = null;
+        if (played.length >= 3) {
+          steady = agg.slice().sort(function (a, b) { return a.spread - b.spread; })[0];
+        }
+        var chipsPlayed = 0;
+        C.squadGws(ds).forEach(function (g) {
+          var pkg = picksAt(ds, g);
+          if (pkg) Object.keys(pkg).forEach(function (k) { if (pkg[k].c) chipsPlayed++; });
+        });
         season = {
-          gws: played.length, bestGw: bestGw,
+          gws: played.length, bestGw: bestGw, worstGw: worstGw,
           mostHits: best(agg, "hits"), mostBench: best(agg, "bench"),
           cleanest: agg.filter(function (a) { return a.hits === 0; }).length,
-          bestAvg: best(agg, "avg")
+          bestAvg: best(agg, "avg"),
+          mostTransfers: best(agg, "transfers"),
+          transfersTotal: agg.reduce(function (t, a) { return t + a.transfers; }, 0),
+          benchTotal: agg.reduce(function (t, a) { return t + a.bench; }, 0),
+          hitsTotal: agg.reduce(function (t, a) { return t + a.hits; }, 0),
+          steadiest: steady, chipsPlayed: chipsPlayed,
+          biggestClimb: best(agg, "climb")
         };
       }
     }
@@ -958,7 +1023,13 @@
           if (s.rank && (bestRank === null || s.rank < bestRank.rank)) bestRank = { rank: s.rank, season: s.season, total: s.total };
           if (typeof s.total === "number" && (bestPts === null || s.total > bestPts.total)) bestPts = { total: s.total, season: s.season, rank: s.rank };
         });
-        pr.push({ id: +id, name: nm(mm, +id), seasons: list.length, bestRank: bestRank, bestPts: bestPts });
+        var career = 0, scored = 0;
+        list.forEach(function (s2) {
+          if (typeof s2.total === "number") { career += s2.total; scored++; }
+        });
+        pr.push({ id: +id, name: nm(mm, +id), seasons: list.length,
+                  bestRank: bestRank, bestPts: bestPts, career: career,
+                  avg: scored ? Math.round(career / scored) : 0 });
       });
       if (pr.length) {
         var ranked = pr.filter(function (x) { return x.bestRank; })
@@ -969,7 +1040,11 @@
           players: pr.length,
           topRanks: ranked.slice(0, 5),
           topScores: scored.slice(0, 5),
-          veterans: pr.slice().sort(function (a, b) { return b.seasons - a.seasons; }).slice(0, 5)
+          veterans: pr.slice().sort(function (a, b) { return b.seasons - a.seasons; }).slice(0, 5),
+          topCareer: pr.slice().sort(function (a, b) { return b.career - a.career; }).slice(0, 5),
+          topAvg: pr.filter(function (x) { return x.seasons >= 2; })
+                    .sort(function (a, b) { return b.avg - a.avg; }).slice(0, 5),
+          topTen: ranked.filter(function (x) { return x.bestRank.rank <= 10000; }).length
         };
       }
     }

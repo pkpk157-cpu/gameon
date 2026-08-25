@@ -670,3 +670,17 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 /* ---- head to head: type-ahead manager fields -------------------------- */
 .mgrin { width:100%; }
 .mgrin.bad { border-color:var(--bad); }
+
+/* ---- stats: category tabs --------------------------------------------- */
+.tabrow { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  padding:2px 2px 8px; margin:0 -2px 4px; scrollbar-width:none; }
+.tabrow::-webkit-scrollbar { display:none; }
+.tabbtn { flex:none; appearance:none; cursor:pointer; font:inherit;
+  font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:999px;
+  border:1px solid var(--line); background:var(--glass-2); color:var(--ink-soft); }
+.tabbtn:hover { color:var(--ink); }
+.tabbtn.on { color:#fff; border-color:transparent;
+  background:linear-gradient(135deg, var(--pl-purple), var(--pl-pink));
+  box-shadow:0 4px 12px -6px rgba(233,0,82,.8); }
+.statlead { font-size:12.5px; font-weight:700; color:var(--ink-faint); margin:2px 2px 12px; }
+.statlead .pill { vertical-align:middle; }

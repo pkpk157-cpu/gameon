@@ -1108,6 +1108,14 @@
       (note ? '<div class="note" style="margin-top:6px">' + esc(note) + '</div>' : '') + '</div>';
   }
 
+  var STAT_TABS = [
+    { k: "gw",     label: "Gameweek", gwPicker: true },
+    { k: "picks",  label: "Picks",    gwPicker: true },
+    { k: "value",  label: "Value",    gwPicker: true },
+    { k: "season", label: "Season" },
+    { k: "fame",   label: "All time" }
+  ];
+
   function renderStats(host, ds) {
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = '<div class="callout">Standings not loaded yet.</div>';
@@ -1119,14 +1127,26 @@
     if (!all.length) all = K.squadGws(ds);
     if (!all.length) { host.innerHTML = '<div class="callout">No gameweeks played yet.</div>'; return; }
     if (!state.statsGw || all.indexOf(+state.statsGw) === -1) state.statsGw = all[all.length - 1];
+    if (!STAT_TABS.some(function (t) { return t.k === state.statsTab; })) state.statsTab = "gw";
 
-    var h = '<div class="pgwline" style="margin-bottom:4px">' +
+    var h = '<div class="tabrow" id="stTabs">' + STAT_TABS.map(function (t) {
+      return '<button type="button" class="tabbtn' + (state.statsTab === t.k ? ' on' : '') +
+        '" data-tab="' + t.k + '">' + esc(t.label) + '</button>';
+    }).join("") + '</div>';
+    h += '<div class="pgwline" id="stGwLine" style="margin-bottom:4px">' +
       '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
         return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
       }).join("") + '</select></div>';
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
+    $("#stTabs", host).addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-tab]");
+      if (!b) return;
+      state.statsTab = b.getAttribute("data-tab");
+      $all(".tabbtn", this).forEach(function (x) { x.classList.toggle("on", x === b); });
+      drawStats(ds);
+    });
     $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
     drawStats(ds);
   }
@@ -1134,78 +1154,109 @@
   function drawStats(ds) {
     var box = $("#stBox");
     if (!box) return;
+    var tab = STAT_TABS.filter(function (t) { return t.k === state.statsTab; })[0] || STAT_TABS[0];
+    var line = $("#stGwLine");
+    if (line) line.style.display = tab.gwPicker ? "" : "none";
+
     var H = K.highlights(ds, state.statsGw);
     if (!H) { box.innerHTML = '<div class="callout">Nothing to show yet.</div>'; return; }
-    var g = H.gwStats, sq = H.squads, v = H.value, se = H.season, pa = H.past;
-    var h = "";
+    var fn = { gw: statsGw, picks: statsPicks, value: statsValue, season: statsSeason, fame: statsFame }[tab.k];
+    box.innerHTML = fn(H, ds) || '<div class="callout">Nothing to show yet.</div>';
+  }
 
-    /* ---- the gameweek ---- */
-    h += '<div class="section-title"><h2>' + esc(H.gwName) + '</h2>' +
-      (H.live ? '<span class="pill live">Live</span>' : '') + '<div class="rule"></div></div>';
-    if (g) {
-      h += '<div class="hgrid">';
-      h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player);
-      h += hcard("League average", num(g.average), g.count + " managers", null,
-        g.median !== null ? ("median " + num(g.median)) : "");
-      h += hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player);
-      if (g.mostBench && g.mostBench.bench > 0) {
-        h += hcard("Most left on bench", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id, "points benched");
-      }
-      if (g.mostHits && g.mostHits.hits > 0) {
-        h += hcard("Biggest hit", "−" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
-          num(g.mostHits.transfers) + " transfers");
-      }
-      h += hcard("Transfers made", num(g.transfersTotal), "across the league", null,
-        "−" + num(g.hitTotal) + " pts in hits");
-      h += '</div>';
-    } else {
-      h += '<div class="callout">No scores recorded for this gameweek yet.</div>';
+  /* ---- one tab each ----------------------------------------------------- */
+  function statsGw(H) {
+    var g = H.gwStats;
+    if (!g) return '<div class="callout">No scores recorded for this gameweek yet.</div>';
+    var h = '<div class="statlead">' + esc(H.gwName) +
+      (H.live ? ' <span class="pill live">Live</span>' : '') + '</div>';
+    h += '<div class="hgrid">';
+    h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player);
+    h += hcard("League average", num(g.average), g.count + " managers", null,
+      g.median !== null ? ("median " + num(g.median)) : "");
+    h += hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player);
+    h += hcard("Beat the average", num(g.aboveAvg), "of " + g.count + " managers", null,
+      num(g.range) + " between best and worst");
+    if (g.mostBench && g.mostBench.bench > 0) {
+      h += hcard("Most left on bench", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id, "points benched");
+    }
+    if (g.mostHits && g.mostHits.hits > 0) {
+      h += hcard("Biggest hit", "−" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
+        num(g.mostHits.transfers) + " transfers");
+    }
+    h += hcard("Transfers made", num(g.transfersTotal), "across the league", null,
+      num(g.noTransfer) + " made none · −" + num(g.hitTotal) + " pts in hits");
+    if (g.biggestClimb) {
+      h += hcard("Biggest climb", "+" + num(g.biggestClimb.move), g.biggestClimb.name, g.biggestClimb.id,
+        num(g.climbers) + " managers moved up");
+    }
+    if (g.biggestFall) {
+      h += hcard("Biggest fall", "−" + num(g.biggestFall.move), g.biggestFall.name, g.biggestFall.id,
+        num(g.fallers) + " managers moved down");
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function statsPicks(H) {
+    var sq = H.squads;
+    if (!sq) return '<div class="callout">No squads stored for this gameweek.</div>';
+    var h = '<div class="statlead">' + esc(H.gwName) + ' · ' + num(sq.managers) + ' squads</div>';
+    h += '<div class="hgrid">';
+    if (sq.bestCaptain) {
+      h += hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
+        sq.bestCaptain.caps + " of " + sq.managers + " captained");
+    }
+    if (sq.worstCaptain) {
+      h += hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
+        sq.worstCaptain.caps + " captained");
+    }
+    if (sq.differentials.length) {
+      var d0 = sq.differentials[0];
+      h += hcard("Best differential", num(d0.pts), d0.name, null, d0.ownedPct + "% of the league");
+    }
+    h += hcard("Different captains", num(sq.distinctCaptains), "picked across the league");
+    h += '</div>';
+
+    var chipKeys = Object.keys(sq.chips || {});
+    if (chipKeys.length) {
+      h += '<div class="card"><div class="bd"><div class="lab-sm">Chips played</div><div class="chiprow">' +
+        chipKeys.map(function (c) {
+          return '<span class="pill gold">' + esc(CHIP_NAME[c] || c) + ' · ' + sq.chips[c] + '</span>';
+        }).join("") + '</div></div></div>';
     }
 
-    /* ---- picks ---- */
-    if (sq) {
-      h += '<div class="section-title"><h2>Picks</h2><div class="rule"></div></div>';
-      h += '<div class="hgrid">';
-      if (sq.bestCaptain) {
-        h += hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
-          sq.bestCaptain.caps + " of " + sq.managers + " captained");
-      }
-      if (sq.worstCaptain) {
-        h += hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
-          sq.worstCaptain.caps + " captained");
-      }
-      if (sq.differentials.length) {
-        var d0 = sq.differentials[0];
-        h += hcard("Best differential", num(d0.pts), d0.name, null, d0.ownedPct + "% of the league");
-      }
-      h += '</div>';
-
-      var chipKeys = Object.keys(sq.chips || {});
-      if (chipKeys.length) {
-        h += '<div class="card"><div class="bd"><div class="lab-sm">Chips played</div><div class="chiprow">' +
-          chipKeys.map(function (c) {
-            return '<span class="pill gold">' + esc(CHIP_NAME[c] || c) + ' · ' + sq.chips[c] + '</span>';
-          }).join("") + '</div></div></div>';
-      }
-
-      h += '<div class="card"><div class="bd hcols">';
-      h += hlist("Most owned", sq.mostOwned, function (x) {
-        return { name: x.name, tag: x.team, val: x.ownedPct + "%" };
-      });
-      h += hlist("Most captained", sq.mostCaptained, function (x) {
-        return { name: x.name, tag: x.team, val: num(x.caps) };
-      });
-      h += hlist("Top scorers owned", sq.topScorers, function (x) {
-        return { name: x.name, tag: x.team, val: num(x.pts) };
-      });
-      h += hlist("Differentials", sq.differentials, function (x) {
-        return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) };
-      }, "Owned by under 10% of the league.");
-      h += '</div></div>';
+    // The league's most-owned XI, drawn as a side.
+    if (sq.templateXi) {
+      h += '<div class="section-title"><h2>The template XI</h2><div class="rule"></div></div>';
+      h += '<div class="note" style="margin:-4px 2px 10px">The most-owned player in each position, with how much of the league has them.</div>';
+      h += '<div class="card pitchcard"><div class="bd">' +
+        pitchHtml({ lines: sq.templateXi, bench: [] }, "eo") + '</div></div>';
     }
 
-    /* ---- money ---- */
-    h += '<div class="section-title"><h2>Value</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="bd hcols">';
+    h += hlist("Most owned", sq.mostOwned, function (x) {
+      return { name: x.name, tag: x.team, val: x.ownedPct + "%" };
+    });
+    h += hlist("Highest effective ownership", sq.ownershipLeaders, function (x) {
+      return { name: x.name, tag: x.team, val: x.eo + "%" };
+    }, "Counts captaincy, so it can pass 100%.");
+    h += hlist("Most captained", sq.mostCaptained, function (x) {
+      return { name: x.name, tag: x.team, val: num(x.caps) };
+    });
+    h += hlist("Top scorers owned", sq.topScorers, function (x) {
+      return { name: x.name, tag: x.team, val: num(x.pts) };
+    });
+    h += hlist("Differentials", sq.differentials, function (x) {
+      return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) };
+    }, "Owned by under 10% of the league.");
+    h += '</div></div>';
+    return h;
+  }
+
+  function statsValue(H) {
+    var v = H.value, sq = H.squads;
+    var h = '<div class="statlead">' + esc(H.gwName) + '</div>';
     if (v && v.richest.value === v.poorest.value) {
       // Before anyone has transferred, every squad is still worth the same —
       // naming a "richest" and "leanest" here would just look broken.
@@ -1220,6 +1271,10 @@
         mval(v.averageBank) + " in the bank");
       h += hcard("Leanest squad", mval(v.poorest.value), v.poorest.name, v.poorest.id,
         mval(v.poorest.bank) + " in the bank");
+      if (v.mostBanked && v.mostBanked.bank > 0) {
+        h += hcard("Most in the bank", mval(v.mostBanked.bank), v.mostBanked.name, v.mostBanked.id,
+          mval(v.mostBanked.value) + " on the pitch");
+      }
       h += '</div>';
     } else {
       h += '<div class="callout">Squad values appear after the next data refresh.</div>';
@@ -1234,50 +1289,85 @@
       });
       h += '</div></div>';
     }
+    return h;
+  }
 
-    /* ---- the season ---- */
-    if (se) {
-      h += '<div class="section-title"><h2>Season so far</h2><div class="rule"></div></div>';
-      h += '<div class="hgrid">';
-      if (se.bestGw) {
-        h += hcard("Best gameweek", num(se.bestGw.p), se.bestGw.name, se.bestGw.id, "in GW" + se.bestGw.gw);
-      }
-      if (se.bestAvg) {
-        h += hcard("Best average", num(se.bestAvg.avg), se.bestAvg.name, se.bestAvg.id,
-          "over " + se.gws + " gameweek" + (se.gws === 1 ? "" : "s"));
-      }
-      if (se.mostHits && se.mostHits.hits > 0) {
-        h += hcard("Most hits taken", "−" + num(se.mostHits.hits), se.mostHits.name, se.mostHits.id, "all season");
-      }
-      if (se.mostBench && se.mostBench.bench > 0) {
-        h += hcard("Most benched", num(se.mostBench.bench), se.mostBench.name, se.mostBench.id, "points on the bench");
-      }
-      h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet");
-      h += '</div>';
+  function statsSeason(H) {
+    var se = H.season;
+    if (!se) return '<div class="callout">No gameweeks scored yet.</div>';
+    var h = '<div class="statlead">' + num(se.gws) + ' gameweek' + (se.gws === 1 ? '' : 's') + ' played</div>';
+    h += '<div class="hgrid">';
+    if (se.bestGw) {
+      h += hcard("Best gameweek", num(se.bestGw.p), se.bestGw.name, se.bestGw.id, "in GW" + se.bestGw.gw);
     }
-
-    /* ---- hall of fame ---- */
-    h += '<div class="section-title"><h2>Hall of fame</h2><div class="rule"></div></div>';
-    if (pa) {
-      h += '<div class="note" style="margin:-2px 2px 10px">Past FPL seasons, across the ' +
-        pa.players + ' managers who have played before.</div>';
-      h += '<div class="card"><div class="bd hcols">';
-      h += hlist("Best ever finish", pa.topRanks, function (x) {
-        return { id: x.id, name: x.name, tag: x.bestRank.season, val: num(x.bestRank.rank) };
-      }, "Overall FPL rank.");
-      h += hlist("Highest season score", pa.topScores, function (x) {
-        return { id: x.id, name: x.name, val: num(x.bestPts.total),
-                 tag: x.bestPts.season + (x.bestPts.rank ? " · rank " + num(x.bestPts.rank) : "") };
-      });
-      h += hlist("Most seasons played", pa.veterans, function (x) {
-        return { id: x.id, name: x.name, tag: "", val: num(x.seasons) };
-      });
-      h += '</div></div>';
-    } else {
-      h += '<div class="callout">Past-season history appears after the next data refresh.</div>';
+    if (se.bestAvg) {
+      h += hcard("Best average", num(se.bestAvg.avg), se.bestAvg.name, se.bestAvg.id,
+        "over " + se.gws + " gameweek" + (se.gws === 1 ? "" : "s"));
     }
+    if (se.steadiest) {
+      h += hcard("Most consistent", num(se.steadiest.spread), se.steadiest.name, se.steadiest.id,
+        "between their best and worst");
+    }
+    if (se.biggestClimb && se.biggestClimb.climb > 0) {
+      h += hcard("Biggest riser", num(se.biggestClimb.climb), se.biggestClimb.name, se.biggestClimb.id,
+        "places gained overall");
+    }
+    if (se.worstGw) {
+      h += hcard("Lowest gameweek", num(se.worstGw.p), se.worstGw.name, se.worstGw.id, "in GW" + se.worstGw.gw);
+    }
+    if (se.mostHits && se.mostHits.hits > 0) {
+      h += hcard("Most hits taken", "−" + num(se.mostHits.hits), se.mostHits.name, se.mostHits.id, "all season");
+    }
+    if (se.mostBench && se.mostBench.bench > 0) {
+      h += hcard("Most benched", num(se.mostBench.bench), se.mostBench.name, se.mostBench.id, "points on the bench");
+    }
+    if (se.mostTransfers && se.mostTransfers.transfers > 0) {
+      h += hcard("Most transfers", num(se.mostTransfers.transfers), se.mostTransfers.name, se.mostTransfers.id, "so far");
+    }
+    h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet");
+    h += '</div>';
 
-    box.innerHTML = h;
+    h += '<div class="section-title"><h2>Across the league</h2><div class="rule"></div></div>';
+    h += '<div class="hgrid">';
+    h += hcard("Transfers", num(se.transfersTotal), "made in total", null, "−" + num(se.hitsTotal) + " pts in hits");
+    h += hcard("Points benched", num(se.benchTotal), "left on benches");
+    h += hcard("Chips played", num(se.chipsPlayed), "so far this season");
+    h += '</div>';
+    return h;
+  }
+
+  function statsFame(H) {
+    var pa = H.past;
+    if (!pa) return '<div class="callout">Past-season history appears after the next data refresh.</div>';
+    var h = '<div class="statlead">' + num(pa.players) + ' managers have played FPL before</div>';
+    if (pa.topTen) {
+      h += '<div class="hgrid">' +
+        hcard("Top 10k finishes", num(pa.topTen), "managers have one", null, "in any past season") +
+        (pa.topRanks[0] ? hcard("Best ever finish", num(pa.topRanks[0].bestRank.rank),
+          pa.topRanks[0].name, pa.topRanks[0].id, pa.topRanks[0].bestRank.season) : "") +
+        (pa.topCareer[0] ? hcard("Most career points", num(pa.topCareer[0].career),
+          pa.topCareer[0].name, pa.topCareer[0].id, pa.topCareer[0].seasons + " seasons") : "") +
+        '</div>';
+    }
+    h += '<div class="card"><div class="bd hcols">';
+    h += hlist("Best ever finish", pa.topRanks, function (x) {
+      return { id: x.id, name: x.name, tag: x.bestRank.season, val: num(x.bestRank.rank) };
+    }, "Overall FPL rank.");
+    h += hlist("Highest season score", pa.topScores, function (x) {
+      return { id: x.id, name: x.name, val: num(x.bestPts.total),
+               tag: x.bestPts.season + (x.bestPts.rank ? " · rank " + num(x.bestPts.rank) : "") };
+    });
+    h += hlist("Best average season", pa.topAvg, function (x) {
+      return { id: x.id, name: x.name, tag: x.seasons + " seasons", val: num(x.avg) };
+    }, "Points per season, two seasons or more.");
+    h += hlist("Most career points", pa.topCareer, function (x) {
+      return { id: x.id, name: x.name, tag: x.seasons + " seasons", val: num(x.career) };
+    });
+    h += hlist("Most seasons played", pa.veterans, function (x) {
+      return { id: x.id, name: x.name, tag: "", val: num(x.seasons) };
+    });
+    h += '</div></div>';
+    return h;
   }
 
   /* ====================================================================== */
