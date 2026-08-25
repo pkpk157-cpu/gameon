@@ -158,7 +158,7 @@
     }
 
     var ds = { updatedAt: new Date().toISOString(), season: cfg.seasonLabel,
-               bootstrap: null, league: null, managers: [], history: {}, h2h: {} };
+               bootstrap: null, league: null, managers: [], history: {}, h2h: {}, pastSeasons: {} };
 
     report({ phase: "bootstrap", message: "Loading gameweeks…" });
     return API.bootstrap()
@@ -192,6 +192,11 @@
                               b: c.points_on_bench || 0, t: c.total_points };
             });
             ds.history[m.id] = gw;
+            if (h.past && h.past.length) {
+              ds.pastSeasons[m.id] = h.past.map(function (p) {
+                return { season: p.season_name, rank: p.rank, total: p.total_points };
+              });
+            }
           });
         }, 5, function (done, total) {
           report({ phase: "history", done: done, total: total,

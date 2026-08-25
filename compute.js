@@ -483,5 +483,43 @@
   }
 
   C.nm = nm; C.pl = pl;
+  /* ---- Per-manager profile across all competitions --------------------- */
+  C.managerProfile = function (ds, id) {
+    id = +id;
+    var mm = managerMap(ds);
+    var classicRows = C.classic(ds);
+    var classic = classicRows.filter(function (r) { return +r.id === id; })[0] || null;
+
+    var monthly = [];
+    C.monthly(ds).forEach(function (m) {
+      var row = m.rows.filter(function (r) { return +r.id === id; })[0];
+      if (row) monthly.push({ name: m.name, label: m.label, pos: row.pos, score: row.score, prize: row.prize, complete: m.complete });
+    });
+
+    var lms = C.lms(ds);
+    var lmsStatus = lms.eliminatedAt[id] ? { state: "out", gw: lms.eliminatedAt[id] }
+      : (lms.survivors.some(function (s) { return +s.id === id; }) ? { state: "in" } : { state: "na" });
+
+    var pyramid = [];
+    C.pyramid(ds).seasons.forEach(function (se) {
+      se.divisions.forEach(function (dv) {
+        var row = dv.rows.filter(function (r) { return +r.id === id; })[0];
+        if (row) pyramid.push({ season: se.name, division: dv.name, pos: row.pos, score: row.score, size: dv.size, prize: row.prize });
+      });
+    });
+
+    var h2h = null;
+    C.h2h(ds).groups.forEach(function (g) {
+      var t = g.table.filter(function (x) { return +x.id === id; })[0];
+      if (t) h2h = { group: g.name, pos: t.pos, pts: t.pts, w: t.w, d: t.d, l: t.l, dest: t.dest, gwPts: t.gwPts };
+    });
+
+    return {
+      id: id, entryName: nm(mm, id), playerName: pl(mm, id),
+      classic: classic, monthly: monthly, lms: lmsStatus, pyramid: pyramid, h2h: h2h,
+      past: (ds.pastSeasons && ds.pastSeasons[id]) || []
+    };
+  };
+
   window.GO_COMPUTE = C;
 })();

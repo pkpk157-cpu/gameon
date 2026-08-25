@@ -185,12 +185,12 @@
     }
     h += '</div>';
 
-    if (admin) {
-      h += '<label class="field" style="margin-top:12px"><span class="lab">Highlight my team (entry ID)</span>' +
-        '<div style="display:flex;gap:8px"><input class="in" id="pfMe" value="' + esc(state.me || "") + '" placeholder="e.g. 1234567" inputmode="numeric">' +
-        '<button class="btn" id="pfMeSave">Save</button></div></label>' +
-        '<div class="note" style="margin-top:6px">Admin mode. Participants don\'t see these controls.</div>';
-    }
+    // My FPL team ID — every participant can set this to highlight themselves.
+    h += '<label class="field" style="margin-top:12px"><span class="lab">My FPL team ID</span>' +
+      '<div style="display:flex;gap:8px"><input class="in" id="pfMe" value="' + esc(state.me || "") + '" placeholder="e.g. 267043" inputmode="numeric">' +
+      '<button class="btn" id="pfMeSave">Save</button></div></label>' +
+      '<div class="note" style="margin-top:2px">Highlights your name across all tabs. Find your ID in your FPL team URL: /entry/<b>NUMBER</b>/.</div>' +
+      (admin ? '<div class="note warn" style="margin-top:8px">Admin mode is on for this device.</div>' : '');
 
     $("#profileBody").innerHTML = h;
     $("#profileBack").classList.add("show");
@@ -199,6 +199,11 @@
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile(); });
     });
     $("#pfRules").addEventListener("click", function () { closeProfile(); location.hash = "rules"; });
+    $("#pfMeSave").addEventListener("click", function () {
+      var v = parseInt($("#pfMe").value, 10);
+      state.me = isNaN(v) ? null : v; lsSet(ME_KEY, state.me);
+      toast(state.me ? "Saved — you're highlighted" : "Cleared"); render();
+    });
 
     if (admin) {
       $("#pfRefresh").addEventListener("click", function () { closeProfile(); startRefresh(); });
@@ -209,11 +214,6 @@
         download("data.json", JSON.stringify(bundle)); toast("Exported data.json");
       });
       $("#pfImport").addEventListener("click", function () { importFile(function () { closeProfile(); }); });
-      $("#pfMeSave").addEventListener("click", function () {
-        var v = parseInt($("#pfMe").value, 10);
-        state.me = isNaN(v) ? null : v; lsSet(ME_KEY, state.me);
-        toast("Saved"); render(); openProfile();
-      });
     }
   }
   function closeProfile() { $("#profileBack").classList.remove("show"); }
@@ -251,8 +251,11 @@
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
     $("#profileBack").addEventListener("click", function (e) { if (e.target === $("#profileBack")) closeProfile(); });
     document.addEventListener("click", function (e) {
-      var b = e.target.closest ? e.target.closest("[data-rules]") : null;
-      if (b) { location.hash = "rules/" + b.getAttribute("data-rules"); }
+      if (!e.target.closest) return;
+      var b = e.target.closest("[data-rules]");
+      if (b) { location.hash = "rules/" + b.getAttribute("data-rules"); return; }
+      var n = e.target.closest("[data-entry]");
+      if (n) { location.hash = "profile/" + n.getAttribute("data-entry"); }
     });
     window.addEventListener("hashchange", syncFromHash);
 
@@ -276,11 +279,13 @@
     var h = (location.hash || "#classic").replace("#", "");
     var parts = h.split("/");
     var view = parts[0];
-    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "home"]);
+    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "home", "profile"]);
     if (known.indexOf(view) === -1) view = "classic";
+    if (view !== "profile" && view !== "rules" && view !== "settings") state.backView = view;
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
+    if (view === "profile") state.profileId = parts[1] || null;
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
     render();
   }
@@ -289,6 +294,8 @@
     $all(".navitem").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === state.view); });
     $all(".view").forEach(function (v) { v.classList.toggle("active", v.getAttribute("data-view") === state.view); });
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+    var fill = ["classic", "monthly", "lms", "pyramid", "h2h"].indexOf(state.view) !== -1;
+    var wrap = $("main.wrap"); if (wrap) wrap.classList.toggle("fill", fill);
     updateBanner();
   }
 
@@ -299,7 +306,8 @@
     pyramid: { t: "Pyramid", topic: "pyramid" },
     h2h:     { t: "Game On UCL", topic: "h2h" },
     rules:   { t: "Rules" },
-    settings:{ t: "Settings" }
+    settings:{ t: "Settings" },
+    profile: { t: "Profile" }
   };
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
@@ -336,6 +344,7 @@
       return;
     }
 
+    if (state.view === "profile") return renderProfile(host, ds, state.profileId);
     if (state.view === "home") return renderHome(host, ds);
     if (state.view === "classic") return renderClassic(host, ds);
     if (state.view === "monthly") return renderMonthly(host, ds);
@@ -477,7 +486,7 @@
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
         '<td class="num"><span class="rankcell"><span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
-        '<td class="name"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
+        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="num">' + num(r.eventTotal) + '</td>' +
         '<td class="num"><b>' + num(r.total) + '</b></td>' +
         '<td class="num">' + mv + '</td>' +
@@ -546,7 +555,7 @@
     h += M.rows.map(function (r) {
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
-        '<td class="name"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
+        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td><td class="num">' + num(r.bench) + '</td>' +
         '<td class="num">' + (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
@@ -577,18 +586,35 @@
         '<div class="note">The Last Manager Standing</div></div></div>';
     }
 
-    // This gameweek only (live if in progress, else the latest finished GW).
-    var wk = lms.live || (lms.perGw.length ? lms.perGw[lms.perGw.length - 1] : null);
-    var wkLive = !!lms.live;
-    if (wk) {
-      h += '<div class="section-title"><h2>This gameweek — GW ' + wk.gw + '</h2><div class="rule"></div>' +
-        (wkLive ? '<span class="pill live">Live</span>' : '<span class="pill gold">Final</span>') + '</div>';
-      h += lmsGwTable(wk, { live: wkLive });
-    } else {
+    // Gameweek dropdown — Live GW first, then finished GWs (review past weeks).
+    var gwOpts = [];
+    if (lms.live) gwOpts.push({ key: "live", label: "GW " + lms.live.gw + " · Live", week: lms.live, live: true });
+    lms.perGw.slice().reverse().forEach(function (w) {
+      gwOpts.push({ key: String(w.gw), label: "GW " + w.gw, week: w, live: false });
+    });
+
+    if (!gwOpts.length) {
       h += '<div class="callout" style="margin-top:14px">The season hasn\'t kicked off yet — nobody is eliminated until GW1 is finalised. All ' + started + ' managers are still in.</div>';
+      host.innerHTML = h;
+      return;
     }
 
+    var curKey = (state.lmsGw && gwOpts.some(function (o) { return o.key === state.lmsGw; })) ? state.lmsGw : gwOpts[0].key;
+    state.lmsGw = curKey;
+    var byKey = function (k) { return gwOpts.filter(function (o) { return o.key === k; })[0]; };
+    h += '<div class="pickrow"><select class="in narrow" id="lmsGwSel">' +
+      gwOpts.map(function (o) {
+        return '<option value="' + o.key + '"' + (o.key === curKey ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+      }).join("") + '</select></div>';
+    h += '<div id="lmsGwPanel"></div>';
+
     host.innerHTML = h;
+    var drawLms = function () {
+      var o = byKey(state.lmsGw);
+      $("#lmsGwPanel", host).innerHTML = lmsGwTable(o.week, { live: o.live });
+    };
+    $("#lmsGwSel", host).addEventListener("change", function () { state.lmsGw = this.value; drawLms(); });
+    drawLms();
   }
 
   function gridTable(rows) {
@@ -612,17 +638,13 @@
       var nameCls = red ? "who out-name" : "who";
       var played = (r.played == null) ? '<span class="note">—</span>' : (r.played + '/' + (r.playedTotal || 12));
       return '<tr class="' + (red ? "gone" : "") + (isMe(r.id) ? " me" : "") + '">' +
-        '<td class="name"><span class="' + nameCls + '">' + esc(r.name) + '</span><div class="mgr">' + esc(r.player) + '</div></td>' +
+        '<td class="name" data-entry="' + r.id + '"><span class="' + nameCls + '">' + esc(r.name) + '</span><div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td>' +
         '<td class="num">' + played + '</td>' +
         '<td class="num">' + (r.hit ? '−' + r.hit : '0') + '</td>' +
         '<td class="num">' + num(r.bench) + '</td></tr>';
     }).join("");
-    var caption = opts.live
-      ? g.sog + ' still in · <span class="out-name">bottom ' + (g.need || 0) + ' in the drop zone (red)</span> · Played out of 12 · lowest first'
-      : g.sog + ' in · <span class="out-name">' + g.eliminated.length + ' out (red)</span> · ' + g.eog + ' left · lowest first';
-    return '<div class="note" style="margin-bottom:8px">' + caption + '</div>' +
-      '<div class="freeze"><table class="t"><thead><tr><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num">Hits</th><th class="num">Bench</th></tr></thead><tbody>' +
+    return '<div class="freeze"><table class="t"><thead><tr><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num">Hits</th><th class="num">Bench</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>';
   }
 
@@ -634,14 +656,13 @@
     var cfg = S.config();
     var h = '';
 
-    // Group selector (dropdown)
+    // Group selector (dropdown) + group-stage GW progress
     if (state.group >= h2h.groups.length) state.group = 0;
-    h += '<div class="section-title"><h2>Group stage</h2><div class="rule"></div>' +
-      '<span class="chip">GW ' + h2h.groupGwsPlayed + '/' + h2h.groupGwsTotal + '</span></div>';
-    h += '<label class="field"><span class="lab">Group</span><select class="in" id="grpSel">' +
+    h += '<div class="pickrow"><select class="in narrow" id="grpSel">' +
       h2h.groups.map(function (g, i) {
         return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
-      }).join("") + '</select></label>';
+      }).join("") + '</select>' +
+      '<div class="pickmeta">Group stage · GW ' + h2h.groupGwsPlayed + '/' + h2h.groupGwsTotal + '</div></div>';
     h += '<div id="grpPanel">' + groupPanel(h2h.groups[state.group] || h2h.groups[0], cfg) + '</div>';
 
     host.innerHTML = h;
@@ -657,7 +678,7 @@
       var pill = t.dest === "UCL" ? '<span class="pill ucl">UCL</span>' : t.dest === "UEL" ? '<span class="pill uel">UEL</span>' : '';
       var zone = t.dest === "UCL" ? "zone-top" : "";
       return '<tr class="' + zone + (isMe(t.id) ? ' me' : '') + '"><td class="num">' + t.pos + '</td>' +
-        '<td class="name"><span class="who">' + esc(t.name) + '</span> ' + pill + '<div class="mgr">' + esc(t.player) + '</div></td>' +
+        '<td class="name" data-entry="' + t.id + '"><span class="who">' + esc(t.name) + '</span> ' + pill + '<div class="mgr">' + esc(t.player) + '</div></td>' +
         '<td class="num">' + t.w + '</td><td class="num">' + t.d + '</td><td class="num">' + t.l + '</td>' +
         '<td class="num"><b>' + t.pts + '</b></td><td class="num">' + num(t.gwPts) + '</td></tr>';
     }).join("");
@@ -785,14 +806,12 @@
         : (r.pos > div.rows.length - pcfg.relegateCount ? '<span class="pill down">▼</span>' : '');
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr class="' + zone + (isMe(r.id) ? ' me' : '') + '"><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
-        '<td class="name"><span class="who">' + esc(r.name) + '</span> ' + badge + '<div class="mgr">' + esc(r.player) + '</div></td>' +
+        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.name) + '</span> ' + badge + '<div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td><td class="num">' +
         (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
     if (!div.rows.length) return '<div class="callout">No managers assigned to this division.</div>';
-    return '<div class="note" style="margin-bottom:8px">' + div.size + ' managers · 1st place ' + money(div.prizes[1]) +
-      ' · <span style="color:var(--good)">▲ top ' + cfg.pyramid.promoteCount + ' promoted</span> · <span style="color:var(--bad)">▼ bottom ' + cfg.pyramid.relegateCount + ' relegated</span></div>' +
-      '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Prize</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Prize</th></tr></thead><tbody>' + body + '</tbody></table></div>';
   }
 
   /* ====================================================================== */
@@ -903,6 +922,64 @@
     var p = cfg.h2h.prizes;
     return '<div class="grid cols-4">' + prizeTile("UCL Winner", p.ucl.winner) + prizeTile("UCL Runner-up", p.ucl.runnerUp) +
       prizeTile("UEL Winner", p.uel.winner) + prizeTile("UEL Runner-up", p.uel.runnerUp) + '</div>';
+  }
+
+  /* ====================================================================== */
+  /* PROFILE (per-manager, opened by tapping a name)                        */
+  /* ====================================================================== */
+  function profStat(label, big, sub) {
+    return '<div class="stat" style="text-align:left"><div class="l" style="margin:0 0 6px">' + esc(label) + '</div>' +
+      '<div style="font-size:18px;font-weight:800;line-height:1.15">' + esc(big) + '</div>' +
+      (sub ? '<div class="note" style="margin-top:3px">' + esc(sub) + '</div>' : '') + '</div>';
+  }
+  function renderProfile(host, ds, id) {
+    if (!id) { host.innerHTML = '<div class="callout">No manager selected.</div>'; return; }
+    var P = K.managerProfile(ds, id);
+    var h = '<div class="btnrow" style="margin-bottom:10px"><button class="btn ghost" id="profBack">' + svg("back", 16) + ' Back</button></div>';
+    h += '<div class="card"><div class="bd"><div class="profhero">' +
+      '<div class="profav">' + esc((P.entryName || "?").trim().slice(0, 1).toUpperCase()) + '</div>' +
+      '<div><h2 style="margin:0;font-size:20px">' + esc(P.entryName) + '</h2>' +
+      '<div class="note">' + esc(P.playerName) + (isMe(id) ? ' · <span class="pill gold">You</span>' : '') + '</div></div>' +
+      '</div></div></div>';
+
+    h += '<div class="section-title"><h2>This season</h2><div class="rule"></div></div>';
+    h += '<div class="grid cols-2">';
+    h += profStat("Classic", P.classic ? ("#" + P.classic.computedRank) : "—",
+      P.classic ? (num(P.classic.total) + " pts" + (P.classic.prize ? " · " + money(P.classic.prize) : "")) : "");
+    var lmsTxt = P.lms.state === "in" ? "Still in" : (P.lms.state === "out" ? ("Out · GW" + P.lms.gw) : "—");
+    h += profStat("Last Manager", lmsTxt, P.lms.state === "in" ? "surviving" : "");
+    var pyl = P.pyramid.length ? P.pyramid[P.pyramid.length - 1] : null;
+    h += profStat("Pyramid", pyl ? ("#" + pyl.pos + " " + pyl.division) : "—", pyl ? (pyl.season + " · " + num(pyl.score) + " pts") : "");
+    h += profStat("UCL", P.h2h ? ("#" + P.h2h.pos + " " + P.h2h.group) : "—",
+      P.h2h ? (P.h2h.w + "W " + P.h2h.d + "D " + P.h2h.l + "L · " + P.h2h.pts + " pts" + (P.h2h.dest ? " · " + P.h2h.dest : "")) : "");
+    h += '</div>';
+
+    if (P.monthly.length) {
+      h += '<div class="section-title"><h2>Monthly</h2><div class="rule"></div></div>';
+      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">Prize</th></tr></thead><tbody>';
+      h += P.monthly.map(function (m) {
+        return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
+          '<td class="num">' + (m.prize ? '<span class="prize">' + money(m.prize) + '</span>' : '') + '</td></tr>';
+      }).join("");
+      h += '</tbody></table></div></div>';
+    }
+
+    h += '<div class="section-title"><h2>Past seasons (FPL)</h2><div class="rule"></div></div>';
+    if (P.past && P.past.length) {
+      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Season</th><th class="num">Overall rank</th><th class="num">Points</th></tr></thead><tbody>';
+      h += P.past.slice().reverse().map(function (s) {
+        return '<tr><td>' + esc(s.season) + '</td><td class="num">' + num(s.rank) + '</td><td class="num">' + num(s.total) + '</td></tr>';
+      }).join("");
+      h += '</tbody></table></div></div>';
+    } else {
+      h += '<div class="callout">No past-season history for this manager (new to FPL, or not yet synced).</div>';
+    }
+
+    host.innerHTML = h;
+    $("#barTitle").textContent = P.entryName || "Profile";
+    $("#profBack", host).addEventListener("click", function () {
+      if (state.backView) location.hash = state.backView; else location.hash = "classic";
+    });
   }
 
   /* ====================================================================== */
