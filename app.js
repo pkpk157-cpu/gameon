@@ -577,6 +577,17 @@
         '<div class="note">The Last Manager Standing</div></div></div>';
     }
 
+    // This gameweek only (live if in progress, else the latest finished GW).
+    var wk = lms.live || (lms.perGw.length ? lms.perGw[lms.perGw.length - 1] : null);
+    var wkLive = !!lms.live;
+    if (wk) {
+      h += '<div class="section-title"><h2>This gameweek — GW ' + wk.gw + '</h2><div class="rule"></div>' +
+        (wkLive ? '<span class="pill live">Live</span>' : '<span class="pill gold">Final</span>') + '</div>';
+      h += lmsGwTable(wk, { live: wkLive });
+    } else {
+      h += '<div class="callout" style="margin-top:14px">The season hasn\'t kicked off yet — nobody is eliminated until GW1 is finalised. All ' + started + ' managers are still in.</div>';
+    }
+
     host.innerHTML = h;
   }
 
