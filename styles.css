@@ -234,7 +234,7 @@ tr.gone td { background:var(--bad-wash); }
 .stat .k { font-size:27px; font-weight:800; line-height:1; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
 .stat .l { font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.8px; margin-top:8px; }
 /* four highlight cards always in one row (LMS) */
-.statrow { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.statrow { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; }
 .statrow .stat { padding:13px 6px; }
 .statrow .stat .k { font-size:23px; }
 .statrow .stat .l { font-size:9.5px; letter-spacing:.4px; margin-top:6px; }
@@ -316,11 +316,11 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 label.field { display:block; margin-bottom:13px; }
 .selrow { display:flex; gap:12px; flex-wrap:wrap; }
 .selrow .field { flex:1 1 45%; min-width:150px; margin-bottom:12px; }
-select.in.narrow { width:auto; min-width:120px; max-width:150px; padding-right:30px; }
+select.in.narrow { width:auto; min-width:120px; max-width:250px; padding-right:30px; }
 
 /* month/season picker row: narrow dropdown + GW status chips beside it */
-.pickrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
-.pickmeta { min-width:0; }
+.pickrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.pickmeta { min-width:0; font-size:13px; font-weight:600; color:var(--ink-soft); }
 .gwchips { display:flex; flex-wrap:wrap; gap:4px; }
 .gwchip { font-size:10.5px; font-weight:700; min-width:22px; text-align:center; padding:2px 5px; border-radius:6px;
   font-variant-numeric:tabular-nums; border:1px solid var(--line); color:var(--ink-soft); background:var(--chip); }
@@ -423,7 +423,7 @@ td.name[data-entry]:hover .who { color:var(--accent); text-decoration-color:var(
 
 /* ---- fill mode: frozen-header table fills the screen under a fixed top ---- */
 :root { --topbar-h:56px; --nav-h:66px; }
-main.wrap.fill { display:flex; flex-direction:column; padding-top:12px; padding-bottom:0; overflow:hidden;
+main.wrap.fill { display:flex; flex-direction:column; padding-top:16px; padding-bottom:0; overflow:hidden;
   height:calc(100vh - var(--topbar-h) - var(--nav-h)); height:calc(100dvh - var(--topbar-h) - var(--nav-h)); }
 main.wrap.fill .foot { display:none; }
 main.wrap.fill .view.active { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -684,3 +684,17 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   box-shadow:0 4px 12px -6px rgba(233,0,82,.8); }
 .statlead { font-size:12.5px; font-weight:700; color:var(--ink-faint); margin:2px 2px 12px; }
 .statlead .pill { vertical-align:middle; }
+
+/* ---- spacing for the per-competition control rows --------------------- */
+/* In fill mode the table is the only thing that should flex; without this
+   the cards and pickers above it get squeezed and run into each other. */
+main.wrap.fill .view.active > *:not(.freeze) { flex:none; }
+main.wrap.fill .statrow,
+main.wrap.fill .pickrow,
+main.wrap.fill .selrow,
+main.wrap.fill .pickmeta,
+main.wrap.fill .section-title { flex:none; }
+/* the pyramid's gameweek chips and their legend need room either side */
+#pyrMeta { margin:12px 2px 14px; }
+#pyrMeta .gwlegend { margin-top:8px; }
+#monthMeta { margin-left:2px; }
