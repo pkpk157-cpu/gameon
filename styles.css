@@ -112,6 +112,8 @@ a { color:var(--accent); text-decoration:none; }
 }
 .brand .t b { font-size:15px; display:block; line-height:1.05; font-weight:700; }
 .brand .t span { font-size:10.5px; color:var(--ink-faint); letter-spacing:1.2px; text-transform:uppercase; }
+.bartitle { font-size:19px; font-weight:800; letter-spacing:-.02em; margin:0; line-height:1.1; }
+@media (max-width:380px){ .bartitle { font-size:17px; } }
 .topbar .spacer { flex:1; }
 .datastate { display:none; }
 .iconbtn, .profilebtn {
@@ -143,10 +145,12 @@ a { color:var(--accent); text-decoration:none; }
   transition:color .18s, background .18s;
 }
 .navitem svg { width:23px; height:23px; }
+.navitem .tile { width:29px; height:29px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.28)); transition:transform .16s ease; }
 .navitem:hover { color:var(--ink-soft); }
 .navitem.active { color:var(--accent); }
-.navitem.active svg { filter:drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 45%, transparent)); }
-@media (max-width:420px){ .navitem span { font-size:10px; } }
+.navitem.active .tile { transform:translateY(-1px) scale(1.08); filter:drop-shadow(0 3px 6px rgba(0,0,0,.34)); }
+@media (prefers-reduced-motion: reduce){ .navitem .tile { transition:none; } }
+@media (max-width:420px){ .navitem span { font-size:10px; } .navitem .tile { width:27px; height:27px; } }
 
 /* frozen-header scroll container (Classic / Monthly full tables) */
 .freeze {

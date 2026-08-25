@@ -23,7 +23,7 @@
     download: '<path d="M12 4v10m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/>',
     upload: '<path d="M12 20V10m0 0 4 4m-4-4-4 4"/><path d="M5 5h14"/>',
     book: '<path d="M5 4.5A2 2 0 0 1 7 3h11v15H7a2 2 0 0 0-2 2V4.5Z"/><path d="M5 18.5A2 2 0 0 0 7 21h11"/>',
-    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M20 12a8 8 0 0 0-.12-1.36l1.9-1.48-2-3.46-2.24.9a7.9 7.9 0 0 0-2.36-1.36L14.7 3h-4L10.3 5.3a7.9 7.9 0 0 0-2.36 1.36l-2.24-.9-2 3.46 1.9 1.48A8 8 0 0 0 5.48 12a8 8 0 0 0 .12 1.36l-1.9 1.48 2 3.46 2.24-.9a7.9 7.9 0 0 0 2.36 1.36l.4 2.34h4l.4-2.34a7.9 7.9 0 0 0 2.36-1.36l2.24.9 2-3.46-1.9-1.48A8 8 0 0 0 20 12Z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5M12 7.8h.01"/>',
     back: '<path d="M15 5l-7 7 7 7"/>',
     chev: '<path d="M6 9l6 6 6-6"/>',
@@ -34,6 +34,59 @@
       '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
       (ICONS[name] || "") + '</svg>';
   }
+
+  /* ---- iOS-style colored 3D tile icons for the tab bar ------------------ */
+  function starPath(cx, cy, r) {
+    var pts = [], inner = r * 0.42;
+    for (var i = 0; i < 10; i++) {
+      var a = -Math.PI / 2 + i * Math.PI / 5, rad = (i % 2 === 0) ? r : inner;
+      pts.push((cx + rad * Math.cos(a)).toFixed(2) + "," + (cy + rad * Math.sin(a)).toFixed(2));
+    }
+    return "M" + pts.join("L") + "Z";
+  }
+  function tile(id, c1, c2, glyph) {
+    return '<svg viewBox="0 0 30 30" width="30" height="30" class="tile" aria-hidden="true">' +
+      '<defs>' +
+      '<linearGradient id="t' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c1 + '"/><stop offset="1" stop-color="' + c2 + '"/></linearGradient>' +
+      '<linearGradient id="g' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>' +
+      '</defs>' +
+      '<rect x="1.5" y="1.5" width="27" height="27" rx="8.5" fill="url(#t' + id + ')"/>' +
+      '<rect x="3" y="2.2" width="24" height="12" rx="7" fill="url(#g' + id + ')"/>' +
+      glyph +
+      '<rect x="1.5" y="1.5" width="27" height="27" rx="8.5" fill="none" stroke="rgba(255,255,255,.4)" stroke-width=".8"/>' +
+      '</svg>';
+  }
+  var G_TROPHY = '<path d="M10.2 8h9.6v2.4c0 2.65-2.15 4.8-4.8 4.8s-4.8-2.15-4.8-4.8Z" fill="#fff"/>' +
+    '<path d="M10.2 8.9H8.3c0 1.9 1 3.1 2.4 3.5M19.8 8.9h1.9c0 1.9-1 3.1-2.4 3.5" fill="none" stroke="#fff" stroke-width="1.3"/>' +
+    '<rect x="14.1" y="15" width="1.8" height="2.8" fill="#fff"/><rect x="11.2" y="17.6" width="7.6" height="2.1" rx=".8" fill="#fff"/>' +
+    '<rect x="9.8" y="20" width="10.4" height="2.4" rx=".9" fill="#fff"/>';
+  var G_CAL = '<rect x="7.8" y="9" width="14.4" height="13.2" rx="2.6" fill="#fff"/>' +
+    '<path d="M7.8 12.4h14.4" stroke="rgba(0,0,0,.16)" stroke-width="1.5"/>' +
+    '<rect x="10.8" y="7.4" width="1.6" height="3.2" rx=".8" fill="#fff"/><rect x="17.6" y="7.4" width="1.6" height="3.2" rx=".8" fill="#fff"/>' +
+    '<rect x="10.4" y="14.6" width="2" height="2" rx=".4" fill="rgba(0,0,0,.28)"/><rect x="14" y="14.6" width="2" height="2" rx=".4" fill="rgba(0,0,0,.28)"/>' +
+    '<rect x="17.6" y="14.6" width="2" height="2" rx=".4" fill="rgba(0,0,0,.28)"/><rect x="10.4" y="18" width="2" height="2" rx=".4" fill="rgba(0,0,0,.28)"/><rect x="14" y="18" width="2" height="2" rx=".4" fill="rgba(0,0,0,.28)"/>';
+  var G_PERSON = '<circle cx="15" cy="8.8" r="2.9" fill="#fff"/>' +
+    '<path d="M9.6 23c0-4.1 2.4-7.3 5.4-7.3s5.4 3.2 5.4 7.3Z" fill="#fff"/>' +
+    '<path d="M15 15.9 12.7 23h4.6Z" fill="#2a2f40"/>' +
+    '<rect x="14.5" y="16.3" width="1" height="6.7" fill="#e0b53a"/>';
+  var G_PYR = '<path d="M15 7.2 23 22.4H7Z" fill="#fff"/>' +
+    '<path d="M11.4 14.6h7.2M9.4 18.4h11.2" stroke="rgba(0,0,0,.2)" stroke-width="1.3"/>';
+  var G_BALL = (function () {
+    var s = '<circle cx="15" cy="15" r="7.7" fill="#fff"/>';
+    s += '<path d="' + starPath(15, 15, 2.1) + '" fill="#0b1440"/>';
+    for (var k = 0; k < 8; k++) {
+      var a = -Math.PI / 2 + k * Math.PI / 4;
+      s += '<path d="' + starPath(15 + 5.3 * Math.cos(a), 15 + 5.3 * Math.sin(a), 1.5) + '" fill="#0b1440"/>';
+    }
+    return s;
+  })();
+  var TILE = {
+    classic: tile("cl", "#ffd76a", "#e6a417", G_TROPHY),
+    monthly: tile("mo", "#5db4ff", "#2f7bf0", G_CAL),
+    lms:     tile("lm", "#525872", "#23283a", G_PERSON),
+    pyramid: tile("py", "#b985ff", "#7c3aed", G_PYR),
+    h2h:     tile("uc", "#3a4fb0", "#0e1a52", G_BALL)
+  };
 
   /* Section title with an info button that opens the competition's rules page. */
   function titleBar(name, topic, chip) {
@@ -171,6 +224,7 @@
     $("#btnProfile").innerHTML = svg("gear", 20);
     $("#btnProfile").setAttribute("title", "Settings");
     $("#btnProfile").addEventListener("click", openProfile);
+    $("#barInfo").innerHTML = svg("info", 18);
     $("#modalClose").addEventListener("click", closeModal);
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
     $("#profileBack").addEventListener("click", function (e) { if (e.target === $("#profileBack")) closeProfile(); });
@@ -189,7 +243,7 @@
   function buildNav() {
     var nav = $("#navbar");
     nav.innerHTML = TABS.map(function (t) {
-      return '<button class="navitem" data-tab="' + t.id + '">' + svg(t.icon) + '<span>' + esc(t.label) + '</span></button>';
+      return '<button class="navitem" data-tab="' + t.id + '">' + (TILE[t.id] || svg(t.icon)) + '<span>' + esc(t.label) + '</span></button>';
     }).join("");
     $all(".navitem", nav).forEach(function (b) {
       b.addEventListener("click", function () { location.hash = b.getAttribute("data-tab"); });
@@ -213,6 +267,24 @@
     $all(".navitem").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === state.view); });
     $all(".view").forEach(function (v) { v.classList.toggle("active", v.getAttribute("data-view") === state.view); });
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+    updateBanner();
+  }
+
+  var VIEW_META = {
+    classic: { t: "Classic League", topic: "classic" },
+    monthly: { t: "Monthly", topic: "monthly" },
+    lms:     { t: "Last Manager Standing", topic: "lms" },
+    pyramid: { t: "Pyramid", topic: "pyramid" },
+    h2h:     { t: "Game On UCL", topic: "h2h" },
+    rules:   { t: "Rules" },
+    settings:{ t: "Settings" }
+  };
+  function updateBanner() {
+    var m = VIEW_META[state.view] || { t: "Game On V12" };
+    $("#barTitle").textContent = m.t;
+    var info = $("#barInfo");
+    if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
+    else { info.style.display = "none"; info.removeAttribute("data-rules"); }
   }
 
   function updateDataState() { /* data freshness now lives in the profile sheet */ }
@@ -357,8 +429,6 @@
     var rows = K.classic(ds);
     var h = '';
 
-    h += titleBar("Classic League", "classic", esc(ds.league && ds.league.name ? ds.league.name : "Overall"));
-
     h += '<label class="field" style="margin-bottom:12px">' +
       '<input class="in" id="classicSearch" placeholder="Search manager or team…"></label>';
 
@@ -426,7 +496,7 @@
       : (active.length ? active[active.length - 1].key : months[0].key);
     state.monthKey = cur;
 
-    var h = titleBar("Monthly Winners", "monthly");
+    var h = '';
     h += '<label class="field"><span class="lab">Month</span><select class="in" id="monthSel">' +
       months.map(function (m) {
         return '<option value="' + m.key + '"' + (m.key === cur ? " selected" : "") + '>' + esc(m.label || monthLabel(m)) + '</option>';
@@ -474,7 +544,7 @@
     var cfg = S.config();
     var started = ds.managers.length;
 
-    var h = titleBar("Last Manager Standing", "lms", "Only 1 can stand");
+    var h = '';
 
     h += '<div class="statrow">' +
       stat(started, "Started") +
@@ -499,8 +569,7 @@
       var curKey = (state.lmsGw && gwOpts.some(function (o) { return o.key === state.lmsGw; })) ? state.lmsGw : gwOpts[0].key;
       state.lmsGw = curKey;
       var byKey = function (k) { return gwOpts.filter(function (o) { return o.key === k; })[0]; };
-      h += '<div class="section-title"><h2>Gameweek results</h2><div class="rule"></div>' +
-        '<button class="infobtn" data-rules="lms" title="LMS rules & elimination grid">' + svg("info", 17) + '</button></div>';
+      h += '<div class="section-title"><h2>Gameweek results</h2><div class="rule"></div></div>';
       h += '<label class="field"><span class="lab">Gameweek</span><select class="in" id="lmsGwSel">' +
         gwOpts.map(function (o) {
           return '<option value="' + o.key + '"' + (o.key === curKey ? ' selected' : '') + '>' + esc(o.label) + '</option>';
@@ -563,7 +632,7 @@
   function renderH2h(host, ds) {
     var h2h = K.h2h(ds);
     var cfg = S.config();
-    var h = titleBar("Game On UCL", "h2h", h2h.groups.length + " groups");
+    var h = '';
 
     // Group selector (dropdown)
     if (state.group >= h2h.groups.length) state.group = 0;
@@ -673,7 +742,7 @@
       })();
     state.seasonKey = cur;
 
-    var h = titleBar("The Pyramid Battle", "pyramid", "4 divisions · 3 mini-seasons");
+    var h = '';
 
     var cfg = S.config();
     var divKeys = pyr.divisions.map(function (d) { return d.key; });
