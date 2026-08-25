@@ -7,7 +7,12 @@
 name: Update FPL data
 on:
   schedule:
-    - cron: "0 */2 * * *"   # every 2 hours (UTC)
+    # Baseline, so the tables are never far out of date.
+    - cron: "0 */2 * * *"                # every 2 hours (UTC)
+    # Match windows: points move here, so refresh far more often. Times are
+    # UTC, chosen to cover UK kick-offs across the year.
+    - cron: "*/30 11-23 * * 6,0"         # Sat + Sun, every 30 min
+    - cron: "*/30 18-23 * * 1,2,3,4,5"   # weekday evening fixtures
   workflow_dispatch: {}
 permissions:
   contents: write

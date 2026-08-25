@@ -76,15 +76,22 @@
 
   var STORE = {};
 
+  // The merged config is deep-cloned, which is far too expensive to redo on
+  // every read — prize lookups alone ask for it once per manager. Cache it and
+  // drop the cache whenever the overrides change. Callers treat it as
+  // read-only.
+  var _configCache = null;
   STORE.config = function () {
-    return merge(window.GO_DEFAULT_CONFIG, _configOverride);
+    if (!_configCache) _configCache = merge(window.GO_DEFAULT_CONFIG, _configOverride);
+    return _configCache;
   };
   STORE.saveConfig = function (partial) {
     _configOverride = merge(_configOverride, partial);
     lsSet(LS_CONFIG, _configOverride);
+    _configCache = null;
     return STORE.config();
   };
-  STORE.resetConfig = function () { _configOverride = {}; lsSet(LS_CONFIG, {}); };
+  STORE.resetConfig = function () { _configOverride = {}; lsSet(LS_CONFIG, {}); _configCache = null; };
 
   STORE.overrides = function () { return _overrides; };
   STORE.saveOverrides = function (partial) {
@@ -119,7 +126,7 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (bundle) {
           if (!bundle) return null;
-          if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); }
+          if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
           if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
           _dataset = bundle.dataset || bundle; // allow bare dataset too
           return _dataset;
@@ -140,7 +147,7 @@
   };
   STORE.importBundle = function (bundle) {
     if (!bundle) throw new Error("Empty file");
-    if (bundle.config) { _configOverride = bundle.config; lsSet(LS_CONFIG, _configOverride); }
+    if (bundle.config) { _configOverride = bundle.config; lsSet(LS_CONFIG, _configOverride); _configCache = null; }
     if (bundle.overrides) { _overrides = bundle.overrides; lsSet(LS_OVERRIDES, _overrides); }
     var ds = bundle.dataset || (bundle.managers ? bundle : null);
     if (ds) return STORE.setDataset(ds);
@@ -225,7 +232,15 @@
         report({ phase: "h2h", done: 0, total: ids.length, message: "Loading H2H groups…" });
         return API.pool(ids, function (id) {
           return API.h2hStandingsAll(id).then(function (r) {
-            ds.h2h[id] = { league: r.league, results: r.results };
+            // same trim as the server-side fetcher
+            ds.h2h[id] = {
+              league: { name: (r.league && r.league.name) || "" },
+              results: (r.results || []).map(function (x) {
+                return { entry: x.entry, entry_name: x.entry_name, player_name: x.player_name,
+                         total: x.total, points_for: x.points_for, matches_won: x.matches_won,
+                         matches_drawn: x.matches_drawn, matches_lost: x.matches_lost };
+              })
+            };
           });
         }, 3, function (done, total) {
           report({ phase: "h2h", done: done, total: total,

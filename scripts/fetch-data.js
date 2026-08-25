@@ -67,15 +67,20 @@ async function classicAll() {
 }
 
 async function h2hAll(id) {
-  let all = [], meta = null;
+  let all = [], name = "";
   for (let page = 1; ; page++) {
     const d = await getJSON("/leagues-h2h/" + id + "/standings/?page_standings=" + page);
-    if (!meta) meta = d.league;
+    if (!name) name = (d.league && d.league.name) || "";
     const res = (d.standings && d.standings.results) || [];
-    all = all.concat(res);
+    // Only the fields the app reads — the rest is a third of this file.
+    res.forEach((r) => all.push({
+      entry: r.entry, entry_name: r.entry_name, player_name: r.player_name,
+      total: r.total, points_for: r.points_for,
+      matches_won: r.matches_won, matches_drawn: r.matches_drawn, matches_lost: r.matches_lost
+    }));
     if (!(d.standings && d.standings.has_next)) break;
   }
-  return { league: meta, results: all };
+  return { league: { name: name }, results: all };
 }
 
 (async () => {
@@ -199,6 +204,18 @@ async function h2hAll(id) {
     managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips
   };
+  // Refuse to publish something clearly worse than what is already live: a
+  // partial fetch overwriting good data is worse than skipping a run.
+  if (prev.managers && prev.managers.length) {
+    const before = prev.managers.length, now = managers.length;
+    if (now < before * 0.9) {
+      throw new Error("refusing to publish: " + now + " managers vs " + before + " already live");
+    }
+    const withHistory = Object.keys(history).filter((k) => Object.keys(history[k] || {}).length).length;
+    if (now && withHistory < now * 0.8) {
+      throw new Error("refusing to publish: only " + withHistory + "/" + now + " managers have history");
+    }
+  }
   fs.writeFileSync("data.json", JSON.stringify({ generatedAt: dataset.updatedAt, dataset }));
   console.log("Wrote data.json — " + managers.length + " managers, " + H2H.length +
     " H2H leagues, pitch GW " + (pitchGw || "none") + ", failed " + (hist.failed || 0));
