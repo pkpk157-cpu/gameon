@@ -141,6 +141,27 @@ async function h2hAll(id) {
 
   let prev = {};
   try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
+
+  // A finished gameweek's deadline is history. FPL does move deadlines when
+  // fixtures are rescheduled around European and cup weeks, and the app reads
+  // the deadline's month to decide which month a gameweek belongs to — so a
+  // shift across a month boundary would quietly reassign a gameweek that has
+  // already been played, changing a settled month's winner and the months-won
+  // tally that breaks classic ties. Keep whatever we published while the
+  // gameweek was still being played.
+  const prevEvents = {};
+  ((prev.bootstrap && prev.bootstrap.events) || []).forEach((e) => { prevEvents[e.id] = e; });
+  let frozen = 0;
+  events.forEach((e) => {
+    const was = prevEvents[e.id];
+    if (was && was.finished && was.data_checked && was.deadline_time &&
+        was.deadline_time !== e.deadline_time) {
+      e.deadline_time = was.deadline_time;
+      frozen++;
+    }
+  });
+  if (frozen) console.log("Kept the published deadline for " + frozen + " already-finished gameweek(s)");
+
   const canReuse = prev.picksV === 2;
   const prevPicks = canReuse ? (prev.picks || {}) : {};
   const prevLive = canReuse ? (prev.livePoints || {}) : {};
