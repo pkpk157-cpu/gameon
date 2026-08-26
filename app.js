@@ -347,8 +347,13 @@
       return;
     }
     // Prices and both ownerships are published already; which way a price is
-    // moving only exists once the updater has been recording it.
-    var tracked = rows[0].tracked;
+    // moving only exists once the updater has been recording it. The very first
+    // capture has the record but nothing to compare it against — every row would
+    // read as a dash, which looks broken rather than early, so hold the column
+    // back until there is genuinely something to put in it.
+    var tracked = rows[0].tracked && rows.some(function (r) {
+      return r.moved || r.net;
+    });
     var own = K.leagueOwnership(ds);
     if (!state.priceSort) state.priceSort = "price";
     if (!state.pricePos) state.pricePos = "all";
@@ -390,7 +395,7 @@
         '<div class="koline">' + list.length + ' players \u00b7 owned across FPL and across our ' +
         (own ? own.managers : 245) + ' managers' +
         (tracked ? ' \u00b7 moving shows a recorded change, else net transfers since the last one'
-                 : ' \u00b7 price movement starts recording with the next update') + '</div>';
+                 : ' \u00b7 which way prices are moving appears from the next update') + '</div>';
       filterRows(panel, $("#prSearch", host).value);
     };
     $("#prSort", host).addEventListener("change", function () { state.priceSort = this.value; draw(); });
