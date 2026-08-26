@@ -1312,41 +1312,165 @@
     host.innerHTML = h;
   }
 
+  // A rules page is a lede, then blocks. A block is prose, a list of rules, or
+  // an ordered tie-break chain — the chain is numbered because the order is the
+  // rule, and its last step is the one that applies when nothing separates them.
+  function ruleBlock(b) {
+    var body;
+    if (b.list) {
+      body = '<ul class="rulelist">' + b.list.map(function (x) {
+        return '<li>' + x + '</li>';
+      }).join("") + '</ul>';
+    } else if (b.chain) {
+      body = '<ol class="rulechain">' + b.chain.map(function (x, i) {
+        var last = i === b.chain.length - 1;
+        return '<li' + (last ? ' class="end"' : '') + '><span class="rc-t">' + x.t + '</span>' +
+          '<span class="rc-s">' + x.s + '</span></li>';
+      }).join("") + '</ol>';
+    } else {
+      body = '<div class="note" style="color:var(--ink-soft);font-size:13.5px;line-height:1.65">' + b.body + '</div>';
+    }
+    return '<div class="card"><div class="hd"><h3>' + esc(b.h) + '</h3></div>' +
+      '<div class="bd">' + body + '</div></div>';
+  }
+
   function renderCompRules(host, R) {
     state.rulesBack = R.back;
     var h = '<div class="section-title"><h2>' + esc(R.name) + '</h2><div class="rule"></div><span class="chip">Rules</span></div>';
-    R.blocks.forEach(function (b) {
-      h += '<div class="card"><div class="hd"><h3>' + esc(b.h) + '</h3></div>' +
-        '<div class="bd"><div class="note" style="color:var(--ink-soft);font-size:13.5px;line-height:1.65">' + b.body + '</div></div></div>';
-    });
+    if (R.lede) h += '<div class="rulelede">' + R.lede + '</div>';
+    R.blocks.forEach(function (b) { h += ruleBlock(b); });
     if (R.extra) { h += R.extra; }
+    h += '<div class="card"><div class="hd"><h3>Applies to every competition</h3></div><div class="bd">' +
+      '<ul class="rulelist">' + everywhereRules().map(function (x) {
+        return '<li>' + x + '</li>';
+      }).join("") + '</ul></div></div>';
     host.innerHTML = h;
   }
 
+  // The four rules that sit behind all five competitions, so each page can end
+  // with them rather than each one restating a quarter of them.
+  function everywhereRules() {
+    return [
+      '<b>One team per manager</b>, entered into all five competitions. The same squad and the same score feed every table.',
+      '<b>Points are FPL\u2019s own</b>, and <b>transfer hits are deducted</b> in every competition here.',
+      '<b>The playing XI means the eleven who eventually played</b> \u2014 after FPL applies its automatic substitutions, not the eleven originally picked. Under Bench Boost all fifteen count.',
+      '<b>A captain\u2019s goal counts once.</b> The multiplier doubles points; goals, clean sheets and assists are counts of things that happened.'
+    ];
+  }
+
   function compRules(topic, cfg) {
-    function rule(n) { var r = cfg.rules.filter(function (x) { return x.n === n; })[0]; return r ? esc(r.body) : ""; }
     var g = cfg.h2h.groupStageGws, kn = cfg.h2h.knockout;
-    if (topic === "classic") return { name: "Classic League", back: "classic", extra: prizesBlock(prizeReferenceCard()), blocks: [
-      { h: "How it works", body: "Your overall Fantasy Premier League points across all " + cfg.totalGameweeks + " gameweeks. The season-long total is your league score — the highest total at the end wins." },
-      { h: "Prizes", body: "The top 45 managers are paid — see the full breakdown below." },
-      { h: "Tie breakers", body: rule(2) } ] };
-    if (topic === "monthly") return { name: "Monthly Winners", back: "monthly", extra: prizesBlock(monthlyPrizeCard(cfg)), blocks: [
-      { h: "How it works", body: "Each month scores only the gameweeks that fall in that month, and <b>includes hits</b>. The top 3 each month (August–May) win." },
-      { h: "Tie breakers", body: rule(7) + "<br><br>The table separates level scores by bench points; deeper tie-breaks (goals, clean sheets, assists) can be set by the organiser." } ] };
-    if (topic === "lms") return { name: "Last Manager Standing", back: "lms", extra: prizesBlock(lmsPrizeCard(cfg)) + lmsGridCard(cfg), blocks: [
-      { h: "Scoring", body: rule(3) },
-      { h: "Eliminations", body: "Each gameweek the lowest scorers among the survivors are eliminated. The number out per GW is fixed (see the elimination grid). The last manager left standing is champion." },
-      { h: "Tie breakers", body: rule(4) } ] };
-    if (topic === "pyramid") return { name: "The Pyramid Battle", back: "pyramid", extra: pyramidVisualCard() + prizesBlock(pyramidPrizeCard(cfg)), blocks: [
-      { h: "Structure", body: "4 divisions — Elite, Championship, Challenger, Conference — across 3 mini-seasons: " +
-        cfg.pyramid.seasons.map(function (s) { return "<b>" + esc(s.name) + "</b> (GW " + s.gws[0] + "–" + s.gws[s.gws.length - 1] + ")"; }).join(", ") + "." },
-      { h: "Promotion & relegation", body: "Top " + cfg.pyramid.promoteCount + " of each division are promoted and the bottom " + cfg.pyramid.relegateCount + " are relegated for the next mini-season." },
-      { h: "Scoring & tie breakers", body: rule(6) } ] };
-    if (topic === "h2h") return { name: "Game On UCL (H2H)", back: "h2h", extra: prizesBlock(h2hPrizeCard(cfg)), blocks: [
-      { h: "Group stage", body: cfg.h2h.groupCount + " groups of " + cfg.h2h.perGroup + ", GW " + g[0] + "–" + g[g.length - 1] +
-        ", round robin (" + cfg.h2h.pointsWin + "/" + cfg.h2h.pointsDraw + "/" + cfg.h2h.pointsLoss + "). Top 2 of each group advance to the UCL knockouts; 3rd & 4th drop to the UEL knockouts." },
-      { h: "Knockouts", body: kn.map(function (k) { return "<b>" + esc(k.name) + "</b> — GW " + k.gws.join("–") + (k.legs === 2 ? " (2 legs)" : " (1 leg)"); }).join("<br>") },
-      { h: "Tie breakers", body: rule(5) } ] };
+    var gwSpan = function (a) { return "GW\u00a0" + a[0] + "\u2013" + a[a.length - 1]; };
+    var n = cfg.expectedManagers || 245;
+
+    if (topic === "classic") return {
+      name: "Classic League", back: "classic",
+      lede: "The season-long table. Every manager, all " + cfg.totalGameweeks +
+        " gameweeks, highest total wins.",
+      extra: prizesBlock(prizeReferenceCard()),
+      blocks: [
+        { h: "How you progress", list: [
+          "Ranked on your <b>total points across the season</b>, net of hits.",
+          "Nobody is eliminated \u2014 the table simply stands at GW\u00a0" + cfg.totalGameweeks + ".",
+          "The <b>top 45 places</b> are paid."
+        ] },
+        { h: "If two managers finish level", chain: [
+          { t: "Months won", s: "Whoever has won more monthly competitions finishes ahead." },
+          { t: "Share the place and split the money",
+            s: "Still level, and they take the same joint position. The prize money for all the tied places is pooled and divided evenly, in whole rupees, with any remainder going to the higher places." }
+        ] }
+      ] };
+
+    if (topic === "monthly") return {
+      name: "Monthly Winners", back: "monthly",
+      lede: "Ten separate mini-competitions, one per calendar month from August to May. Top three in each are paid.",
+      extra: prizesBlock(monthlyPrizeCard(cfg)),
+      blocks: [
+        { h: "How you progress", list: [
+          "Your score for a month is the <b>sum of your gameweek scores in that month</b>, hits included.",
+          "Each month stands alone \u2014 nothing carries between them.",
+          "Gameweeks are assigned to months by <b>the real fixture deadline dates</b>, so a month follows the actual calendar rather than a fixed guess."
+        ] },
+        { h: "If two managers finish level in a month", chain: [
+          { t: "Points on the bench", s: "More bench points across the month\u2019s gameweeks finishes ahead." },
+          { t: "Goals in the playing XI", s: "Then more goals across those gameweeks." },
+          { t: "Clean sheets in the playing XI", s: "Then more clean sheets." },
+          { t: "Assists in the playing XI", s: "Then more assists." }
+        ] }
+      ] };
+
+    if (topic === "lms") return {
+      name: "Last Manager Standing", back: "lms",
+      lede: "Every gameweek, the lowest scorers among the survivors go out. It runs the full " +
+        cfg.totalGameweeks + " gameweeks and ends with one manager left from " + n + ".",
+      extra: prizesBlock(lmsPrizeCard(cfg)) + lmsGridCard(cfg),
+      blocks: [
+        { h: "How you progress", list: [
+          "Your score is <b>that gameweek alone</b>, including hits. It resets every week \u2014 nothing accumulates.",
+          "The <b>lowest scorers among the managers still alive</b> are eliminated. How many go depends on the gameweek \u2014 see the elimination grid below.",
+          "Once you are out, you are out. There is no re-entry.",
+          "A gameweek <b>never eliminates the last manager standing</b>. However many places are due, one is always left."
+        ] },
+        { h: "If survivors are level on score", chain: [
+          { t: "Points on the bench", s: "More bench points survives." },
+          { t: "Goals in the playing XI", s: "More goals survives." },
+          { t: "Clean sheets in the playing XI", s: "More clean sheets survives." },
+          { t: "Assists in the playing XI", s: "More assists survives." },
+          { t: "Carry the tie forward",
+            s: "Still level on all four, and none of the tied managers goes out this week. The places they were level for are added to next gameweek\u2019s eliminations, on top of its own." }
+        ] }
+      ] };
+
+    if (topic === "pyramid") return {
+      name: "The Pyramid Battle", back: "pyramid",
+      lede: "Four divisions, three mini-seasons. Win your division, or climb into a better one for the next.",
+      extra: pyramidVisualCard() + prizesBlock(pyramidPrizeCard(cfg)),
+      blocks: [
+        { h: "How you progress", list: [
+          "All " + n + " managers are split across four divisions: <b>" +
+            cfg.pyramid.divisions.map(function (d) { return esc(d.name); }).join(", ") + "</b>.",
+          "The season runs as <b>three mini-seasons</b>, each scored independently: " +
+            cfg.pyramid.seasons.map(function (x) { return "<b>" + gwSpan(x.gws) + "</b>"; }).join(", ") +
+            ". The gameweeks in between count for nothing here.",
+          "Your score in a mini-season is the sum of your gameweek scores in it, <b>hits included</b>.",
+          "Between mini-seasons the <b>top " + cfg.pyramid.promoteCount + " of each division go up</b> and the <b>bottom " +
+            cfg.pyramid.relegateCount + " go down</b>.",
+          "The <b>top three in every division</b> are paid at the end of every mini-season."
+        ] },
+        { h: "If two managers finish level in a division", chain: [
+          { t: "The last gameweek of the mini-season", s: "Higher score in that gameweek finishes ahead." },
+          { t: "Points on the bench", s: "Then more bench points \u2014 in that final gameweek alone." },
+          { t: "Goals in the playing XI", s: "Then more goals in that gameweek." },
+          { t: "Clean sheets, then assists", s: "Then more clean sheets, and then more assists, in that gameweek." }
+        ] }
+      ] };
+
+    if (topic === "h2h") return {
+      name: "Game On UCL", back: "h2h",
+      lede: "A head-to-head competition run like the Champions League: " + cfg.h2h.groupCount +
+        " groups, then a knockout bracket, with a second bracket for the teams who just miss out.",
+      extra: prizesBlock(h2hPrizeCard(cfg)),
+      blocks: [
+        { h: "Group stage", list: [
+          "<b>" + cfg.h2h.groupCount + " groups of " + cfg.h2h.perGroup + "</b> \u2014 " +
+            (cfg.h2h.expectedManagers || cfg.h2h.groupCount * cfg.h2h.perGroup) +
+            " managers \u2014 playing head-to-head across <b>" + gwSpan(g) + "</b>.",
+          "Each week you are drawn against one manager in your group. <b>Higher gameweek score wins.</b>",
+          "<b>Win " + cfg.h2h.pointsWin + ", draw " + cfg.h2h.pointsDraw + ", loss " + cfg.h2h.pointsLoss +
+            ".</b> Groups are ordered on points, then on total gameweek points scored.",
+          "<b>Top " + cfg.h2h.qualify.uclPerGroup + " in each group</b> go into the UCL knockout. <b>Third and fourth</b> go into the UEL knockout."
+        ] },
+        { h: "Knockout stage", list: kn.map(function (k) {
+          return "<b>" + esc(k.name) + "</b> \u2014 GW\u00a0" + k.gws.join(" & ") +
+            (k.legs === 2 ? ", two legs on aggregate" : ", a single gameweek");
+        }) },
+        { h: "If a knockout tie is level", chain: [
+          { t: "The Last Manager tie-breakers", s: "Bench points, then goals, then clean sheets, then assists in the playing XI." },
+          { t: "Group stage points", s: "More points won in the group stage goes through." },
+          { t: "Group stage score", s: "Higher total score across the group stage goes through." }
+        ] }
+      ] };
+
     return null;
   }
 

@@ -907,3 +907,47 @@ table.t th.sortable .sarrow:empty { display:none; }
 /* a decision the league still has to make, not a state of the data */
 .callout.warn-callout { border-color:var(--accent); background:var(--accent-tint); }
 .callout.warn-callout b { color:var(--accent); }
+
+/* ---------- rules pages ------------------------------------------------ */
+/* A competition's rules read as prose, not as a settings screen: a lede, then
+   what you have to do, then what happens when two managers cannot be split. */
+.rulelede {
+  font-size: 15px; line-height: 1.6; color: var(--ink-soft);
+  margin: -2px 2px 14px; max-width: 62ch;
+}
+
+.rulelist { list-style: none; margin: 0; padding: 0; }
+.rulelist li {
+  position: relative; padding-left: 18px; margin-bottom: 10px;
+  font-size: 13.5px; line-height: 1.65; color: var(--ink-soft);
+}
+.rulelist li:last-child { margin-bottom: 0; }
+.rulelist li::before {
+  content: ""; position: absolute; left: 0; top: .72em;
+  width: 8px; height: 1px; background: var(--line-strong);
+}
+.rulelist b { color: var(--ink); font-weight: 600; }
+
+/* The tie-break chain is numbered because the order is the rule. The last step
+   is what applies when nothing has separated them, so it is marked, not
+   numbered. */
+.rulechain { list-style: none; margin: 0; padding: 0 0 0 2px; counter-reset: rc; border-left: 1.5px solid var(--line); }
+.rulechain li {
+  counter-increment: rc; position: relative;
+  padding: 0 0 14px 30px; font-size: 13.5px; line-height: 1.6;
+}
+.rulechain li:last-child { padding-bottom: 0; }
+.rulechain li::before {
+  content: counter(rc);
+  position: absolute; left: -10px; top: 0;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--glass); border: 1.5px solid var(--line-strong);
+  color: var(--ink-soft); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.rulechain li.end::before {
+  content: "\2192"; border-color: var(--accent); color: var(--accent); font-size: 11px;
+}
+.rulechain .rc-t { display: block; font-weight: 700; color: var(--ink); }
+.rulechain .rc-s { display: block; color: var(--ink-soft); margin-top: 1px; }
