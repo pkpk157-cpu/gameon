@@ -732,11 +732,6 @@
 
     var h = '';
 
-    h += '<div class="statrow">' +
-      stat(started, "Started") +
-      stat(lms.survivorsCount, "Alive") +
-      stat(lms.finishedCount, "GWs") +
-      stat(started - lms.survivorsCount, "Out") + '</div>';
 
     if (lms.champion) {
       h += '<div class="card" style="margin-top:14px;border-color:var(--gold)"><div class="bd" style="text-align:center">' +
@@ -760,10 +755,16 @@
     var curKey = (state.lmsGw && gwOpts.some(function (o) { return o.key === state.lmsGw; })) ? state.lmsGw : gwOpts[0].key;
     state.lmsGw = curKey;
     var byKey = function (k) { return gwOpts.filter(function (o) { return o.key === k; })[0]; };
-    h += '<div class="pickrow"><select class="in narrow" id="lmsGwSel">' +
+    // The four cards said what this row already says: the picker names the
+    // gameweek, and started is alive plus out. What is left rides along with
+    // the picker instead of costing a row of its own.
+    h += '<div class="pickrow lmsrow"><select class="in narrow" id="lmsGwSel">' +
       gwOpts.map(function (o) {
         return '<option value="' + o.key + '"' + (o.key === curKey ? ' selected' : '') + '>' + esc(o.label) + '</option>';
-      }).join("") + '</select>' + searchBox("lmsSearch") + '</div>';
+      }).join("") + '</select>' + searchBox("lmsSearch") +
+      '<span class="lmscount"><b>' + num(lms.survivorsCount) + '</b> alive' +
+      '<span class="gone"> \u00b7 <b>' + num(started - lms.survivorsCount) + '</b> out</span></span>' +
+      '</div>';
     h += '<div id="lmsGwPanel"></div>';
 
     host.innerHTML = h;
