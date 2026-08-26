@@ -297,6 +297,79 @@
     setTimeout(function () { document.body.removeChild(inp); }, 60000);
   }
 
+  /* ---- staying current -------------------------------------------------- */
+  // The updater publishes every half hour through match windows, so an app left
+  // open would otherwise sit on whatever it loaded at boot — the deadline would
+  // tick down while the points stood still. Poll for a newer publish and swap it
+  // in where the reader already is, so nobody has to think about refreshing.
+  var AUTO_LIVE_MS = 120000, AUTO_IDLE_MS = 900000, AUTO_MIN_GAP = 20000;
+  var autoTimer = null, autoBusy = false, autoLast = 0;
+
+  function sheetOpen() {
+    return $("#modalBack").classList.contains("show") || $("#profileBack").classList.contains("show");
+  }
+
+  // Swapping the data re-renders the view, which must not interrupt someone
+  // mid-thought: not while a sheet is up, and not while they are typing into a
+  // search box, where a rebuild would eat the keystroke and the caret with it.
+  function busyReading() {
+    if (sheetOpen()) return true;
+    var el = document.activeElement;
+    return !!(el && el !== document.body && el.closest && el.closest("main.wrap") &&
+              /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName));
+  }
+
+  // Re-rendering rebuilds the table, which would otherwise throw the reader
+  // back to the top of it.
+  function keepPlace(fn) {
+    var y = window.scrollY || 0;
+    var fz = $(".view.active .freeze");
+    var inner = fz ? fz.scrollTop : 0;
+    fn();
+    var fz2 = $(".view.active .freeze");
+    if (fz2) fz2.scrollTop = inner;
+    window.scrollTo(0, y);
+  }
+
+  // Returns true when newer data arrived and was shown. A request that never
+  // settles — which a patchy mobile connection will produce sooner or later —
+  // must not leave the loop wedged, so give up on one and let the next tick try.
+  function autoCheck() {
+    if (autoBusy || document.hidden || busyReading()) return Promise.resolve(false);
+    autoBusy = true;
+    autoLast = Date.now();
+    var before = (S.dataset() || {}).updatedAt;
+    var gaveUp = new Promise(function (_, rej) { setTimeout(function () { rej(new Error("timeout")); }, 20000); });
+    return Promise.race([S.reload(), gaveUp]).then(function (ds) {
+      autoBusy = false;
+      if (!ds || ds.updatedAt === before) { updateBanner(); return false; }
+      if (busyReading()) return false; // they started while it was in flight
+      keepPlace(render);
+      return true;
+    }, function () { autoBusy = false; return false; });
+  }
+
+  // Points only move during a gameweek; the rest of the week a quarter-hourly
+  // look is more than enough.
+  function autoEvery() {
+    var ds = S.dataset();
+    return (ds && K.liveGwId(ds)) ? AUTO_LIVE_MS : AUTO_IDLE_MS;
+  }
+
+  function scheduleAuto() {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(function () { autoCheck().then(scheduleAuto, scheduleAuto); }, autoEvery());
+  }
+
+  // Coming back to the app is when the numbers are most likely stale: phones
+  // suspend timers the moment it goes into the background.
+  function onForeground() {
+    if (document.hidden) { clearTimeout(autoTimer); return; }
+    updateBanner();
+    if (Date.now() - autoLast < AUTO_MIN_GAP) { scheduleAuto(); return; }
+    autoCheck().then(scheduleAuto, scheduleAuto);
+  }
+
   /* ---- boot ------------------------------------------------------------ */
   function boot() {
     buildNav();
@@ -339,15 +412,31 @@
       var b = e.target.closest("[data-rules]");
       if (b) { location.hash = "rules/" + b.getAttribute("data-rules"); return; }
       var n = e.target.closest("[data-entry]");
+      if (!n) {
+        // Only the name cell carries the link, but a row is what people aim
+        // at — on a phone the name is a third of its width, on a tablet less,
+        // so tapping the rank or the points looked like the app had frozen.
+        // Any part of a row that names a manager now opens them.
+        var tr = e.target.closest("tr");
+        if (tr && !e.target.closest("button, a, input, select, label")) n = tr.querySelector("[data-entry]");
+      }
       if (n) { location.hash = "profile/" + n.getAttribute("data-entry"); }
     });
     window.addEventListener("hashchange", syncFromHash);
     // keep the deadline in the bar honest without re-rendering the view
     setInterval(function () { if (!$("#profileBack").classList.contains("show")) updateBanner(); }, 60000);
 
+    // Automatic updates. visibilitychange covers tabbing away and back; pageshow
+    // catches a restore from the back/forward cache, which is how iOS returns a
+    // page it had frozen; focus covers a window regaining it without either.
+    document.addEventListener("visibilitychange", onForeground);
+    window.addEventListener("pageshow", function (e) { if (e.persisted) onForeground(); });
+    window.addEventListener("focus", onForeground);
+
     S.load().then(function () {
       syncFromHash();
       updateDataState();
+      scheduleAuto();
     });
   }
 

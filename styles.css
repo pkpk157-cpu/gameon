@@ -15,7 +15,9 @@
   --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052;
   --pl-pink-lt:#ff2882; --pl-green:#00ff87; --pl-cyan:#04f5ff;
   /* accent + semantics */
-  --accent:#d0004f; --accent-2:#6b1f7a; --on-accent:#ffffff;
+  --accent:#d0004f; --accent-2:#6b1f7a; --on-accent:#ffffff; --accent-wash:rgba(208,0,79,.13);
+  --accent-lift:#d61f64; --accent-tint:rgba(208,0,79,.10); --gold-wash:rgba(169,121,26,.14);
+  --pink-wash:rgba(233,0,82,.12);
   --gold:#a9791a; --silver:#7f8792; --bronze:#a86a3c;
   /* the coloured bar (same in both themes) */
   --bar-bg:linear-gradient(120deg, #37003c 0%, #4a0050 55%, #6a0a5c 100%);
@@ -47,7 +49,9 @@
     --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.18);
     --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052;
     --pl-pink-lt:#ff2882; --pl-green:#00ff87; --pl-cyan:#04f5ff;
-    --accent:#ff2882; --accent-2:#c98bff; --on-accent:#2a0014;
+    --accent:#ff2882; --accent-2:#c98bff; --on-accent:#2a0014; --accent-wash:rgba(255,40,130,.15);
+    --accent-lift:#ff4291; --accent-tint:rgba(255,40,130,.12); --gold-wash:rgba(246,196,69,.16);
+    --pink-wash:rgba(233,0,82,.18);
     --gold:#f6c445; --silver:#c3cad4; --bronze:#d59367;
     --head-ink:#f2d9ff;
     --good:#4ade80; --good-wash:rgba(74,222,128,.14);
@@ -70,7 +74,9 @@
   --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.18);
   --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052;
   --pl-pink-lt:#ff2882; --pl-green:#00ff87; --pl-cyan:#04f5ff;
-  --accent:#ff2882; --accent-2:#c98bff; --on-accent:#2a0014;
+  --accent:#ff2882; --accent-2:#c98bff; --on-accent:#2a0014; --accent-wash:rgba(255,40,130,.15);
+  --accent-lift:#ff4291; --accent-tint:rgba(255,40,130,.12); --gold-wash:rgba(246,196,69,.16);
+  --pink-wash:rgba(233,0,82,.18);
   --gold:#f6c445; --silver:#c3cad4; --bronze:#d59367;
   --head-ink:#f2d9ff;
   --good:#4ade80; --good-wash:rgba(74,222,128,.14);
@@ -137,6 +143,16 @@ a { color:var(--accent); text-decoration:none; }
 }
 .profilebtn svg { width:20px; height:20px; }
 .profilebtn:hover { border-color:var(--pl-green); color:var(--pl-green); }
+
+/* Header controls are small circles by design, but a 26-38px circle is a poor
+   target for a thumb — Apple asks for 44pt, Android for 48dp. Each one keeps
+   its size and grows an invisible hit area out to 44px. The 12px bar gap keeps
+   the enlarged areas clear of each other. */
+.profilebtn, .infobtn, .backbtn { position:relative; }
+.profilebtn::after, .infobtn::after, .backbtn::after { content:""; position:absolute; }
+.profilebtn::after { top:-3px; right:-3px; bottom:-3px; left:-3px; }
+.backbtn::after   { top:-6px; right:-6px; bottom:-6px; left:-6px; }
+.infobtn::after   { top:-9px; right:-9px; bottom:-9px; left:-9px; }
 
 /* ---------- bottom nav ---------- */
 .navbar {
@@ -282,8 +298,8 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 /* ---------- LMS grid ---------- */
 .lmsgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
 @media (max-width:720px){ .lmsgrid{grid-template-columns:1fr;} }
-.lmsgrid table.t tr.now td { background:color-mix(in srgb, var(--accent) 10%, transparent); }
-.lmsgrid table.t tr.champ td { background:color-mix(in srgb, var(--gold) 14%, transparent); }
+.lmsgrid table.t tr.now td { background:var(--accent-tint); }
+.lmsgrid table.t tr.champ td { background:var(--gold-wash); }
 
 /* ---------- pyramid ---------- */
 .pyr { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 0 4px; }
@@ -334,7 +350,7 @@ select.in { appearance:none; }
   color:var(--ink); border-radius:12px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer;
   -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); box-shadow:inset 0 1px 0 var(--glass-hi); }
 .btn:hover { border-color:var(--accent); }
-.btn.primary { background:linear-gradient(180deg, color-mix(in srgb,var(--accent) 88%, #fff), var(--accent));
+.btn.primary { background:linear-gradient(180deg, var(--accent-lift), var(--accent));
   color:var(--on-accent); border-color:transparent; }
 .btn.ghost { background:transparent; box-shadow:none; }
 .btn.danger { border-color:color-mix(in srgb, var(--bad) 45%, transparent); color:var(--bad); }
@@ -350,7 +366,7 @@ select.in { appearance:none; }
 
 /* ---------- progress ---------- */
 .progress { height:8px; border-radius:999px; background:var(--chip); overflow:hidden; border:1px solid var(--line); }
-.progress > i { display:block; height:100%; width:0; background:linear-gradient(90deg, color-mix(in srgb,var(--accent) 70%, #000 0%), var(--accent)); transition:width .2s; }
+.progress > i { display:block; height:100%; width:0; background:linear-gradient(90deg, var(--accent-lift), var(--accent)); transition:width .2s; }
 
 /* ---------- empty ---------- */
 .empty { text-align:center; padding:46px 20px; color:var(--ink-faint); }
@@ -366,7 +382,7 @@ select.in { appearance:none; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
 /* ---------- modal + profile sheet ---------- */
-.modal-back { position:fixed; inset:0; background:rgba(10,8,20,.4); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+.modal-back { position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(10,8,20,.4); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   display:none; align-items:center; justify-content:center; z-index:70; padding:16px; }
 .modal-back.show { display:flex; }
 .modal { background:var(--glass-bar); -webkit-backdrop-filter:blur(30px) saturate(190%); backdrop-filter:blur(30px) saturate(190%);
@@ -451,7 +467,7 @@ main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }
     repeating-linear-gradient(180deg, #24a35a 0 56px, #1f9553 56px 112px);
   box-shadow:inset 0 0 40px rgba(0,0,0,.18); }
 /* white markings, drawn from the top goal down to the halfway line */
-.pmark { position:absolute; inset:0; pointer-events:none; }
+.pmark { position:absolute; top:0; right:0; bottom:0; left:0; pointer-events:none; }
 .pmark span { position:absolute; left:50%; transform:translateX(-50%);
   border:2px solid rgba(255,255,255,.5); }
 .pmark .goal { top:0; width:76px; height:9px; border-top:0;
@@ -603,7 +619,7 @@ td.sqp .sq-v { flex:none; font-size:11.5px; font-weight:800; font-variant-numeri
 td.sqp.benched .sq-nm, td.sqp.benched .sq-v { opacity:.55; }
 .pb.sq { position:static; display:inline-block; margin-left:4px; vertical-align:middle;
   width:13px; height:13px; line-height:13px; font-size:8px; box-shadow:none; }
-table.t.sqtable tr.same td { background:color-mix(in srgb, var(--accent) 11%, transparent); }
+table.t.sqtable tr.same td { background:var(--accent-tint); }
 table.t.sqtable tr.same td.sqp .sq-nm { color:var(--ink); }
 
 /* ---- head to head: season by season ------------------------------------ */
@@ -641,7 +657,7 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   border:1px dashed var(--line-strong); color:var(--ink-faint); background:var(--chip); }
 .chipcard .cn { font-size:10px; font-weight:700; line-height:1.2; }
 .chipcard .cg { font-size:10px; font-weight:800; margin-top:2px; }
-.chipcard.used { border-style:solid; background:color-mix(in srgb, var(--pl-pink) 12%, transparent);
+.chipcard.used { border-style:solid; background:var(--pink-wash);
   border-color:color-mix(in srgb, var(--pl-pink) 50%, transparent); color:var(--ink); }
 .chipcard.used .cg { color:var(--accent); }
 
@@ -681,7 +697,7 @@ main.wrap.fill .section-title { flex:none; }
 .nohits { margin-top:10px; }
 /* the better season of the two reads green, rank and points together */
 table.t.cmptable.seasons td.num.win .sr { color:var(--good); }
-table.t.cmptable.seasons td.num.win .sp { color:color-mix(in srgb, var(--good) 65%, var(--ink-faint)); }
+table.t.cmptable.seasons td.num.win .sp { color:var(--good); }
 
 /* ---- the gear sheet, as a profile -------------------------------------- */
 .profile-hd { margin-bottom:14px; }
@@ -704,7 +720,7 @@ table.t.cmptable.seasons td.num.win .sp { color:color-mix(in srgb, var(--good) 6
 .spark svg { display:block; width:100%; height:auto; overflow:visible; }
 .spark .ln { fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round;
   vector-effect:non-scaling-stroke; }
-.spark .fill { fill:color-mix(in srgb, var(--accent) 13%, transparent); stroke:none; }
+.spark .fill { fill:var(--accent-wash); stroke:none; }
 .spark .avg { stroke:var(--line-strong); stroke-width:1; stroke-dasharray:3 4; vector-effect:non-scaling-stroke; }
 .spark .head { fill:var(--accent); stroke:var(--glass-hi); stroke-width:2; vector-effect:non-scaling-stroke; }
 .sparkfoot { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-top:6px;
