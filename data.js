@@ -122,6 +122,13 @@
   // published or one this device stored earlier. Reading the stored copy first
   // and stopping there would freeze a device on it forever — it would never
   // see another gameweek. The stored copy still covers being offline.
+  // A published file that parses but is not a dataset (a truncated write, an
+  // error page served as JSON) must not be adopted: several views read it
+  // before the empty-state guard and would throw on it.
+  function looksLikeDataset(d) {
+    return !!(d && typeof d === "object" && Array.isArray(d.managers));
+  }
+
   STORE.load = function () {
     var stored = null;
     return idbGet(DATASET_KEY)
@@ -137,6 +144,7 @@
       })
       .then(function (bundle) {
         var published = bundle ? (bundle.dataset || bundle) : null;
+        if (!looksLikeDataset(published)) published = null;
         if (published && bundle) {
           if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
           if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
@@ -163,7 +171,9 @@
         if (!bundle) throw new Error("empty");
         if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
         if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
-        _dataset = bundle.dataset || bundle;
+        var next = bundle.dataset || bundle;
+        if (!looksLikeDataset(next)) throw new Error("data.json is not a dataset");
+        _dataset = next;
         return _dataset;
       });
   };
