@@ -139,6 +139,9 @@ a { color:var(--accent); text-decoration:none; }
 .profilebtn {
   border:1px solid var(--bar-line); background:var(--bar-fill); color:var(--bar-ink);
   cursor:pointer;
+  /* flex:none, or a crowded bar shrinks these below a thumb's reach — the
+     title beside them has min-width:0 and is the right thing to give up */
+  flex:none;
   width:38px; height:38px; border-radius:50%; display:grid; place-items:center; padding:0;
 }
 .profilebtn svg { width:20px; height:20px; }
@@ -298,6 +301,25 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 .lmscount { flex:none; white-space:nowrap; font-size:12px; font-weight:600; color:var(--ink-faint); }
 .lmscount b { font-size:15px; font-weight:800; color:var(--ink); font-variant-numeric:tabular-nums; }
 @media (max-width:389px){ .lmscount .gone { display:none; } }
+
+/* the section burger, sitting where the back arrow does in a sub-view */
+.menubtn { flex:none; width:32px; height:32px; padding:0; border-radius:50%; cursor:pointer;
+  border:1px solid var(--bar-line); background:var(--bar-fill); color:var(--bar-ink);
+  display:grid; place-items:center; position:relative; }
+.menubtn::after { content:""; position:absolute; top:-6px; right:-6px; bottom:-6px; left:-6px; }
+.menubtn:hover { border-color:var(--pl-green); color:var(--pl-green); }
+
+/* the section list inside the burger sheet */
+.menulist { display:flex; flex-direction:column; gap:8px; }
+.menuitem { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%;
+  text-align:left; cursor:pointer; padding:12px 14px; border-radius:14px;
+  border:1px solid var(--line); background:var(--chip); color:var(--ink); }
+.menuitem:hover { border-color:var(--accent); }
+.menuitem.on { border-color:var(--accent); background:var(--accent-tint); }
+.menuitem .mi-t { font-size:15px; font-weight:700; }
+.menuitem .mi-s { font-size:12px; color:var(--ink-faint); font-weight:500; }
+table.t b.up { color:var(--good); }
+table.t b.down { color:var(--bad); }
 
 /* the squad's live caveat: bonus not yet confirmed */
 .provnote { text-align:center; font-size:11.5px; font-weight:600; color:var(--ink-faint);

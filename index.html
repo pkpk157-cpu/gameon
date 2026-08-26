@@ -28,6 +28,7 @@
 <body>
   <header class="topbar">
     <button class="backbtn" id="barBack" aria-label="Back" style="display:none"></button>
+    <button class="menubtn" id="barMenu" title="Sections" aria-label="Sections"></button>
     <div class="barwrap">
       <h1 class="bartitle" id="barTitle">Classic League</h1>
       <div class="barsub" id="barSub"></div>
@@ -49,6 +50,8 @@
     <section class="view" data-view="profile"></section>
     <section class="view" data-view="compare"></section>
     <section class="view" data-view="stats"></section>
+    <section class="view" data-view="prices"></section>
+    <section class="view" data-view="pricechange"></section>
   </main>
 
   <nav class="navbar" id="navbar"></nav>
@@ -59,6 +62,9 @@
       <div class="hd"><h3 id="modalTitle">—</h3><span class="x" id="modalClose">×</span></div>
       <div class="bd" id="modalBody"></div>
     </div>
+  </div>
+  <div class="modal-back sheet" id="menuBack">
+    <div class="modal"><div class="bd" id="menuBody"></div></div>
   </div>
   <div class="modal-back sheet" id="profileBack">
     <div class="modal"><div class="bd" id="profileBody"></div></div>

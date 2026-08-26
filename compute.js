@@ -1485,5 +1485,66 @@
     };
   };
 
+  /* ---- player prices ---------------------------------------------------- */
+  var PPOS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+
+  // Every player, with what the game says about his price and what our own
+  // record says about the flow behind it.
+  C.priceTable = function (ds) {
+    var pr = ds && ds.prices;
+    if (!pr || !pr.now) return null;
+    var els = ds.elements || {};
+    return Object.keys(pr.now).map(function (id) {
+      var meta = els[id] || ["?", 0, "", 0, 0];
+      var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
+      var net = (pr.netSince && pr.netSince[id]) || 0;
+      return {
+        id: +id, name: meta[0], type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
+        price: (pr.now[id] || 0) / 10,
+        gw: (pr.changeEvent && pr.changeEvent[id] || 0) / 10,
+        season: (pr.changeStart && pr.changeStart[id] || 0) / 10,
+        owned: owned,
+        net: net,
+        // Pressure relative to how many people own him. The threshold the game
+        // uses is not published, so this is not a percentage of anything — it
+        // orders players by how hard they are being bought or sold, which is
+        // the part that can be said without inventing a constant.
+        pressure: owned > 0 ? net / owned : 0
+      };
+    });
+  };
+
+  // Changes we have actually recorded, newest first. FPL publishes no history,
+  // so this only reaches back to the day the tracker started keeping one.
+  C.priceChanges = function (ds, limit) {
+    var log = (ds && ds.priceLog) || [];
+    var els = (ds && ds.elements) || {};
+    var out = log.slice().reverse().map(function (r) {
+      var meta = els[r[0]] || ["?", 0, "", 0, 0];
+      return { id: r[0], name: meta[0], pos: PPOS[meta[1]] || "", team: meta[2],
+               from: r[1] / 10, to: r[2] / 10, up: r[2] > r[1], at: r[3] };
+    });
+    return limit ? out.slice(0, limit) : out;
+  };
+
+  // When our record began, so the view can say how far back it goes.
+  C.priceLogFrom = function (ds) {
+    var log = (ds && ds.priceLog) || [];
+    return log.length ? log[0][3] : null;
+  };
+
+  // Who is under the most pressure each way. Ordered, not timed: the ordering
+  // holds without knowing the game's threshold, the night it lands does not.
+  C.priceWatch = function (ds, n) {
+    var rows = C.priceTable(ds);
+    if (!rows) return null;
+    var live = rows.filter(function (r) { return r.owned > 0 && r.net !== 0; });
+    var rising = live.filter(function (r) { return r.net > 0; })
+                     .sort(function (a, b) { return b.pressure - a.pressure; }).slice(0, n || 10);
+    var falling = live.filter(function (r) { return r.net < 0; })
+                      .sort(function (a, b) { return a.pressure - b.pressure; }).slice(0, n || 10);
+    return { rising: rising, falling: falling, tracked: live.length, at: ds.prices && ds.prices.at };
+  };
+
   window.GO_COMPUTE = C;
 })();

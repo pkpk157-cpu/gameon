@@ -10,6 +10,7 @@
 
   /* Minimal line icons (24px, currentColor). */
   var ICONS = {
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     classic: '<path d="M6 4h12v3a6 6 0 0 1-12 0V4Z"/><path d="M6 5H4v1a3 3 0 0 0 3 3M18 5h2v1a3 3 0 0 1-3 3"/><path d="M12 13v3M9 20h6M10 20a2 2 0 0 1 4 0"/>',
     monthly: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/><circle cx="8.5" cy="13.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="13.5" r="1" fill="currentColor" stroke="none"/>',
     lms: '<path d="M12 3s4 3.5 4 8a4 4 0 0 1-8 0c0-1.6.8-3 1.5-4"/><path d="M12 21a6 6 0 0 0 6-6c0-1-.2-2-.6-2.9"/><path d="M12 21a6 6 0 0 1-6-6"/>',
@@ -297,6 +298,168 @@
     setTimeout(function () { document.body.removeChild(inp); }, 60000);
   }
 
+  /* ====================================================================== */
+  /* Player prices                                                          */
+  /* ====================================================================== */
+  function priceRows(rows) {
+    return rows.map(function (r) {
+      var mv = r.season > 0 ? '<span class="move up">\u25b2' + r.season.toFixed(1) + '</span>'
+             : r.season < 0 ? '<span class="move down">\u25bc' + Math.abs(r.season).toFixed(1) + '</span>'
+             : '<span class="move flat">\u2013</span>';
+      return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
+        '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
+        '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
+        '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
+        '<td class="num">' + mv + '</td></tr>';
+    }).join("");
+  }
+
+  function renderPrices(host, ds) {
+    var rows = ds ? K.priceTable(ds) : null;
+    if (!rows || !rows.length) {
+      host.innerHTML = '<div class="callout">Player prices arrive with the next data update.</div>';
+      return;
+    }
+    if (!state.priceSort) state.priceSort = "price";
+    if (!state.pricePos) state.pricePos = "all";
+
+    var sorts = { price: "Most expensive", cheap: "Cheapest", owned: "Most owned",
+                  risen: "Risen most", fallen: "Fallen most" };
+    var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+
+    var h = '<div class="pickrow">' +
+      '<select class="in narrow" id="prSort">' + Object.keys(sorts).map(function (k) {
+        return '<option value="' + k + '"' + (k === state.priceSort ? ' selected' : '') + '>' + esc(sorts[k]) + '</option>';
+      }).join("") + '</select>' +
+      '<select class="in narrow" id="prPos">' + Object.keys(poss).map(function (k) {
+        return '<option value="' + k + '"' + (k === state.pricePos ? ' selected' : '') + '>' + esc(poss[k]) + '</option>';
+      }).join("") + '</select>' +
+      searchBox("prSearch") + '</div>';
+    h += '<div id="prPanel"></div>';
+    host.innerHTML = h;
+
+    var draw = function () {
+      var list = rows.slice();
+      if (state.pricePos !== "all") list = list.filter(function (r) { return String(r.type) === state.pricePos; });
+      var by = {
+        price: function (a, b) { return b.price - a.price; },
+        cheap: function (a, b) { return a.price - b.price; },
+        owned: function (a, b) { return b.owned - a.owned; },
+        risen: function (a, b) { return b.season - a.season; },
+        fallen: function (a, b) { return a.season - b.season; }
+      };
+      list.sort(by[state.priceSort] || by.price);
+      var panel = $("#prPanel", host);
+      panel.innerHTML = '<div class="card freeze"><table class="t"><thead><tr>' +
+        '<th>Player</th><th class="num">Price</th><th class="num">Owned</th><th class="num">Season</th>' +
+        '</tr></thead><tbody>' + priceRows(list.slice(0, 400)) + '</tbody></table></div>' +
+        '<div class="koline">' + list.length + ' players \u00b7 prices as FPL publishes them</div>';
+      filterRows(panel, $("#prSearch", host).value);
+    };
+    $("#prSort", host).addEventListener("change", function () { state.priceSort = this.value; draw(); });
+    $("#prPos", host).addEventListener("change", function () { state.pricePos = this.value; draw(); });
+    $("#prSearch", host).addEventListener("input", function () { filterRows($("#prPanel", host), this.value); });
+    draw();
+  }
+
+  /* ---- price changes and what is driving them --------------------------- */
+  function watchRows(list, up) {
+    if (!list.length) return '<div class="note" style="padding:10px 12px">Nothing moving either way yet.</div>';
+    return '<table class="t"><thead><tr><th>Player</th><th class="num">Price</th>' +
+      '<th class="num">Owned</th><th class="num">Net transfers</th></tr></thead><tbody>' +
+      list.map(function (r) {
+        return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
+          '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
+          '<td class="num">' + r.price.toFixed(1) + '</td>' +
+          '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
+          '<td class="num"><b class="' + (up ? "up" : "down") + '">' +
+          (up ? "+" : "") + num(r.net) + '</b></td></tr>';
+      }).join("") + '</tbody></table>';
+  }
+
+  function renderPriceChange(host, ds) {
+    var watch = ds ? K.priceWatch(ds, 12) : null;
+    if (!watch) {
+      host.innerHTML = '<div class="callout">Price tracking starts with the next data update.</div>';
+      return;
+    }
+    var changes = K.priceChanges(ds, 60);
+    var from = K.priceLogFrom(ds);
+
+    var h = '<div class="tabrow" id="pcTabs">' +
+      ['watch', 'recent'].map(function (k) {
+        var lab = k === "watch" ? "Under pressure" : "Recent changes";
+        return '<button type="button" class="tabbtn' + ((state.pcTab || "watch") === k ? " on" : "") +
+          '" data-pc="' + k + '">' + lab + '</button>';
+      }).join("") + '</div><div id="pcPanel"></div>';
+    host.innerHTML = h;
+
+    var draw = function () {
+      var tab = state.pcTab || "watch";
+      var panel = $("#pcPanel", host);
+      if (tab === "watch") {
+        panel.innerHTML =
+          '<div class="section-title"><h2>Being bought</h2><div class="rule"></div>' +
+            '<span class="chip">' + watch.rising.length + '</span></div>' +
+          '<div class="card"><div class="tablewrap">' + watchRows(watch.rising, true) + '</div></div>' +
+          '<div class="section-title"><h2>Being sold</h2><div class="rule"></div>' +
+            '<span class="chip">' + watch.falling.length + '</span></div>' +
+          '<div class="card"><div class="tablewrap">' + watchRows(watch.falling, false) + '</div></div>' +
+          '<div class="callout" style="margin-top:12px">Ordered by how hard each player is being ' +
+          'bought or sold relative to how many own him \u2014 net transfers counted since his price ' +
+          'last moved. The direction is measured, not guessed. <b>When</b> a change lands is not: ' +
+          'the game does not publish the threshold it uses, and it applies changes once a day.</div>';
+      } else {
+        panel.innerHTML = changes.length
+          ? '<div class="card freeze"><table class="t"><thead><tr><th>Player</th>' +
+            '<th class="num">From</th><th class="num">To</th><th class="num">When</th></tr></thead><tbody>' +
+            changes.map(function (c) {
+              return '<tr><td class="name"><span class="who">' + esc(c.name) + '</span>' +
+                '<div class="mgr">' + esc(c.pos) + ' \u00b7 ' + esc(c.team) + '</div></td>' +
+                '<td class="num">' + c.from.toFixed(1) + '</td>' +
+                '<td class="num"><b class="' + (c.up ? "up" : "down") + '">' + c.to.toFixed(1) + '</b></td>' +
+                '<td class="num">' + esc(agoText(Date.now() - Date.parse(c.at))) + '</td></tr>';
+            }).join("") + '</tbody></table></div>'
+          : '<div class="callout">No price changes recorded yet. FPL publishes no history of them, ' +
+            'so this list starts from the day the tracker began keeping one' +
+            (from ? ' \u2014 ' + esc(agoText(Date.now() - Date.parse(from))) + ' ago' : '') + '.</div>';
+      }
+    };
+    $all(".tabbtn", $("#pcTabs", host)).forEach(function (b) {
+      b.addEventListener("click", function () {
+        state.pcTab = b.getAttribute("data-pc");
+        $all(".tabbtn", $("#pcTabs", host)).forEach(function (x) { x.classList.toggle("on", x === b); });
+        draw();
+      });
+    });
+    draw();
+  }
+
+  /* ---- the section menu -------------------------------------------------- */
+  function openMenu() {
+    var here = state.view;
+    var items = [
+      { k: "classic", icon: "classic", t: "Game On tournament", s: "Classic, Monthly, LMS, Pyramid and UCL" },
+      { k: "prices", icon: "stats", t: "Player prices", s: "Every player, what he costs and who owns him" },
+      { k: "pricechange", icon: "stats", t: "Price changes", s: "What has moved, and what is under pressure" }
+    ];
+    var inLeague = ["prices", "pricechange"].indexOf(here) === -1;
+    $("#menuBody").innerHTML = '<div class="profile-hd"><h3>Sections</h3></div>' +
+      '<div class="menulist">' + items.map(function (it) {
+        var on = (it.k === "classic") ? inLeague : (here === it.k);
+        return '<button type="button" class="menuitem' + (on ? " on" : "") + '" data-go="' + it.k + '">' +
+          '<span class="mi-t">' + esc(it.t) + '</span>' +
+          '<span class="mi-s">' + esc(it.s) + '</span></button>';
+      }).join("") + '</div>';
+    $("#menuBack").classList.add("show");
+    $all(".menuitem", $("#menuBody")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        $("#menuBack").classList.remove("show");
+        location.hash = b.getAttribute("data-go");
+      });
+    });
+  }
+
   /* ---- staying current -------------------------------------------------- */
   // The updater publishes every half hour through match windows, so an app left
   // open would otherwise sit on whatever it loaded at boot — the deadline would
@@ -404,6 +567,11 @@
       goBack();
     });
     $("#barInfo").innerHTML = svg("info", 18);
+    $("#barMenu").innerHTML = svg("menu", 19);
+    $("#barMenu").addEventListener("click", openMenu);
+    $("#menuBack").addEventListener("click", function (e) {
+      if (e.target === $("#menuBack")) $("#menuBack").classList.remove("show");
+    });
     $("#modalClose").addEventListener("click", closeModal);
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
     $("#profileBack").addEventListener("click", function (e) { if (e.target === $("#profileBack")) closeProfile(); });
@@ -454,9 +622,12 @@
     var h = (location.hash || "#classic").replace("#", "");
     var parts = h.split("/");
     var view = parts[0];
-    var known = TABS.map(function (t) { return t.id; }).concat(["rules", "settings", "profile", "compare", "stats"]);
+    var known = TABS.map(function (t) { return t.id; })
+      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "pricechange"]);
     if (known.indexOf(view) === -1) view = "classic";
-    if (["profile","rules","settings","compare","stats"].indexOf(view) === -1) state.backView = view;
+    // Remember only a place worth coming back to: the same list the back arrow
+    // uses, so adding a sub-view can never make it point at itself.
+    if (SUB_VIEWS.indexOf(view) === -1) state.backView = view;
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
@@ -484,11 +655,13 @@
     settings:{ t: "Settings" },
     profile: { t: "Profile" },
     compare: { t: "Head to head" },
-    stats:   { t: "Stats & highlights" }
+    stats:   { t: "Stats & highlights" },
+    prices:  { t: "Player prices" },
+    pricechange: { t: "Price changes" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
-  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings"];
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "pricechange"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -516,7 +689,9 @@
     subEl.style.display = sub ? "" : "none";
 
     var back = $("#barBack");
-    back.style.display = SUB_VIEWS.indexOf(state.view) === -1 ? "none" : "";
+    var isSub = SUB_VIEWS.indexOf(state.view) !== -1;
+    back.style.display = isSub ? "" : "none";
+    $("#barMenu").style.display = isSub ? "none" : "";
 
     var info = $("#barInfo");
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
@@ -544,6 +719,8 @@
     if (state.view === "rules") return renderRules(host);
     if (state.view === "compare") return renderCompare(host, S.dataset());
     if (state.view === "stats") return renderStats(host, S.dataset());
+    if (state.view === "prices") return renderPrices(host, S.dataset());
+    if (state.view === "pricechange") return renderPriceChange(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();
