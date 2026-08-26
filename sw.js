@@ -1,5 +1,5 @@
 /* FPL Game On V12 — service worker (network-first for app + data, cache fallback) */
-const CACHE = "gameon-v12-1";
+const CACHE = "gameon-v12-2";
 const ASSETS = [
   "./", "./index.html", "./styles.css",
   "./config.js", "./api.js", "./data.js", "./compute.js", "./app.js",
@@ -42,8 +42,12 @@ self.addEventListener("fetch", (e) => {
   }
 
   // Don't cache data.json (it changes each gameweek): network-first.
+  // Ask the server to revalidate rather than trusting the browser's own HTTP
+  // cache — otherwise a stale app.js can outlive a deploy for as long as its
+  // max-age, and the device sits on an old build with no way to notice.
+  const fresh = new Request(req.url, { cache: "no-cache", credentials: "same-origin" });
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(fresh).then((res) => {
       const copy = res.clone();
       if (!url.pathname.endsWith("data.json")) {
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});

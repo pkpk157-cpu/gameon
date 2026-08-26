@@ -71,7 +71,21 @@
   <script src="app.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+      /* A device that already has a worker gets reloaded once when a newer one
+         takes over, so a deploy reaches everyone without a hard refresh. */
+      var hadWorker = !!navigator.serviceWorker.controller, reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (!hadWorker || reloading) return;
+        reloading = true;
+        location.reload();
+      });
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").then(function (reg) {
+          var check = function () { if (document.visibilityState === "visible") reg.update().catch(function () {}); };
+          check();
+          document.addEventListener("visibilitychange", check);
+        }).catch(function () {});
+      });
     }
   </script>
 </body>
