@@ -699,3 +699,19 @@ table.t.cmptable.seasons td.num.win .sp { color:color-mix(in srgb, var(--good) 6
 .pffoot { margin-top:16px; padding-top:12px; border-top:1px solid var(--line);
   font-size:11.5px; line-height:1.5; color:var(--ink-faint); text-align:center; }
 .pffoot .warn { color:var(--accent); font-weight:600; }
+
+/* ---- form sparkline ---------------------------------------------------- */
+.spark svg { display:block; width:100%; height:auto; overflow:visible; }
+.spark .ln { fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round;
+  vector-effect:non-scaling-stroke; }
+.spark .fill { fill:color-mix(in srgb, var(--accent) 13%, transparent); stroke:none; }
+.spark .avg { stroke:var(--line-strong); stroke-width:1; stroke-dasharray:3 4; vector-effect:non-scaling-stroke; }
+.spark .head { fill:var(--accent); stroke:var(--glass-hi); stroke-width:2; vector-effect:non-scaling-stroke; }
+.sparkfoot { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-top:6px;
+  font-size:11px; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+.sparkfoot .mid { color:var(--ink-faint); }
+.sparkfoot b { font-size:13px; color:var(--ink); }
+/* one gameweek is a number, not a line */
+.sparkone { display:flex; align-items:baseline; gap:10px; }
+.sparkone .v { font-size:30px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+.sparkone .l { font-size:11.5px; color:var(--ink-faint); }

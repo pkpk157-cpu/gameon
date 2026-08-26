@@ -319,6 +319,8 @@
       if (n) { location.hash = "profile/" + n.getAttribute("data-entry"); }
     });
     window.addEventListener("hashchange", syncFromHash);
+    // keep the deadline in the bar honest without re-rendering the view
+    setInterval(function () { if (!$("#profileBack").classList.contains("show")) updateBanner(); }, 60000);
 
     S.load().then(function () {
       syncFromHash();
@@ -382,6 +384,13 @@
       var ds = S.dataset();
       var who = ds && K.managerMap(ds)[+state.profileId];
       if (who) { title = who.entryName; sub = who.playerName; }
+    }
+    // Competition tabs have no subtitle of their own, so the next deadline
+    // lives there — always visible, costing no extra space.
+    if (!sub && TABS.some(function (t) { return t.id === state.view; })) {
+      var ds2 = S.dataset();
+      var dl = ds2 ? K.nextDeadline(ds2) : null;
+      if (dl) sub = "GW" + dl.gw + " deadline " + untilText(dl.msLeft);
     }
     $("#barTitle").textContent = title;
     var subEl = $("#barSub");
@@ -1140,6 +1149,44 @@
         '</div>';
     }).join("") + '</div>';
 
+    // Form — the shape of their season.
+    var fm = K.form(ds, id);
+    if (fm.length) {
+      h += '<div class="section-title"><h2>Form</h2><div class="rule"></div></div>';
+      h += '<div class="card"><div class="bd">' + sparkline(fm) + '</div></div>';
+    }
+
+    // Winnings, keeping what is settled apart from what is merely on course.
+    var W = K.winnings(ds, id);
+    var gap = K.prizeGap(ds, id);
+    if (W && (W.items.length || gap)) {
+      h += '<div class="section-title"><h2>Prize money</h2><div class="rule"></div></div>';
+      h += '<div class="pcards">';
+      h += pcard("Won", money(W.settled), W.settled ? "banked" : "nothing settled yet");
+      h += pcard("On track for", money(W.onTrack), W.onTrack ? "if it finished today" : "no prize position");
+      if (gap) {
+        h += gap.inMoney
+          ? pcard("Cut line", gap.cushion === null ? "—" : ("+" + num(gap.cushion)),
+              "pts clear of " + ordinal(gap.lastPaid))
+          : pcard("Off the money", num(gap.behind), "pts from " + ordinal(gap.lastPaid));
+      }
+      h += '</div>';
+      if (W.items.length) {
+        h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr>' +
+          '<th>Competition</th><th>Placing</th><th class="num">Amount</th></tr></thead><tbody>';
+        h += W.items.map(function (it) {
+          return '<tr><td>' + esc(it.comp) + '</td>' +
+            '<td>' + esc(it.label) + ' ' + (it.settled
+              ? '<span class="pill up">settled</span>'
+              : '<span class="pill">on track</span>') + '</td>' +
+            '<td class="num"><span class="prize">' + money(it.amount) + '</span></td></tr>';
+        }).join("");
+        h += '</tbody></table></div>';
+        h += '<div class="note" style="padding:10px 14px">Only finished competitions are settled. ' +
+          'Everything else moves until its last gameweek is played.</div></div>';
+      }
+    }
+
     // Squad on a football pitch, steppable through every gameweek played.
     var gws = K.squadGws(ds);
     if (gws.length && K.managerPitch(ds, id, gws[gws.length - 1])) {
@@ -1414,7 +1461,7 @@
     return h;
   }
 
-  function statsSeason(H) {
+  function statsSeason(H, ds) {
     var se = H.season;
     if (!se) return '<div class="callout">No gameweeks scored yet.</div>';
     var h = '<div class="statlead">' + num(se.gws) + ' gameweek' + (se.gws === 1 ? '' : 's') + ' played</div>';
@@ -1448,6 +1495,21 @@
     }
     h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet");
     h += '</div>';
+
+    // Who is winning money, settled first.
+    var purse = ds.managers.map(function (m) {
+      var w = K.winnings(ds, m.id);
+      return { id: m.id, name: m.entryName, settled: w.settled, onTrack: w.onTrack, total: w.total };
+    }).filter(function (x) { return x.total > 0; })
+      .sort(function (a, b) { return (b.settled - a.settled) || (b.onTrack - a.onTrack); });
+    if (purse.length) {
+      h += '<div class="section-title"><h2>Prize money</h2><div class="rule"></div></div>';
+      h += '<div class="card"><div class="bd">';
+      h += hlist("On course to win", purse.slice(0, 8), function (x) {
+        return { id: x.id, name: x.name, tag: x.settled ? money(x.settled) + " settled" : "", val: money(x.total) };
+      }, "Nothing is settled until a competition finishes.");
+      h += '</div></div>';
+    }
 
     h += '<div class="section-title"><h2>Across the league</h2><div class="rule"></div></div>';
     h += '<div class="hgrid">';
@@ -1933,6 +1995,58 @@
   }
 
   function isMe(id) { return state.me && +id === +state.me; }
+
+  // "in 2d 4h" / "in 40m" / "closed"
+  function untilText(ms) {
+    if (ms <= 0) return "closed";
+    var m = Math.floor(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    if (d >= 1) return "in " + d + "d " + (h % 24) + "h";
+    if (h >= 1) return "in " + h + "h " + (m % 60) + "m";
+    return "in " + m + "m";
+  }
+
+  // A season's shape: one line, no axes, the latest point labelled. Fewer than
+  // two gameweeks is not a chart, so it renders as a plain figure instead.
+  function sparkline(points, opts) {
+    opts = opts || {};
+    if (!points || !points.length) return "";
+    if (points.length < 2) {
+      return '<div class="sparkone"><span class="v">' + num(points[0].p) + '</span>' +
+        '<span class="l">GW' + points[0].gw + ' \u2014 a line needs more than one gameweek</span></div>';
+    }
+    var W = 300, H = 62, padY = 10, padX = 4;
+    var vals = points.map(function (p) { return p.p; });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var span = (hi - lo) || 1;
+    var avg = vals.reduce(function (t, v) { return t + v; }, 0) / vals.length;
+    function x(i) { return padX + (i * (W - padX * 2)) / (points.length - 1); }
+    function y(v) { return H - padY - ((v - lo) / span) * (H - padY * 2); }
+
+    var line = points.map(function (p, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.p).toFixed(1); }).join(" ");
+    var area = line + " L" + x(points.length - 1).toFixed(1) + " " + (H - padY) + " L" + x(0).toFixed(1) + " " + (H - padY) + " Z";
+    var last = points[points.length - 1];
+
+    var dots = points.map(function (p, i) {
+      // a generous invisible target so the native tooltip is reachable
+      return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.p).toFixed(1) + '" r="9" fill="transparent">' +
+        '<title>GW' + p.gw + ': ' + num(p.p) + ' pts</title></circle>';
+    }).join("");
+
+    return '<div class="spark">' +
+      // scales uniformly: stretching would turn the marker into an ellipse
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" ' +
+        'aria-label="Gameweek scores from GW' + points[0].gw + ' to GW' + last.gw + '">' +
+        '<line class="avg" x1="' + padX + '" x2="' + (W - padX) + '" y1="' + y(avg).toFixed(1) + '" y2="' + y(avg).toFixed(1) + '"/>' +
+        '<path class="fill" d="' + area + '"/>' +
+        '<path class="ln" d="' + line + '"/>' +
+        '<circle class="head" cx="' + x(points.length - 1).toFixed(1) + '" cy="' + y(last.p).toFixed(1) + '" r="4"/>' +
+        dots +
+      '</svg>' +
+      '<div class="sparkfoot"><span>GW' + points[0].gw + '</span>' +
+        '<span class="mid">avg ' + num(Math.round(avg)) + '</span>' +
+        '<span><b>' + num(last.p) + '</b> GW' + last.gw + '</span></div>' +
+      '</div>';
+  }
 
   document.addEventListener("DOMContentLoaded", boot);
 })();

@@ -1112,5 +1112,107 @@
              past: past, potw: potw };
   };
 
+  /* ---- deadline, winnings, the cut line, and form ----------------------- */
+
+  // The next gameweek deadline still in the future.
+  C.nextDeadline = function (ds, now) {
+    if (!ds || !ds.bootstrap) return null;
+    var t = (now === undefined ? Date.now() : now);
+    var soon = null;
+    ds.bootstrap.events.forEach(function (e) {
+      if (!e.deadline_time) return;
+      var when = Date.parse(e.deadline_time);
+      if (when > t && (!soon || when < soon.when)) soon = { gw: e.id, name: e.name, when: when };
+    });
+    if (!soon) return null;
+    soon.msLeft = soon.when - t;
+    return soon;
+  };
+
+  // What a manager has actually won, kept separate from what they are on
+  // course for. A league plays for real money — showing an unsettled standing
+  // as winnings would be plainly wrong.
+  C.winnings = function (ds, id) {
+    if (!ds || !id) return null;
+    id = +id;
+    var items = [], settledTotal = 0, onTrackTotal = 0;
+    function add(comp, label, amount, settled) {
+      if (!amount) return;
+      items.push({ comp: comp, label: label, amount: amount, settled: !!settled });
+      if (settled) settledTotal += amount; else onTrackTotal += amount;
+    }
+
+    // Classic only pays out at the end of the season.
+    var finished = C.finishedGws(ds);
+    var seasonDone = finished.length >= (cfg().totalGameweeks || 38);
+    C.classic(ds).forEach(function (r) {
+      if (+r.id === id && r.prize) add("Classic", "#" + r.computedRank + " overall", r.prize, seasonDone);
+    });
+
+    // A month pays once every one of its gameweeks is done.
+    C.monthly(ds).forEach(function (m) {
+      var row = m.rows.filter(function (r) { return +r.id === id; })[0];
+      if (row && row.prize) add("Monthly", (m.label || m.name) + " · #" + row.pos, row.prize, m.complete);
+    });
+
+    // A pyramid mini-season pays once its gameweeks are done.
+    var fset = {}; finished.forEach(function (g) { fset[g] = true; });
+    C.pyramid(ds).seasons.forEach(function (se) {
+      var done = (se.gws || []).length > 0 && se.gws.every(function (g) { return fset[g]; });
+      se.divisions.forEach(function (dv) {
+        var row = dv.rows.filter(function (r) { return +r.id === id; })[0];
+        if (row && row.prize) add("Pyramid", se.name + " · " + dv.name + " · #" + row.pos, row.prize, done);
+      });
+    });
+
+    // Last Manager Standing pays when a champion exists.
+    var lms = C.lms(ds);
+    if (lms.champion && +lms.champion.id === id) {
+      add("Last Manager", "Champion", (cfg().lms.prizes || {}).champion, true);
+    }
+
+    return { items: items, settled: settledTotal, onTrack: onTrackTotal,
+             total: settledTotal + onTrackTotal };
+  };
+
+  // Where a manager sits against the paid places in the Classic league.
+  C.prizeGap = function (ds, id) {
+    if (!ds || !id) return null;
+    id = +id;
+    var rows = C.classic(ds);
+    var me = rows.filter(function (r) { return +r.id === id; })[0];
+    if (!me) return null;
+    // the lowest rank that still earns something
+    var lastPaid = 0;
+    for (var r = rows.length; r >= 1; r--) { if (C.classicPrize(r)) { lastPaid = r; break; } }
+    if (!lastPaid) return null;
+    if (me.computedRank <= lastPaid) {
+      // how much cushion above the cut
+      var cutRow = rows[lastPaid - 1];
+      return { inMoney: true, rank: me.computedRank, prize: me.prize, lastPaid: lastPaid,
+               cushion: cutRow ? (me.total - cutRow.total) : null };
+    }
+    var target = rows[lastPaid - 1];
+    return { inMoney: false, rank: me.computedRank, lastPaid: lastPaid,
+             behind: target ? (target.total - me.total) : null,
+             prizeThere: C.classicPrize(lastPaid) };
+  };
+
+  // Recent gameweek scores, oldest first — the shape of someone's season.
+  C.form = function (ds, id, count) {
+    if (!ds || !id) return [];
+    id = +id;
+    var played = C.finishedGws(ds);
+    var cur = C.currentGw(ds);
+    if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
+    var h = ds.history[id] || {};
+    var out = [];
+    played.forEach(function (g) {
+      var r = h[g];
+      if (r && typeof r.p === "number") out.push({ gw: g, p: r.p });
+    });
+    return count ? out.slice(-count) : out;
+  };
+
   window.GO_COMPUTE = C;
 })();
