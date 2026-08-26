@@ -1282,6 +1282,13 @@
     h += '</div>';
 
     h += pitchStats(pit, metric);
+    // Bonus is not confirmed until a fixture is finalised, and a clean sheet
+    // held at 60 minutes can still be lost — say so rather than letting a
+    // score quietly move.
+    if (pit.provisional) {
+      h += '<div class="provnote">Includes <b>' + num(pit.provisional) +
+        '</b> provisional bonus \u00b7 bonus and clean sheets can still change while matches are on</div>';
+    }
 
     h += '<div class="psegrow">';
     h += '<div class="pseg"><button type="button"' + (mode === "pitch" ? ' class="on"' : '') + ' data-mode="pitch">Pitch</button>' +

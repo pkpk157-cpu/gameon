@@ -6,6 +6,7 @@
    Node 18+ (global fetch). No dependencies.
    ========================================================================== */
 const fs = require("fs");
+const { provisionalBonus } = require("./bonus.js");
 
 const BASE = "https://fantasy.premierleague.com/api";
 const CLASSIC = 478139;
@@ -126,8 +127,79 @@ async function h2hAll(id) {
   // stepped back through the season. A finished gameweek's squads and points
   // never change, so we reuse whatever the last run already wrote and only
   // fetch the gameweeks we are missing (plus the live one, which moves).
+  const liveAudit = {};
+
+  // Everything that moves during a gameweek, in one request pair: each player's
+  // points and minutes, plus the bonus FPL has not published yet.
+  //
+  // Bonus only appears once a fixture is finalised. Until then FPL's own site
+  // ranks bps to show it provisionally, and a tracker that does not do the same
+  // reads up to three points light per bonus-earning player for the length of
+  // the match. It is applied ONLY to fixtures still in play: a finalised
+  // fixture already has its bonus inside total_points, so adding ours on top
+  // would count it twice.
+  async function liveFor(gw, settled) {
+    const live = await getJSON("/event/" + gw + "/live/");
+    const mins = {}, pts = {}, bpsByFixture = {};
+    (live.elements || []).forEach((el) => {
+      const st = el.stats || {};
+      mins[el.id] = st.minutes || 0;
+      pts[el.id] = st.total_points || 0;
+      (el.explain || []).forEach((ex) => {
+        const b = (ex.stats || []).filter((x) => x.identifier === "bps")[0];
+        if (!b) return;
+        (bpsByFixture[ex.fixture] || (bpsByFixture[ex.fixture] = {}))[el.id] = b.value || 0;
+      });
+    });
+    const bonus = {};
+    if (!settled) {
+      try {
+        const fixtures = await getJSON("/fixtures/?event=" + gw);
+        let inPlay = 0;
+        (fixtures || []).forEach((f) => {
+          if (!f.started || f.finished_provisional) return;
+          inPlay++;
+          const b = provisionalBonus(bpsByFixture[f.id] || {});
+          // a double gameweek can earn bonus in more than one fixture
+          Object.keys(b).forEach((el) => { bonus[el] = (bonus[el] || 0) + b[el]; });
+        });
+        if (inPlay) console.log("  GW " + gw + " — " + inPlay + " fixture(s) in play, provisional bonus for " +
+                                Object.keys(bonus).length + " player(s)");
+      } catch (e) { console.log("  GW " + gw + " fixtures failed, no provisional bonus: " + e.message); }
+    }
+    return { mins, pts, bonus };
+  }
+
+  // Every run checks the formula the live view uses against FPL's own score for
+  // the same gameweek — with and without provisional bonus. That is what
+  // settles which of the two FPL is actually counting, from real data rather
+  // than from an assumption, and it keeps checking every run afterwards.
+  function audit(gw, squads, pts, bonus) {
+    const ids = Object.keys(squads);
+    let n = 0, plain = 0, withBonus = 0;
+    for (const id of ids) {
+      const row = (history[id] || {})[gw];
+      if (!row || typeof row.p !== "number") continue;
+      let a = 0, b = 0;
+      (squads[id].p || []).forEach((pk) => {
+        const base = pts[pk[0]] || 0;
+        a += base * pk[1];
+        b += (base + (bonus[pk[0]] || 0)) * pk[1];
+      });
+      const hit = row.h || 0;
+      n++;
+      if (a === row.p || a - hit === row.p) plain++;
+      if (b === row.p || b - hit === row.p) withBonus++;
+    }
+    if (!n) return;
+    const pc = (v) => Math.round((v / n) * 100);
+    console.log("  GW " + gw + " — squad totals vs FPL: " + pc(plain) + "% match without bonus, " +
+                pc(withBonus) + "% with it (" + n + " checked)");
+    liveAudit[gw] = { n: n, plain: plain, withBonus: withBonus };
+  }
+
   let elements = null, pitchGw = null;
-  const livePoints = {}, picks = {};
+  const livePoints = {}, picks = {}, liveBonus = {}, picksFinal = {};
 
   // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
   const teamShort = {};
@@ -162,9 +234,11 @@ async function h2hAll(id) {
   });
   if (frozen) console.log("Kept the published deadline for " + frozen + " already-finished gameweek(s)");
 
-  const canReuse = prev.picksV === 2;
+  const canReuse = prev.picksV >= 2;
   const prevPicks = canReuse ? (prev.picks || {}) : {};
   const prevLive = canReuse ? (prev.livePoints || {}) : {};
+  const prevBonus = canReuse ? (prev.liveBonus || {}) : {};
+  const prevFinal = canReuse ? (prev.picksFinal || {}) : {};
 
   const curEv = events.find((e) => e.is_current) || events.find((e) => e.is_next);
   if (curEv) {
@@ -175,22 +249,53 @@ async function h2hAll(id) {
       const settled = !!(ev && ev.finished && ev.data_checked);
       const cached = prevPicks[gw] && prevLive[gw] &&
         Object.keys(prevPicks[gw]).length >= Math.floor(managers.length * 0.9);
-      if (settled && cached) {
+      // Squads are frozen at the deadline, so a settled gameweek can be reused
+      // — but only once it has been read AFTER it settled. FPL applies
+      // automatic substitutions when the gameweek finalises, and anything
+      // cached while it was still live holds the pre-substitution eleven.
+      if (settled && cached && prevFinal[gw]) {
         picks[gw] = prevPicks[gw];
         livePoints[gw] = prevLive[gw];
-        console.log("GW " + gw + " — reused " + Object.keys(picks[gw]).length + " cached squads");
+        if (prevBonus[gw]) liveBonus[gw] = prevBonus[gw];
+        picksFinal[gw] = 1;
+        console.log("GW " + gw + " — reused " + Object.keys(picks[gw]).length + " settled squads");
         continue;
+      }
+      if (settled && cached) console.log("GW " + gw + " — settled: re-reading squads for auto-subs");
+
+      // A gameweek in progress has frozen squads: nothing about a team can
+      // change between the deadline and the final whistle. So refresh only what
+      // moves — the players' points — and leave 245 squad requests unmade. That
+      // is what makes a live refresh cheap enough to run often.
+      if (!settled && cached) {
+        try {
+          const fresh = await liveFor(gw, false);
+          picks[gw] = prevPicks[gw];
+          livePoints[gw] = fresh.pts;
+          if (Object.keys(fresh.bonus).length) liveBonus[gw] = fresh.bonus;
+          // players played is derived from the frozen squads and fresh minutes
+          for (const id of Object.keys(picks[gw])) {
+            let played = 0, total = 0;
+            (picks[gw][id].p || []).forEach((pk) => {
+              if (pk[1] > 0) { total += pk[1]; if ((fresh.mins[pk[0]] || 0) > 0) played += pk[1]; }
+            });
+            if (!history[id]) history[id] = {};
+            if (!history[id][gw]) history[id][gw] = { p: 0, h: 0, b: 0, t: 0 };
+            history[id][gw].pl = played;
+            history[id][gw].plt = total || 12;
+          }
+          console.log("GW " + gw + " — live refresh only, " + Object.keys(picks[gw]).length +
+                      " squads reused (no squad requests)");
+          audit(gw, picks[gw], fresh.pts, fresh.bonus);
+          continue;
+        } catch (e) {
+          console.log("GW " + gw + " — live refresh failed, falling back to a full read: " + e.message);
+        }
       }
       const inProgress = !!(ev && ev.is_current && !settled);
       console.log("GW " + gw + " — fetching squads…");
       try {
-        const live = await getJSON("/event/" + gw + "/live/");
-        const mins = {}, pts = {};
-        (live.elements || []).forEach((el) => {
-          const st = el.stats || {};
-          mins[el.id] = st.minutes || 0;
-          pts[el.id] = st.total_points || 0;
-        });
+        const { mins, pts, bonus } = await liveFor(gw, settled);
         const got = {};
         await pool(managers, async (m) => {
           try {
@@ -213,8 +318,15 @@ async function h2hAll(id) {
             }
           } catch (e) { /* skip this manager */ }
         }, 6);
-        if (Object.keys(got).length) { picks[gw] = got; livePoints[gw] = pts; }
-        console.log("  GW " + gw + " — " + Object.keys(got).length + " squads");
+        if (Object.keys(got).length) {
+          picks[gw] = got;
+          livePoints[gw] = pts;
+          if (Object.keys(bonus).length) liveBonus[gw] = bonus;
+          if (settled) picksFinal[gw] = 1;
+        }
+        console.log("  GW " + gw + " — " + Object.keys(got).length + " squads" +
+                    (settled ? " (settled, auto-subs included)" : ""));
+        audit(gw, got, pts, bonus);
       } catch (e) { console.log("  GW " + gw + " squads failed (non-fatal): " + e.message); }
     }
   }
@@ -223,7 +335,8 @@ async function h2hAll(id) {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
-    elements, pitchGw, picksV: 2, livePoints, picks, chips
+    elements, pitchGw, picksV: 2, livePoints, picks, chips,
+    liveBonus, picksFinal, liveAudit
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.

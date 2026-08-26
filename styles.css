@@ -299,6 +299,11 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 .lmscount b { font-size:15px; font-weight:800; color:var(--ink); font-variant-numeric:tabular-nums; }
 @media (max-width:389px){ .lmscount .gone { display:none; } }
 
+/* the squad's live caveat: bonus not yet confirmed */
+.provnote { text-align:center; font-size:11.5px; font-weight:600; color:var(--ink-faint);
+  margin:-4px 0 12px; }
+.provnote b { color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+
 /* the knockout round's own detail line, since the picker names the round */
 .koline { text-align:center; font-size:12.5px; font-weight:600; color:var(--ink-soft);
   margin:2px 0 12px; }

@@ -602,14 +602,21 @@
      current gameweek in a flat map, so both shapes are read here. */
   function picksAt(ds, gw) {
     if (!ds || !ds.picks) return null;
-    if (ds.picksV === 2) return ds.picks[gw] || null;
+    if (ds.picksV >= 2) return ds.picks[gw] || null;
     return (+gw === +ds.pitchGw) ? ds.picks : null;
   }
   function liveAt(ds, gw) {
     if (!ds || !ds.livePoints) return {};
-    if (ds.picksV === 2) return ds.livePoints[gw] || {};
+    if (ds.picksV >= 2) return ds.livePoints[gw] || {};
     return (+gw === +ds.pitchGw) ? ds.livePoints : {};
   }
+  // Bonus FPL has not published yet, ranked from bps by the updater. It exists
+  // only for fixtures still in play: once one is finalised its bonus is already
+  // inside the player's points and this is empty for them again.
+  function bonusAt(ds, gw) {
+    return (ds && ds.liveBonus && ds.liveBonus[gw]) || {};
+  }
+  C.provisionalBonus = bonusAt;
 
   /* Effective ownership across THIS league for one gameweek: the summed
      multiplier a player carries over every squad, as a percentage of squads.
@@ -690,7 +697,7 @@
   // Gameweeks we hold squads for, oldest first.
   C.squadGws = function (ds) {
     if (!ds || !ds.picks) return [];
-    if (ds.picksV !== 2) return ds.pitchGw ? [+ds.pitchGw] : [];
+    if (!(ds.picksV >= 2)) return ds.pitchGw ? [+ds.pitchGw] : [];
     return Object.keys(ds.picks).map(Number)
       .filter(function (g) { return ds.picks[g] && Object.keys(ds.picks[g]).length; })
       .sort(function (a, b) { return a - b; });
@@ -705,15 +712,18 @@
     var pk = picksAt(ds, gw);
     var sq = pk && pk[id];
     if (!sq || !sq.p || !sq.p.length) return null;
-    var els = ds.elements, lp = liveAt(ds, gw);
+    var els = ds.elements, lp = liveAt(ds, gw), pb = bonusAt(ds, gw);
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
     var eot = eoTable(ds, gw);
     function build(el, mult, isCap, isVice) {
       var meta = els[el] || ["?", 0, "", 0, 0];
-      var base = lp[el] || 0;
+      // While a fixture is in play FPL withholds bonus, so a squad reads up to
+      // three points light per bonus-earning player unless it is added back.
+      var prov = pb[el] || 0;
+      var base = (lp[el] || 0) + prov;
       return { el: el, name: meta[0], type: meta[1], team: meta[2], pos: POS[meta[1]] || "",
-               pts: base * (mult || 1), base: base,
+               pts: base * (mult || 1), base: base, prov: prov,
                price: meta[3] || 0, eo: (eot && eot.eo[el]) || 0,
                cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
@@ -775,7 +785,9 @@
       if (topPrice === null || p.price > topPrice) topPrice = p.price;
     });
 
-    return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live,
+    var provTotal = 0;
+    scoring.forEach(function (p) { provTotal += (p.prov || 0) * p.mult; });
+    return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live, provisional: provTotal,
              chip: sq.c || "", lines: lines, bench: bench,
              total: total, hits: hits, net: net,
              average: n ? Math.round(sum / n) : null, highest: top,
