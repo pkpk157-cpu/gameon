@@ -310,13 +310,21 @@
       if (btn.classList.contains("spin")) return;
       btn.classList.add("spin");
       var before = (S.dataset() || {}).updatedAt;
-      S.reload()
-        .then(function (ds) {
-          render();
-          toast(ds && ds.updatedAt !== before ? "Updated" : "Already up to date");
-        })
-        .catch(function () { toast("Could not reach the league data"); })
-        .then(function () { btn.classList.remove("spin"); });
+      // The fetch can finish in tens of milliseconds, which would flash the
+      // spinner too briefly to register as anything. Hold it for one full turn
+      // so the tap visibly does something.
+      var spun = new Promise(function (r) { setTimeout(r, 600); });
+      var work = S.reload().then(
+        function (ds) { return { ok: true, changed: ds && ds.updatedAt !== before }; },
+        function () { return { ok: false }; }
+      );
+      Promise.all([work, spun]).then(function (res) {
+        var out = res[0];
+        btn.classList.remove("spin");
+        if (!out.ok) { toast("Could not reach the league data"); return; }
+        render();
+        toast(out.changed ? "Updated" : "Already up to date");
+      });
     });
     $("#barBack").addEventListener("click", function () {
       if (state.view === "rules" && state.rulesBack) { location.hash = state.rulesBack; return; }
