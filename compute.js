@@ -1486,6 +1486,32 @@
   };
 
   /* ---- player prices ---------------------------------------------------- */
+  // How much of our own league owns each player. Counted the way FPL counts
+  // its own ownership — squad membership, bench included — rather than the
+  // effective ownership the squad view shows, which weights by multiplier.
+  var _own = { key: "", val: null };
+  C.leagueOwnership = function (ds, gw) {
+    if (!ds) return null;
+    gw = gw ? +gw : +ds.pitchGw;
+    var key = (ds.updatedAt || "") + "|" + gw;
+    if (_own.key === key) return _own.val;
+    var pk = picksAt(ds, gw);
+    if (!pk) return null;
+    var ids = Object.keys(pk), n = ids.length;
+    if (!n) return null;
+    var count = {};
+    ids.forEach(function (mid) {
+      (pk[mid].p || []).forEach(function (t) { count[t[0]] = (count[t[0]] || 0) + 1; });
+    });
+    var pct = {};
+    Object.keys(count).forEach(function (el) {
+      pct[el] = Math.round((count[el] / n) * 1000) / 10;
+    });
+    var out = { pct: pct, count: count, managers: n };
+    _own = { key: key, val: out };
+    return out;
+  };
+
   var PPOS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
   // Every player, with what the game says about his price and what our own
@@ -1499,6 +1525,11 @@
     if (!els) return null;
     var pr = (ds && ds.prices) || {};
     var has = !!pr.now;
+    var own = C.leagueOwnership(ds);
+    // the most recent recorded change per player, so a move that has already
+    // happened is shown as fact rather than as pressure
+    var last = {};
+    ((ds && ds.priceLog) || []).forEach(function (r) { last[r[0]] = r; });
     return Object.keys(els).map(function (id) {
       var meta = els[id] || ["?", 0, "", 0, 0];
       var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
@@ -1510,6 +1541,9 @@
         season: (pr.changeStart && pr.changeStart[id] || 0) / 10,
         tracked: has,
         owned: owned,
+        goOwned: own ? (own.pct[id] || 0) : null,
+        moved: last[id] ? { up: last[id][2] > last[id][1], at: last[id][3] } : null,
+        owners: own ? (own.count[id] || 0) : null,
         net: net,
         // Pressure relative to how many people own him. The threshold the game
         // uses is not published, so this is not a percentage of anything — it

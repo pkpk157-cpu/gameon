@@ -234,8 +234,14 @@
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
       '</div>';
 
-    $("#profileBody").innerHTML = h;
-    $("#profileBack").classList.add("show");
+    $("#menuBody").innerHTML = sectionList() + h;
+    $all(".menuitem", $("#menuBody")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        closeProfile();
+        location.hash = b.getAttribute("data-go");
+      });
+    });
+    $("#menuBack").classList.add("show");
 
     $all("#pfTheme button").forEach(function (b) {
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile({ edit: editing }); });
@@ -275,7 +281,7 @@
       $("#pfImport").addEventListener("click", function () { importFile(function () { closeProfile(); }); });
     }
   }
-  function closeProfile() { $("#profileBack").classList.remove("show"); }
+  function closeProfile() { $("#menuBack").classList.remove("show"); }
   function segBtn(val, icon, label, cur) {
     return '<button data-th="' + val + '" class="' + (cur === val ? "on" : "") + '">' + svg(icon, 16) + label + '</button>';
   }
@@ -301,16 +307,36 @@
   /* ====================================================================== */
   /* Player prices                                                          */
   /* ====================================================================== */
+  // 32,790 becomes 32.8k. On the narrowest phones the difference between these
+  // two is whether the direction column fits on screen at all.
+  function kNum(n) {
+    n = Math.abs(n);
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "m";
+    if (n >= 10000) return Math.round(n / 1000) + "k";
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+    return String(n);
+  }
+
   function priceRows(rows, tracked) {
     return rows.map(function (r) {
-      var mv = r.season > 0 ? '<span class="move up">\u25b2' + r.season.toFixed(1) + '</span>'
-             : r.season < 0 ? '<span class="move down">\u25bc' + Math.abs(r.season).toFixed(1) + '</span>'
-             : '<span class="move flat">\u2013</span>';
+      // What the price is doing: a change we actually recorded is fact; short
+      // of that, the direction of real transfer flow since it last moved.
+      var dir = '<span class="move flat">\u2013</span>';
+      if (r.moved) {
+        dir = '<span class="move ' + (r.moved.up ? "up" : "down") + '">' +
+          (r.moved.up ? "\u25b2" : "\u25bc") + ' ' + esc(agoText(Date.now() - Date.parse(r.moved.at))) + '</span>';
+      } else if (r.net > 0) {
+        dir = '<span class="move up">\u25b2 ' + kNum(r.net) + '</span>';
+      } else if (r.net < 0) {
+        dir = '<span class="move down">\u25bc ' + kNum(r.net) + '</span>';
+      }
       return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
         '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
         '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
         '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
-        (tracked ? '<td class="num">' + mv + '</td>' : '') + '</tr>';
+        '<td class="num">' + (r.goOwned == null ? '\u2013'
+            : '<b>' + r.goOwned.toFixed(1) + '%</b>') + '</td>' +
+        (tracked ? '<td class="num">' + dir + '</td>' : '') + '</tr>';
     }).join("");
   }
 
@@ -320,17 +346,17 @@
       host.innerHTML = '<div class="callout">No player list in this data yet.</div>';
       return;
     }
-    // Prices are published already; how they have moved only exists once the
-    // updater has been recording, so those columns and sorts appear with it.
-    var tracked = rows.length > 0 && rows[0].tracked;
+    // Prices and both ownerships are published already; which way a price is
+    // moving only exists once the updater has been recording it.
+    var tracked = rows[0].tracked;
+    var own = K.leagueOwnership(ds);
     if (!state.priceSort) state.priceSort = "price";
     if (!state.pricePos) state.pricePos = "all";
-    if (!tracked && (state.priceSort === "risen" || state.priceSort === "fallen")) state.priceSort = "price";
+    if (!tracked && (state.priceSort === "rising" || state.priceSort === "falling")) state.priceSort = "price";
 
-    var sorts = tracked
-      ? { price: "Most expensive", cheap: "Cheapest", owned: "Most owned",
-          risen: "Risen most", fallen: "Fallen most" }
-      : { price: "Most expensive", cheap: "Cheapest", owned: "Most owned" };
+    var sorts = { price: "Most expensive", cheap: "Cheapest",
+                  owned: "Most owned (FPL)", go: "Most owned (Game On)" };
+    if (tracked) { sorts.rising = "Rising hardest"; sorts.falling = "Falling hardest"; }
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
     var h = '<div class="pickrow">' +
@@ -351,17 +377,20 @@
         price: function (a, b) { return b.price - a.price; },
         cheap: function (a, b) { return a.price - b.price; },
         owned: function (a, b) { return b.owned - a.owned; },
-        risen: function (a, b) { return b.season - a.season; },
-        fallen: function (a, b) { return a.season - b.season; }
+        go: function (a, b) { return (b.goOwned || 0) - (a.goOwned || 0); },
+        rising: function (a, b) { return b.pressure - a.pressure; },
+        falling: function (a, b) { return a.pressure - b.pressure; }
       };
       list.sort(by[state.priceSort] || by.price);
       var panel = $("#prPanel", host);
-      panel.innerHTML = '<div class="card freeze"><table class="t"><thead><tr>' +
-        '<th>Player</th><th class="num">Price</th><th class="num">Owned</th>' +
-        (tracked ? '<th class="num">Season</th>' : '') +
+      panel.innerHTML = '<div class="card freeze"><table class="t pricetbl"><thead><tr>' +
+        '<th>Player</th><th class="num">Price</th><th class="num">FPL</th>' +
+        '<th class="num">Game On</th>' + (tracked ? '<th class="num">Moving</th>' : '') +
         '</tr></thead><tbody>' + priceRows(list.slice(0, 400), tracked) + '</tbody></table></div>' +
-        '<div class="koline">' + list.length + ' players \u00b7 prices as FPL publishes them' +
-        (tracked ? '' : ' \u00b7 how they have moved starts recording with the next update') + '</div>';
+        '<div class="koline">' + list.length + ' players \u00b7 owned across FPL and across our ' +
+        (own ? own.managers : 245) + ' managers' +
+        (tracked ? ' \u00b7 moving shows a recorded change, else net transfers since the last one'
+                 : ' \u00b7 price movement starts recording with the next update') + '</div>';
       filterRows(panel, $("#prSearch", host).value);
     };
     $("#prSort", host).addEventListener("change", function () { state.priceSort = this.value; draw(); });
@@ -370,105 +399,25 @@
     draw();
   }
 
-  /* ---- price changes and what is driving them --------------------------- */
-  function watchRows(list, up) {
-    if (!list.length) return '<div class="note" style="padding:10px 12px">Nothing moving either way yet.</div>';
-    return '<table class="t"><thead><tr><th>Player</th><th class="num">Price</th>' +
-      '<th class="num">Owned</th><th class="num">Net transfers</th></tr></thead><tbody>' +
-      list.map(function (r) {
-        return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
-          '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
-          '<td class="num">' + r.price.toFixed(1) + '</td>' +
-          '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
-          '<td class="num"><b class="' + (up ? "up" : "down") + '">' +
-          (up ? "+" : "") + num(r.net) + '</b></td></tr>';
-      }).join("") + '</tbody></table>';
-  }
-
-  function renderPriceChange(host, ds) {
-    var watch = ds ? K.priceWatch(ds, 12) : null;
-    if (!watch || (!watch.tracked && !(ds.priceLog || []).length)) {
-      host.innerHTML = '<div class="callout">Prices themselves are on the ' +
-        '<a href="#prices">Player prices</a> page. What is missing here is how they have ' +
-        '<b>moved</b> — FPL publishes no history of price changes and no dates for them, so ' +
-        'the tracker keeps its own from the next update onward.</div>';
-      return;
-    }
-    var changes = K.priceChanges(ds, 60);
-    var from = K.priceLogFrom(ds);
-
-    var h = '<div class="tabrow" id="pcTabs">' +
-      ['watch', 'recent'].map(function (k) {
-        var lab = k === "watch" ? "Under pressure" : "Recent changes";
-        return '<button type="button" class="tabbtn' + ((state.pcTab || "watch") === k ? " on" : "") +
-          '" data-pc="' + k + '">' + lab + '</button>';
-      }).join("") + '</div><div id="pcPanel"></div>';
-    host.innerHTML = h;
-
-    var draw = function () {
-      var tab = state.pcTab || "watch";
-      var panel = $("#pcPanel", host);
-      if (tab === "watch") {
-        panel.innerHTML =
-          '<div class="section-title"><h2>Being bought</h2><div class="rule"></div>' +
-            '<span class="chip">' + watch.rising.length + '</span></div>' +
-          '<div class="card"><div class="tablewrap">' + watchRows(watch.rising, true) + '</div></div>' +
-          '<div class="section-title"><h2>Being sold</h2><div class="rule"></div>' +
-            '<span class="chip">' + watch.falling.length + '</span></div>' +
-          '<div class="card"><div class="tablewrap">' + watchRows(watch.falling, false) + '</div></div>' +
-          '<div class="callout" style="margin-top:12px">Ordered by how hard each player is being ' +
-          'bought or sold relative to how many own him \u2014 net transfers counted since his price ' +
-          'last moved. The direction is measured, not guessed. <b>When</b> a change lands is not: ' +
-          'the game does not publish the threshold it uses, and it applies changes once a day.</div>';
-      } else {
-        panel.innerHTML = changes.length
-          ? '<div class="card freeze"><table class="t"><thead><tr><th>Player</th>' +
-            '<th class="num">From</th><th class="num">To</th><th class="num">When</th></tr></thead><tbody>' +
-            changes.map(function (c) {
-              return '<tr><td class="name"><span class="who">' + esc(c.name) + '</span>' +
-                '<div class="mgr">' + esc(c.pos) + ' \u00b7 ' + esc(c.team) + '</div></td>' +
-                '<td class="num">' + c.from.toFixed(1) + '</td>' +
-                '<td class="num"><b class="' + (c.up ? "up" : "down") + '">' + c.to.toFixed(1) + '</b></td>' +
-                '<td class="num">' + esc(agoText(Date.now() - Date.parse(c.at))) + '</td></tr>';
-            }).join("") + '</tbody></table></div>'
-          : '<div class="callout">No price changes recorded yet. FPL publishes no history of them, ' +
-            'so this list starts from the day the tracker began keeping one' +
-            (from ? ' \u2014 ' + esc(agoText(Date.now() - Date.parse(from))) + ' ago' : '') + '.</div>';
-      }
-    };
-    $all(".tabbtn", $("#pcTabs", host)).forEach(function (b) {
-      b.addEventListener("click", function () {
-        state.pcTab = b.getAttribute("data-pc");
-        $all(".tabbtn", $("#pcTabs", host)).forEach(function (x) { x.classList.toggle("on", x === b); });
-        draw();
-      });
-    });
-    draw();
-  }
-
   /* ---- the section menu -------------------------------------------------- */
-  function openMenu() {
+  // Sections, shown above everything the gear used to hold — one menu, not two.
+  function sectionList() {
     var here = state.view;
+    // Coming back should land where the reader left, not always on Classic.
+    var backTo = TABS.map(function (t) { return t.id; }).indexOf(state.backView) === -1
+      ? "classic" : state.backView;
     var items = [
-      { k: "classic", icon: "classic", t: "Game On tournament", s: "Classic, Monthly, LMS, Pyramid and UCL" },
-      { k: "prices", icon: "stats", t: "Player prices", s: "Every player, what he costs and who owns him" },
-      { k: "pricechange", icon: "stats", t: "Price changes", s: "What has moved, and what is under pressure" }
+      { k: "league", go: backTo, t: "Game On tournament", s: "Classic, Monthly, LMS, Pyramid and UCL" },
+      { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving" }
     ];
-    var inLeague = ["prices", "pricechange"].indexOf(here) === -1;
-    $("#menuBody").innerHTML = '<div class="profile-hd"><h3>Sections</h3></div>' +
+    var inLeague = here !== "prices";
+    return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
-        var on = (it.k === "classic") ? inLeague : (here === it.k);
-        return '<button type="button" class="menuitem' + (on ? " on" : "") + '" data-go="' + it.k + '">' +
+        var on = (it.k === "league") ? inLeague : (here === it.k);
+        return '<button type="button" class="menuitem' + (on ? " on" : "") + '" data-go="' + it.go + '">' +
           '<span class="mi-t">' + esc(it.t) + '</span>' +
           '<span class="mi-s">' + esc(it.s) + '</span></button>';
-      }).join("") + '</div>';
-    $("#menuBack").classList.add("show");
-    $all(".menuitem", $("#menuBody")).forEach(function (b) {
-      b.addEventListener("click", function () {
-        $("#menuBack").classList.remove("show");
-        location.hash = b.getAttribute("data-go");
-      });
-    });
+      }).join("") + '</div></div>';
   }
 
   /* ---- staying current -------------------------------------------------- */
@@ -480,7 +429,7 @@
   var autoTimer = null, autoBusy = false, autoLast = 0;
 
   function sheetOpen() {
-    return $("#modalBack").classList.contains("show") || $("#profileBack").classList.contains("show");
+    return $("#modalBack").classList.contains("show") || $("#menuBack").classList.contains("show");
   }
 
   // Swapping the data re-renders the view, which must not interrupt someone
@@ -548,9 +497,6 @@
   function boot() {
     buildNav();
     isAdmin(); // persist ?admin flag on first visit
-    $("#btnProfile").innerHTML = svg("gear", 20);
-    $("#btnProfile").setAttribute("title", "Settings");
-    $("#btnProfile").addEventListener("click", openProfile);
     $("#btnSync").innerHTML = svg("sync", 19);
     $("#btnSync").addEventListener("click", function () {
       var btn = this;
@@ -579,13 +525,10 @@
     });
     $("#barInfo").innerHTML = svg("info", 18);
     $("#barMenu").innerHTML = svg("menu", 19);
-    $("#barMenu").addEventListener("click", openMenu);
-    $("#menuBack").addEventListener("click", function (e) {
-      if (e.target === $("#menuBack")) $("#menuBack").classList.remove("show");
-    });
+    $("#barMenu").addEventListener("click", function () { openProfile(); });
     $("#modalClose").addEventListener("click", closeModal);
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
-    $("#profileBack").addEventListener("click", function (e) { if (e.target === $("#profileBack")) closeProfile(); });
+    $("#menuBack").addEventListener("click", function (e) { if (e.target === $("#menuBack")) closeProfile(); });
     document.addEventListener("click", function (e) {
       if (!e.target.closest) return;
       var b = e.target.closest("[data-rules]");
@@ -603,7 +546,7 @@
     });
     window.addEventListener("hashchange", syncFromHash);
     // keep the deadline in the bar honest without re-rendering the view
-    setInterval(function () { if (!$("#profileBack").classList.contains("show")) updateBanner(); }, 60000);
+    setInterval(function () { if (!$("#menuBack").classList.contains("show")) updateBanner(); }, 60000);
 
     // Automatic updates. visibilitychange covers tabbing away and back; pageshow
     // catches a restore from the back/forward cache, which is how iOS returns a
@@ -634,8 +577,15 @@
     var parts = h.split("/");
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
-      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "pricechange"]);
-    if (known.indexOf(view) === -1) view = "classic";
+      .concat(["rules", "settings", "profile", "compare", "stats", "prices"]);
+    if (known.indexOf(view) === -1) {
+      // A bookmark or a cached hash for a view that no longer exists: show the
+      // league, and correct the address so a reload does not repeat the detour.
+      view = "classic"; parts = [view];
+      if (location.hash && location.hash !== "#classic") {
+        try { history.replaceState(null, "", "#classic"); } catch (e) { }
+      }
+    }
     // Remember only a place worth coming back to: the same list the back arrow
     // uses, so adding a sub-view can never make it point at itself.
     if (SUB_VIEWS.indexOf(view) === -1) state.backView = view;
@@ -667,12 +617,11 @@
     profile: { t: "Profile" },
     compare: { t: "Head to head" },
     stats:   { t: "Stats & highlights" },
-    prices:  { t: "Player prices" },
-    pricechange: { t: "Price changes" }
+    prices:  { t: "Player prices" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
-  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "pricechange"];
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -700,9 +649,7 @@
     subEl.style.display = sub ? "" : "none";
 
     var back = $("#barBack");
-    var isSub = SUB_VIEWS.indexOf(state.view) !== -1;
-    back.style.display = isSub ? "" : "none";
-    $("#barMenu").style.display = isSub ? "none" : "";
+    back.style.display = SUB_VIEWS.indexOf(state.view) === -1 ? "none" : "";
 
     var info = $("#barInfo");
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
@@ -731,7 +678,6 @@
     if (state.view === "compare") return renderCompare(host, S.dataset());
     if (state.view === "stats") return renderStats(host, S.dataset());
     if (state.view === "prices") return renderPrices(host, S.dataset());
-    if (state.view === "pricechange") return renderPriceChange(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();

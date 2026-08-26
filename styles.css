@@ -302,6 +302,21 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 .lmscount b { font-size:15px; font-weight:800; color:var(--ink); font-variant-numeric:tabular-nums; }
 @media (max-width:389px){ .lmscount .gone { display:none; } }
 
+/* the menu drawer: in from the left, full height, the way a burger implies */
+.modal-back.drawer { align-items:stretch; justify-content:flex-start; padding:0; }
+.modal-back.drawer .modal {
+  width:min(340px, 88vw); max-width:none; max-height:none; height:100%;
+  border-radius:0 20px 20px 0; border-left:0;
+  transform:translateX(-100%); transition:transform .24s cubic-bezier(.2,.7,.3,1);
+  display:flex; flex-direction:column;
+}
+.modal-back.drawer.show .modal { transform:translateX(0); }
+.modal-back.drawer .bd {
+  padding:calc(16px + env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom));
+  overflow:auto; -webkit-overflow-scrolling:touch; flex:1; min-height:0;
+}
+@media (prefers-reduced-motion: reduce) { .modal-back.drawer .modal { transition:none; } }
+
 /* the section burger, sitting where the back arrow does in a sub-view */
 .menubtn { flex:none; width:32px; height:32px; padding:0; border-radius:50%; cursor:pointer;
   border:1px solid var(--bar-line); background:var(--bar-fill); color:var(--bar-ink);
@@ -309,15 +324,17 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
 .menubtn::after { content:""; position:absolute; top:-6px; right:-6px; bottom:-6px; left:-6px; }
 .menubtn:hover { border-color:var(--pl-green); color:var(--pl-green); }
 
-/* the section list inside the burger sheet */
-.menulist { display:flex; flex-direction:column; gap:8px; }
-.menuitem { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%;
-  text-align:left; cursor:pointer; padding:12px 14px; border-radius:14px;
+/* The section list inside the burger drawer. These are two-line cards rather
+   than the single-line rows below them, so every property .menu button sets
+   has to be answered here — it carries more specificity than a lone class. */
+.menulist { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.menulist .menuitem { display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+  width:100%; text-align:left; cursor:pointer; padding:12px 14px; border-radius:14px;
   border:1px solid var(--line); background:var(--chip); color:var(--ink); }
-.menuitem:hover { border-color:var(--accent); }
-.menuitem.on { border-color:var(--accent); background:var(--accent-tint); }
-.menuitem .mi-t { font-size:15px; font-weight:700; }
-.menuitem .mi-s { font-size:12px; color:var(--ink-faint); font-weight:500; }
+.menulist .menuitem:hover { background:var(--chip); border-color:var(--accent); }
+.menulist .menuitem.on { border-color:var(--accent); background:var(--accent-tint); }
+.menulist .menuitem .mi-t { font-size:15px; font-weight:700; line-height:1.25; }
+.menulist .menuitem .mi-s { font-size:12px; color:var(--ink-faint); font-weight:500; line-height:1.3; }
 table.t b.up { color:var(--good); }
 table.t b.down { color:var(--bad); }
 
@@ -799,3 +816,35 @@ table.t.prizetbl .mgr { font-size:10.5px; }
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tie .sd { flex:none; font-size:10px; font-weight:700; color:var(--ink-faint); }
 .tie.pending .nm { color:var(--ink-faint); font-weight:600; font-style:italic; }
+
+/* The price table carries five columns, four of them numeric. On a 320px phone
+   the generic table metrics push the last two off the edge — and those two are
+   the whole point of the table — so it gets its own tighter spacing. */
+table.t.pricetbl { width:100%; table-layout:auto; }
+table.t.pricetbl th, table.t.pricetbl td { padding:9px 4px; }
+.freeze table.t.pricetbl th:first-child, .freeze table.t.pricetbl td:first-child { padding-left:9px; }
+.freeze table.t.pricetbl th:last-child, .freeze table.t.pricetbl td:last-child { padding-right:9px; }
+table.t.pricetbl th { font-size:9.5px; letter-spacing:.3px; }
+table.t.pricetbl td.num { font-size:13px; }
+table.t.pricetbl .move { font-size:12px; white-space:nowrap; }
+/* A long surname must give way rather than push the last column off the edge —
+   the position and club underneath still say who this is. */
+table.t.pricetbl td.name { min-width:0; max-width:84px; white-space:nowrap; }
+table.t.pricetbl td.name .who,
+table.t.pricetbl td.name .mgr { display:block; overflow:hidden; text-overflow:ellipsis; }
+table.t.pricetbl td.name .who { font-size:13.5px; }
+table.t.pricetbl td.name .mgr { font-size:10.5px; }
+
+/* The very narrow phones (320px) need a little more give still. */
+@media (max-width:360px) {
+  table.t.pricetbl td.name { max-width:74px; }
+  table.t.pricetbl th, table.t.pricetbl td { padding:9px 3px; }
+}
+
+/* Once there is room, let it breathe again. */
+@media (min-width:400px) {
+  table.t.pricetbl th, table.t.pricetbl td { padding:10px 9px; }
+  table.t.pricetbl td.name { max-width:none; }
+  table.t.pricetbl td.name .who { font-size:14px; }
+  table.t.pricetbl td.num, table.t.pricetbl .move { font-size:13.5px; }
+}
