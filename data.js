@@ -118,10 +118,6 @@
     return idbSet(DATASET_KEY, ds).catch(function () { return false; });
   };
 
-  // Load the dataset, preferring whichever copy is newer: the one the updater
-  // published or one this device stored earlier. Reading the stored copy first
-  // and stopping there would freeze a device on it forever — it would never
-  // see another gameweek. The stored copy still covers being offline.
   // A published file that parses but is not a dataset (a truncated write, an
   // error page served as JSON) must not be adopted: several views read it
   // before the empty-state guard and would throw on it.
@@ -129,6 +125,10 @@
     return !!(d && typeof d === "object" && Array.isArray(d.managers));
   }
 
+  // Load the dataset, preferring whichever copy is newer: the one the updater
+  // published or one this device stored earlier. Reading the stored copy first
+  // and stopping there would freeze a device on it forever — it would never
+  // see another gameweek. The stored copy still covers being offline.
   STORE.load = function () {
     var stored = null;
     return idbGet(DATASET_KEY)
