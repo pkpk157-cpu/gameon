@@ -850,12 +850,23 @@
           panel.innerHTML = groupPanel(h2h.groups[state.group], cfg);
         });
       } else {
-        extra.innerHTML = "";
         var B = K.knockout(ds, state.h2hStage === "ko-uel" ? "uel" : "ucl");
         // a bracket scrolls; fill mode is for a single table fitted to the screen
-        if (!B) { meta.textContent = ""; panel.innerHTML = '<div class="callout">No knockout draw yet.</div>'; return; }
-        meta.textContent = "From GW " + B.startsGw;
-        panel.innerHTML = bracketPanel(B);
+        if (!B) { extra.innerHTML = ""; meta.textContent = ""; panel.innerHTML = '<div class="callout">No knockout draw yet.</div>'; return; }
+        // Five rounds stacked one under another is a long scroll to reach the
+        // final. Pick a round the way the group stage picks a group.
+        var ri = koRoundIndex(ds, B);
+        extra.innerHTML = '<select class="in narrow" id="koRoundSel">' + B.rounds.map(function (r, i) {
+          return '<option value="' + i + '"' + (i === ri ? ' selected' : '') + '>' + esc(r.name) + '</option>';
+        }).join("") + '</select>';
+        var drawRound = function () {
+          meta.textContent = "";   // the round's own line carries its detail
+          panel.innerHTML = bracketPanel(B, state.koRound);
+        };
+        $("#koRoundSel", host).addEventListener("change", function () {
+          state.koRound = +this.value; drawRound();
+        });
+        drawRound();
       }
     }
     $("#stageSel", host).addEventListener("change", function () {
@@ -866,7 +877,23 @@
 
   // The knockout path, round by round. Ties nobody has reached yet name the
   // ties they come from rather than inventing teams.
-  function bracketPanel(B) {
+  // Open on the round the competition has actually reached rather than always
+  // the first, and remember whatever the reader picks after that.
+  function koRoundIndex(ds, B) {
+    if (state.koRound != null && B.rounds[state.koRound]) return state.koRound;
+    var done = {};
+    K.finishedGws(ds).forEach(function (g) { done[g] = true; });
+    var i = 0;
+    for (; i < B.rounds.length; i++) {
+      var gws = B.rounds[i].gws || [];
+      var over = gws.length && gws.every(function (g) { return done[g]; });
+      if (!over) break;
+    }
+    state.koRound = Math.min(i, B.rounds.length - 1);
+    return state.koRound;
+  }
+
+  function bracketPanel(B, idx) {
     var h = "";
     if (B.provisional) {
       h += '<div class="callout" style="margin-bottom:12px">Projected from the group tables as they stand. ' +
@@ -876,7 +903,8 @@
       h += '<div class="korow"><span class="pill gold">Winner ' + money(B.prizes.winner) + '</span>' +
         '<span class="pill">Runner-up ' + money(B.prizes.runnerUp) + '</span></div>';
     }
-    h += B.rounds.map(function (r) {
+    var only = B.rounds[idx] ? [B.rounds[idx]] : B.rounds;
+    h += only.map(function (r) {
       var body = r.ties.map(function (t) {
         if (t.home !== undefined) {
           return '<div class="tie">' + '<span class="tn">' + t.n + '</span>' +
@@ -886,8 +914,9 @@
           '<div class="ts"><div class="side"><span class="nm">Winner of tie ' + t.fromA + '</span></div>' +
           '<div class="side"><span class="nm">Winner of tie ' + t.fromB + '</span></div></div></div>';
       }).join("");
-      return '<div class="section-title"><h2>' + esc(r.name) + '</h2><div class="rule"></div>' +
-        '<span class="chip">GW ' + r.gws.join("\u2013") + (r.legs === 2 ? ' \u00b7 2 legs' : '') + '</span></div>' +
+      var n = r.ties.length;
+      return '<div class="koline">' + n + (n === 1 ? ' tie' : ' ties') +
+        ' \u00b7 GW ' + r.gws.join("\u2013") + (r.legs === 2 ? ' \u00b7 two legs' : '') + '</div>' +
         '<div class="card"><div class="bd kobody">' + body + '</div></div>';
     }).join("");
     return h;

@@ -295,6 +295,10 @@ tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
   font-size:13px; line-height:1.55; background:var(--glass-2); }
 .callout b { color:var(--ink); }
 
+/* the knockout round's own detail line, since the picker names the round */
+.koline { text-align:center; font-size:12.5px; font-weight:600; color:var(--ink-soft);
+  margin:2px 0 12px; }
+
 /* a shared place in the classic table */
 .rankcell .jt { font-size:11px; font-weight:800; color:var(--ink-faint); margin-right:1px; }
 
