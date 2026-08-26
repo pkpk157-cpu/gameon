@@ -651,6 +651,12 @@
     if (best && best.pts > 0) best.star = true;
 
     var lines = [1, 2, 3, 4].map(function (t) { return { pos: POS[t], players: rows[t] || [] }; });
+    // A pick whose player is missing from the element table has no position, so
+    // it belongs to none of the four lines. Give it its own row rather than
+    // letting it drop out of the XI and leave a hole on the pitch.
+    Object.keys(rows).forEach(function (t) {
+      if (!POS[t] && rows[t] && rows[t].length) lines.push({ pos: "?", players: rows[t] });
+    });
     var gwEv = (ds.bootstrap && ds.bootstrap.events || []).filter(function (e) { return +e.id === +gw; })[0];
     var live = gwEv ? (gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false;
 

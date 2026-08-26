@@ -24,6 +24,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -38,13 +39,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain data.json)" ]; then
-            git add data.json
-            git commit -m "Update FPL data ($(date -u +%Y-%m-%dT%H:%MZ))"
-            git push
-          else
+          if [ -z "$(git status --porcelain data.json)" ]; then
             echo "No data change"
+            exit 0
           fi
+          git add data.json
+          git commit -m "Update FPL data ($(date -u +%Y-%m-%dT%H:%MZ))"
+          # main may have moved while we were fetching. Rebase and retry rather
+          # than failing the job, which would leave the new data unpublished.
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "push rejected, rebasing (attempt $i)"
+            git pull --rebase --autostash origin main || true
+            sleep $((i * 3))
+          done
+          echo "could not push data.json after 5 attempts" >&2
+          exit 1
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
