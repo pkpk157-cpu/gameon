@@ -214,6 +214,53 @@ async function h2hAll(id) {
   let prev = {};
   try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
 
+  /* ---- prices, and the transfer flow that moves them -------------------- */
+  // FPL publishes no history of price changes and no record of when one
+  // happened, so the only way to have either is to keep our own from now on.
+  //
+  // The flow that drives a change is net transfers measured since that player
+  // last moved. transfers_in_event resets at every deadline, which is not how
+  // the game's own counter behaves, so this diffs the season-cumulative fields
+  // between our runs instead and carries a rolling total per player — reset to
+  // zero the moment his price actually moves.
+  const prevPrices = (prev.prices && prev.prices.now) || {};
+  const prevIn = (prev.prices && prev.prices.tIn) || {};
+  const prevOut = (prev.prices && prev.prices.tOut) || {};
+  const prevNet = (prev.prices && prev.prices.netSince) || {};
+  const priceLog = (prev.priceLog || []).slice();
+
+  const priceNow = {}, tIn = {}, tOut = {}, netSince = {},
+        changeEvent = {}, changeStart = {}, owned = {};
+  const stamp = new Date().toISOString();
+  let moved = 0;
+  (bs.elements || []).forEach((el) => {
+    const id = el.id;
+    const cost = el.now_cost || 0;
+    priceNow[id] = cost;
+    changeEvent[id] = el.cost_change_event || 0;
+    changeStart[id] = el.cost_change_start || 0;
+    owned[id] = parseFloat(el.selected_by_percent) || 0;
+    tIn[id] = el.transfers_in || 0;
+    tOut[id] = el.transfers_out || 0;
+
+    const was = prevPrices[id];
+    if (was != null && was !== cost) {
+      // a real change, dated by us because FPL does not date them
+      priceLog.push([id, was, cost, stamp]);
+      netSince[id] = 0;                       // the counter starts again
+      moved++;
+    } else {
+      const dIn = (tIn[id] - (prevIn[id] != null ? prevIn[id] : tIn[id]));
+      const dOut = (tOut[id] - (prevOut[id] != null ? prevOut[id] : tOut[id]));
+      netSince[id] = (prevNet[id] || 0) + (dIn - dOut);
+    }
+  });
+  // a season's changes are small, but do not let the log grow without limit
+  while (priceLog.length > 6000) priceLog.shift();
+  if (moved) console.log(moved + " price change(s) recorded");
+  const prices = { at: stamp, now: priceNow, changeEvent, changeStart,
+                   owned, tIn, tOut, netSince };
+
   // A finished gameweek's deadline is history. FPL does move deadlines when
   // fixtures are rescheduled around European and cup weeks, and the app reads
   // the deadline's month to decide which month a gameweek belongs to — so a
@@ -336,7 +383,7 @@ async function h2hAll(id) {
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips,
-    liveBonus, picksFinal, liveAudit
+    liveBonus, picksFinal, liveAudit, prices, priceLog
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.
