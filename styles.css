@@ -213,8 +213,10 @@ a { color:var(--accent); text-decoration:none; }
 .freeze table.t { width:100%; }
 .freeze table.t thead th {
   position:sticky; top:0; z-index:3;
-  background:var(--glass-bar);
-  -webkit-backdrop-filter:blur(20px) saturate(180%); backdrop-filter:blur(20px) saturate(180%);
+  /* .freeze already owns the backdrop, so a nested backdrop-filter here has
+     nothing left to work on and the rows slide legibly under the headings.
+     The header carries the opacity itself instead. */
+  background:var(--head-solid);
 }
 .freeze table.t th:first-child, .freeze table.t td:first-child { padding-left:16px; }
 .freeze table.t th:last-child, .freeze table.t td:last-child { padding-right:16px; }
@@ -861,7 +863,6 @@ table.t.prizetbl .mgr { font-size:10.5px; }
    the generic table metrics push the last two off the edge — and those two are
    the whole point of the table — so it gets its own tighter spacing. */
 table.t.pricetbl { width:100%; table-layout:auto; }
-.freeze table.t.pricetbl thead th { background:var(--head-solid); }
 table.t.pricetbl th, table.t.pricetbl td { padding:9px 4px; }
 .freeze table.t.pricetbl th:first-child, .freeze table.t.pricetbl td:first-child { padding-left:9px; }
 .freeze table.t.pricetbl th:last-child, .freeze table.t.pricetbl td:last-child { padding-right:9px; }

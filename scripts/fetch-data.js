@@ -141,10 +141,19 @@ async function h2hAll(id) {
   async function liveFor(gw, settled) {
     const live = await getJSON("/event/" + gw + "/live/");
     const mins = {}, pts = {}, bpsByFixture = {};
+    // The league breaks a Last Manager Standing tie on bench points, then goals,
+    // then clean sheets, then assists in the playing XI. Only the first was
+    // computable, because only points were kept. These come from the same
+    // response and are stored sparsely — in a given gameweek most players score
+    // none of them, so the cost is a few hundred entries rather than 600 x 3.
+    const goals = {}, cs = {}, assists = {};
     (live.elements || []).forEach((el) => {
       const st = el.stats || {};
       mins[el.id] = st.minutes || 0;
       pts[el.id] = st.total_points || 0;
+      if (st.goals_scored) goals[el.id] = st.goals_scored;
+      if (st.clean_sheets) cs[el.id] = st.clean_sheets;
+      if (st.assists) assists[el.id] = st.assists;
       (el.explain || []).forEach((ex) => {
         const b = (ex.stats || []).filter((x) => x.identifier === "bps")[0];
         if (!b) return;
@@ -167,7 +176,7 @@ async function h2hAll(id) {
                                 Object.keys(bonus).length + " player(s)");
       } catch (e) { console.log("  GW " + gw + " fixtures failed, no provisional bonus: " + e.message); }
     }
-    return { mins, pts, bonus };
+    return { mins, pts, bonus, goals, cs, assists };
   }
 
   // Every run checks the formula the live view uses against FPL's own score for
@@ -199,7 +208,14 @@ async function h2hAll(id) {
   }
 
   let elements = null, pitchGw = null;
-  const livePoints = {}, picks = {}, liveBonus = {}, picksFinal = {};
+  const livePoints = {}, picks = {}, liveBonus = {}, picksFinal = {}, liveStats = {};
+  // goals, clean sheets and assists for one gameweek, kept only where a player
+  // actually recorded one — these are the Last Manager Standing tie-breakers
+  const keepStats = (gw, src) => {
+    const g = src && src.goals, c = src && src.cs, a = src && src.assists;
+    const any = (o) => o && Object.keys(o).length;
+    if (any(g) || any(c) || any(a)) liveStats[gw] = { g: g || {}, c: c || {}, a: a || {} };
+  };
 
   // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
   const teamShort = {};
@@ -324,6 +340,7 @@ async function h2hAll(id) {
   const prevLive = canReuse ? (prev.livePoints || {}) : {};
   const prevBonus = canReuse ? (prev.liveBonus || {}) : {};
   const prevFinal = canReuse ? (prev.picksFinal || {}) : {};
+  const prevStats = canReuse ? (prev.liveStats || {}) : {};
 
   const curEv = events.find((e) => e.is_current) || events.find((e) => e.is_next);
   if (curEv) {
@@ -342,6 +359,7 @@ async function h2hAll(id) {
         picks[gw] = prevPicks[gw];
         livePoints[gw] = prevLive[gw];
         if (prevBonus[gw]) liveBonus[gw] = prevBonus[gw];
+        if (prevStats[gw]) liveStats[gw] = prevStats[gw];
         picksFinal[gw] = 1;
         console.log("GW " + gw + " — reused " + Object.keys(picks[gw]).length + " settled squads");
         continue;
@@ -358,6 +376,7 @@ async function h2hAll(id) {
           picks[gw] = prevPicks[gw];
           livePoints[gw] = fresh.pts;
           if (Object.keys(fresh.bonus).length) liveBonus[gw] = fresh.bonus;
+          keepStats(gw, fresh);
           // players played is derived from the frozen squads and fresh minutes
           for (const id of Object.keys(picks[gw])) {
             let played = 0, total = 0;
@@ -380,7 +399,8 @@ async function h2hAll(id) {
       const inProgress = !!(ev && ev.is_current && !settled);
       console.log("GW " + gw + " — fetching squads…");
       try {
-        const { mins, pts, bonus } = await liveFor(gw, settled);
+        const stats = await liveFor(gw, settled);
+        const { mins, pts, bonus } = stats;
         const got = {};
         await pool(managers, async (m) => {
           try {
@@ -407,6 +427,7 @@ async function h2hAll(id) {
           picks[gw] = got;
           livePoints[gw] = pts;
           if (Object.keys(bonus).length) liveBonus[gw] = bonus;
+          keepStats(gw, stats);
           if (settled) picksFinal[gw] = 1;
         }
         console.log("  GW " + gw + " — " + Object.keys(got).length + " squads" +
@@ -421,7 +442,7 @@ async function h2hAll(id) {
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips,
-    liveBonus, picksFinal, liveAudit, prices, priceLog
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.

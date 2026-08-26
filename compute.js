@@ -48,10 +48,40 @@
   C._hitsAlreadyOff = hitsAlreadyOff;   // so the check can be asserted in tests
 
   // The score a competition is settled on: net of hits, however FPL reports it.
+  // While matches are being played, FPL's own manager total lags behind the
+  // player data and leaves bonus out until each fixture finalises. Every live
+  // FPL tool works the same way round: add up the squad yourself. So do we —
+  // the number here is then the one people are seeing elsewhere during a match,
+  // and there is no question of adding our provisional bonus on top of a total
+  // that may already carry it.
+  //
+  // A settled gameweek keeps FPL's own figure. It is authoritative, and it
+  // carries the real bonus and the automatic substitutions we cannot infer.
+  function liveSquadTotal(ds, entryId, gw, benchInstead) {
+    if (!ds || C.liveGwId(ds) !== +gw) return null;
+    var squad = ds.picks && ds.picks[gw] && ds.picks[gw][entryId];
+    var picks = squad && squad.p;
+    if (!picks || !picks.length) return null;
+    var lp = liveAt(ds, gw), pb = bonusAt(ds, gw);
+    if (!lp || !Object.keys(lp).length) return null;
+    var total = 0;
+    picks.forEach(function (pk) {
+      var mult = pk[1] || 0;
+      var onBench = mult === 0;
+      if (benchInstead !== onBench) return;
+      var base = (lp[pk[0]] || 0) + (pb[pk[0]] || 0);
+      total += benchInstead ? base : base * mult;
+    });
+    return total;
+  }
+
   function gwScore(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return null;
     var row = h[gw];
+    var live = liveSquadTotal(ds, entryId, gw, false);
+    // hits are ours to subtract when the total is ours to add up
+    if (live !== null) return live - (row.h || 0);
     if (typeof row.p !== "number") return null;
     return hitsAlreadyOff(ds) ? row.p : row.p - (row.h || 0);
   }
@@ -59,8 +89,11 @@
   function gwBench(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return 0;
+    var live = liveSquadTotal(ds, entryId, gw, true);
+    if (live !== null) return live;
     return h[gw].b || 0;
   }
+  C.gwBench = gwBench;
   function sumGws(ds, entryId, gws) {
     var s = 0, any = false;
     gws.forEach(function (gw) {
@@ -135,7 +168,34 @@
   // points are separated by months won; any still level share one position and
   // split the money for the places they occupy, rather than being ordered by
   // something the table never shows.
+  // The classic table is the one place that reads FPL's league standings rather
+  // than adding the squad up, and those standings lag through a match and leave
+  // the bonus out. Every other competition here already goes through gwScore,
+  // so during a live gameweek this brings the standings into line with them.
+  // Idempotent and memoised: every view must agree on the same number.
+  function liveAdjust(ds) {
+    if (!ds || ds._liveAdj) return;
+    try { Object.defineProperty(ds, "_liveAdj", { value: true, enumerable: false }); } catch (e) { return; }
+    var gw = C.liveGwId(ds);
+    if (!gw) return;
+    (ds.managers || []).forEach(function (m) {
+      var live = gwScore(ds, m.id, gw);
+      if (live == null) return;
+      var hist = ds.history && ds.history[m.id];
+      var prev = (hist && hist[gw - 1] && typeof hist[gw - 1].t === "number")
+        ? hist[gw - 1].t
+        // no prior row to build on: take FPL's own total less the event score it
+        // is carrying, which is the same arithmetic from the other end
+        : (typeof m.total === "number" && typeof m.eventTotal === "number"
+            ? m.total - m.eventTotal : null);
+      if (prev == null) return;
+      m.eventTotal = live;
+      m.total = prev + live;
+    });
+  }
+
   C.classic = function (ds) {
+    liveAdjust(ds);
     var wins = C.monthlyWins(ds);
     var rows = ds.managers.slice().sort(function (a, b) {
       return (b.total - a.total) ||
@@ -259,9 +319,15 @@
       if (manualElim[gw]) {
         eliminatedIds = manualElim[gw].filter(function (id) { return alive[id]; });
       } else {
-        // ascending by score, then FEWER bench points is worse (tie-break #1
-        // rewards more bench points => higher bench survives).
-        contenders.sort(function (a, b) { return (a.score - b.score) || (a.bench - b.bench); });
+        // Worst first, since this decides who goes out. The league's order:
+        // score, then bench points, then goals, then clean sheets, then assists
+        // across the playing XI — more of any of them keeps you up. Anyone
+        // still level after all four is left level, and the rules carry that
+        // tie forward to the next gameweek.
+        contenders.sort(function (a, b) {
+          return (a.score - b.score) || (a.bench - b.bench) ||
+                 lmsTieBreak(ds, a.id, b.id, [gw]);
+        });
         var forced = carriedTies[gw] || [];
         var pick = [];
         for (var i = 0; i < contenders.length && pick.length < need; i++) {
@@ -617,6 +683,40 @@
     return (ds && ds.liveBonus && ds.liveBonus[gw]) || {};
   }
   C.provisionalBonus = bonusAt;
+
+  // The Last Manager Standing tie-breakers after bench points: goals, then
+  // clean sheets, then assists, counted across the playing XI.
+  //
+  // "Playing XI" is read as the eleven that actually played — which is what the
+  // stored squad holds once a gameweek has settled, because it is re-read after
+  // FPL applies its automatic substitutions. Under Bench Boost all fifteen
+  // count, since all fifteen play. A captain's goal counts once: the multiplier
+  // doubles points, and these are counts of things that happened, not points.
+  function xiStats(ds, entryId, gws) {
+    var out = { goals: 0, cs: 0, assists: 0 };
+    (gws || []).forEach(function (gw) {
+      var st = ds.liveStats && ds.liveStats[gw];
+      var squad = ds.picks && ds.picks[gw] && ds.picks[gw][entryId];
+      if (!st || !squad || !squad.p) return;
+      squad.p.forEach(function (pk) {
+        if (!pk[1]) return;                       // benched, so not in the XI
+        out.goals += (st.g && st.g[pk[0]]) || 0;
+        out.cs += (st.c && st.c[pk[0]]) || 0;
+        out.assists += (st.a && st.a[pk[0]]) || 0;
+      });
+    });
+    return out;
+  }
+  C.xiStats = xiStats;
+
+  // Order two tied managers by the league's rules, worst first — the caller is
+  // deciding who goes out. Returns 0 when every tie-breaker is exhausted, which
+  // the rules then carry forward to the next gameweek.
+  function lmsTieBreak(ds, a, b, gws) {
+    var sa = xiStats(ds, a, gws), sb = xiStats(ds, b, gws);
+    return (sa.goals - sb.goals) || (sa.cs - sb.cs) || (sa.assists - sb.assists);
+  }
+  C.lmsTieBreak = lmsTieBreak;
 
   /* Effective ownership across THIS league for one gameweek: the summed
      multiplier a player carries over every squad, as a percentage of squads.
