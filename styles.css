@@ -903,3 +903,7 @@ table.t th.sortable .sarrow:empty { display:none; }
   table.t.pricetbl td.name .who { font-size:14px; }
   table.t.pricetbl td.num, table.t.pricetbl .move { font-size:13.5px; }
 }
+
+/* a decision the league still has to make, not a state of the data */
+.callout.warn-callout { border-color:var(--accent); background:var(--accent-tint); }
+.callout.warn-callout b { color:var(--accent); }

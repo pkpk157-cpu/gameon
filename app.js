@@ -1028,7 +1028,21 @@
     var drawLms = function () {
       var o = byKey(state.lmsGw);
       var panel = $("#lmsGwPanel", host);
-      panel.innerHTML = lmsGwTable(o.week, { live: o.live });
+      // A tie the rules cannot break is the league's to settle, not the app's.
+      // Say who is level and how many places are waiting on it rather than
+      // quietly eliminating whoever happened to sort first.
+      var u = o.week && o.week.unresolved;
+      var note = "";
+      if (u) {
+        note = '<div class="callout warn-callout"><b>' + u.managers.length +
+          ' managers are level on every tie-breaker</b> — same score, same bench ' +
+          'points, same goals, clean sheets and assists in the eleven that played. ' +
+          esc(String(u.places)) + (u.places === 1 ? ' place is' : ' places are') +
+          ' waiting on it, and carry into the next gameweek along with its own. ' +
+          'Nobody here has been eliminated: ' +
+          esc(u.managers.map(function (m) { return m.name; }).join(", ")) + '.</div>';
+      }
+      panel.innerHTML = note + lmsGwTable(o.week, { live: o.live });
       filterRows(panel, $("#lmsSearch", host).value);
     };
     $("#lmsGwSel", host).addEventListener("change", function () { state.lmsGw = this.value; drawLms(); });

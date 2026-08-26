@@ -303,9 +303,15 @@
     var grid = []; // per-gw summary rows
     var perGw = [];
 
+    var carryOver = 0;   // places a tie stopped us filling, owed to the next GW
     finished.forEach(function (gw) {
       var sog = Object.keys(alive).length;
-      var need = elimGrid[gw] || 0;
+      // Places the last gameweek could not fill because a tie straddled its cut
+      // are owed here on top of this week's own. But a Last Manager Standing
+      // week can never take the last manager standing: whatever is owed, one
+      // has to be left, and the competition ends when one is.
+      var want = (elimGrid[gw] || 0) + carryOver;
+      var need = Math.max(0, Math.min(want, sog - 1));
 
       // Score every survivor this GW.
       var contenders = Object.keys(alive).map(function (id) {
@@ -315,24 +321,45 @@
       // A survivor with no score for a finished GW counts as 0 (didn't play).
       contenders.forEach(function (c) { if (c.score === null) c.score = 0; });
 
-      var eliminatedIds;
+      var eliminatedIds, unresolved = null;
       if (manualElim[gw]) {
         eliminatedIds = manualElim[gw].filter(function (id) { return alive[id]; });
       } else {
         // Worst first, since this decides who goes out. The league's order:
         // score, then bench points, then goals, then clean sheets, then assists
-        // across the playing XI — more of any of them keeps you up. Anyone
-        // still level after all four is left level, and the rules carry that
-        // tie forward to the next gameweek.
-        contenders.sort(function (a, b) {
+        // across the playing XI — more of any of them keeps you up.
+        var order = function (a, b) {
           return (a.score - b.score) || (a.bench - b.bench) ||
                  lmsTieBreak(ds, a.id, b.id, [gw]);
-        });
+        };
+        contenders.sort(order);
         var forced = carriedTies[gw] || [];
+
+        // Managers the rules cannot separate are one block. If the cut falls
+        // inside a block, nobody in it goes: "tied managers carry forward to
+        // next GW and the tie is broken there in addition to the normal
+        // eliminations for that week". So the places not filled this week are
+        // added to next week's, rather than settled by list position.
+        var blocks = [];
+        contenders.forEach(function (c) {
+          var last = blocks[blocks.length - 1];
+          if (last && order(last[0], c) === 0 && order(c, last[0]) === 0) last.push(c);
+          else blocks.push([c]);
+        });
+
         var pick = [];
-        for (var i = 0; i < contenders.length && pick.length < need; i++) {
-          if (forced.indexOf(contenders[i].id) !== -1) continue; // forced survive
-          pick.push(contenders[i].id);
+        for (var bi = 0; bi < blocks.length && pick.length < need; bi++) {
+          var block = blocks[bi].filter(function (c) { return forced.indexOf(c.id) === -1; });
+          if (!block.length) continue;
+          if (pick.length + block.length <= need) {
+            block.forEach(function (c) { pick.push(c.id); });
+          } else {
+            unresolved = { gw: gw, places: need - pick.length,
+                           managers: block.map(function (c) {
+                             return { id: c.id, name: nm(mm, c.id), score: c.score, bench: c.bench };
+                           }) };
+            break;
+          }
         }
         eliminatedIds = pick;
       }
@@ -340,7 +367,9 @@
       eliminatedIds.forEach(function (id) { delete alive[id]; eliminatedAt[id] = gw; });
       var eog = Object.keys(alive).length;
 
-      grid.push({ gw: gw, sog: sog, eliminated: eliminatedIds.length, expected: need, eog: eog });
+      carryOver = Math.max(0, need - eliminatedIds.length);
+      grid.push({ gw: gw, sog: sog, eliminated: eliminatedIds.length, expected: need, eog: eog,
+                  carried: carryOver });
 
       // Full week table: every survivor at start of GW, scored, worst first.
       var elimSet = {}; eliminatedIds.forEach(function (id) { elimSet[id] = 1; });
@@ -353,7 +382,7 @@
       }).sort(function (a, b) { return (a.score - b.score) || (a.bench - b.bench); });
 
       perGw.push({
-        gw: gw, need: need, sog: sog, eog: eog, table: table,
+        gw: gw, need: need, sog: sog, eog: eog, table: table, unresolved: unresolved,
         eliminated: eliminatedIds.map(function (id) {
           var c = contenders.find(function (x) { return x.id === id; });
           return { id: id, name: nm(mm, id), score: c ? c.score : 0, bench: c ? c.bench : 0 };
@@ -697,6 +726,11 @@
     (gws || []).forEach(function (gw) {
       var st = ds.liveStats && ds.liveStats[gw];
       var squad = ds.picks && ds.picks[gw] && ds.picks[gw][entryId];
+      // The eleven who eventually played only exists once FPL has made its
+      // substitutions and the updater has re-read the squad. Before that the
+      // stored squad is the eleven picked, which is a different set and would
+      // break the tie on the wrong players.
+      if (!(ds.picksFinal && ds.picksFinal[gw])) return;
       if (!st || !squad || !squad.p) return;
       squad.p.forEach(function (pk) {
         if (!pk[1]) return;                       // benched, so not in the XI
