@@ -326,6 +326,18 @@
     try { return new Intl.Collator(undefined, { sensitivity: "base", numeric: true }); }
     catch (e) { return { compare: function (a, b) { return a < b ? -1 : a > b ? 1 : 0; } }; }
   })();
+  // "Garcia" should find "García", and "erling" should find Haaland. Strip the
+  // accents once per player and keep the full name alongside the short one FPL
+  // prints, so the search matches the name people actually know.
+  function plain(t) {
+    t = String(t || "").toLowerCase();
+    return t.normalize ? t.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : t;
+  }
+  function haystack(r) {
+    if (r._h == null) r._h = plain(r.name + " " + r.full + " " + r.pos + " " + r.team);
+    return r._h;
+  }
+
   function sortKey(r) {
     if (r._k == null) r._k = r.name + "\u0000" + r.team + "\u0000" + r.pos;
     return r._k;
@@ -417,10 +429,8 @@
       if (state.pricePos !== "all") list = list.filter(function (r) { return String(r.type) === state.pricePos; });
       // Search all 600-odd players, not just the ones on screen. Filtering the
       // rendered rows used to hide anyone the current sort had pushed down.
-      var q = String(($("#prSearch", host) || {}).value || "").toLowerCase().trim();
-      if (q) list = list.filter(function (r) {
-        return (r.name + " " + r.pos + " " + r.team).toLowerCase().indexOf(q) !== -1;
-      });
+      var q = plain($("#prSearch", host) ? $("#prSearch", host).value : "").trim();
+      if (q) list = list.filter(function (r) { return haystack(r).indexOf(q) !== -1; });
       var col = colOf(state.priceSort), dir = state.priceDir;
       // Ties fall back to name, then club, then position — all three folded into
       // one key — so the two players called Davies always sit in the same order
@@ -440,7 +450,10 @@
       }).join("");
 
       var panel = $("#prPanel", host);
-      panel.innerHTML = '<div class="card freeze"><table class="t pricetbl"><thead><tr>' +
+      // "freeze" alone, as the league tables use it: .card carries overflow:hidden
+      // and wins on order, which left the rows unreachable by any gesture even
+      // though scrollTop still moved them from script.
+      panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
         head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked) + '</tbody></table></div>' +
         (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>');
 
@@ -679,6 +692,11 @@
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
     var fill = ["classic", "monthly", "lms", "pyramid", "h2h", "prices"].indexOf(state.view) !== -1;
     var wrap = $("main.wrap"); if (wrap) wrap.classList.toggle("fill", fill);
+    // In fill mode the wrap is already sized to stop above the tab bar, so the
+    // body padding that clears that bar is pure overhang — 34px of page the
+    // reader could drag, carrying the frozen filter row and headers up with it
+    // once the table underneath had run out.
+    document.body.classList.toggle("fill", fill);
     updateBanner();
   }
 

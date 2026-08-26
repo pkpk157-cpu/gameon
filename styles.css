@@ -192,7 +192,9 @@ a { color:var(--accent); text-decoration:none; }
 
 /* frozen-header scroll container (Classic / Monthly full tables) */
 .freeze {
-  overflow:auto; -webkit-overflow-scrolling:touch;
+  /* Reaching the bottom of the table must not then start dragging the page —
+     the header and the row of controls above it are meant to stay put. */
+  overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
   max-height:calc(100vh - 250px); max-height:calc(100dvh - 250px);
   background:var(--glass);
   -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
@@ -487,6 +489,7 @@ td.name[data-entry]:hover .who { color:var(--accent); text-decoration-color:var(
 
 /* ---- fill mode: frozen-header table fills the screen under a fixed top ---- */
 :root { --topbar-h:56px; --nav-h:66px; }
+body.fill { padding-bottom:0; }
 main.wrap.fill { display:flex; flex-direction:column; padding-top:16px; padding-bottom:0; overflow:hidden;
   height:calc(100vh - var(--topbar-h) - var(--nav-h)); height:calc(100dvh - var(--topbar-h) - var(--nav-h)); }
 main.wrap.fill .view.active { flex:1; min-height:0; display:flex; flex-direction:column; }

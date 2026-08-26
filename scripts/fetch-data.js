@@ -206,9 +206,15 @@ async function h2hAll(id) {
   (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; });
   elements = {};
   (bs.elements || []).forEach((el) => {
-    // [name, position, club, price(tenths), owned% across all FPL]
+    // The table shows the short name FPL uses, but people search for the name
+    // they know — "Erling" finds Haaland. Keep the full name alongside it, and
+    // only when it says something the short name does not.
+    const full = ((el.first_name || "") + " " + (el.second_name || "")).trim();
+    const extra = full && full.toLowerCase() !== String(el.web_name || "").toLowerCase()
+      ? full : "";
+    // [name, position, club, price(tenths), owned% across all FPL, full name]
     elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
-                       el.now_cost || 0, parseFloat(el.selected_by_percent) || 0];
+                       el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra];
   });
 
   let prev = {};

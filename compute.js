@@ -1535,7 +1535,8 @@
       var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
       var net = (pr.netSince && pr.netSince[id]) || 0;
       return {
-        id: +id, name: meta[0], type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
+        id: +id, name: meta[0], full: meta[5] || "",
+        type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
         price: ((has && pr.now[id] != null) ? pr.now[id] : (meta[3] || 0)) / 10,
         gw: (pr.changeEvent && pr.changeEvent[id] || 0) / 10,
         season: (pr.changeStart && pr.changeStart[id] || 0) / 10,
