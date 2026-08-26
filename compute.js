@@ -274,7 +274,13 @@
         };
       }).filter(function (r) { return r.gwsCounted > 0; });
 
-      rows.sort(function (a, b) { return (b.score - a.score) || (b.bench - a.bench); });
+      // Rule 7: a tie in the month is settled by the Last Manager tie-breakers,
+      // over the gameweeks that belong to the month. Best first here, so the
+      // arguments go the other way round from the elimination sort.
+      rows.sort(function (a, b) {
+        return (b.score - a.score) || (b.bench - a.bench) ||
+               lmsTieBreak(ds, b.id, a.id, playedGws);
+      });
       applyOverrideOrder(rows, ov().monthlyOrder && ov().monthlyOrder[month.key]);
       rows.forEach(function (r, i) {
         r.pos = i + 1;
@@ -469,6 +475,7 @@
       var playedGws = season.gws.filter(function (g) { return finished[g] || g === pLive; });
       var complete = season.gws.every(function (g) { return finished[g]; });
 
+      var lastGw = playedGws.length ? playedGws[playedGws.length - 1] : null;
       var divResults = p.divisions.map(function (div) {
         var ids = (rosters[key] && rosters[key][div.key]) || [];
         var rows = ids.map(function (id) {
@@ -476,10 +483,18 @@
             id: id, name: nm(mm, id), player: pl(mm, id),
             score: sumGws(ds, id, playedGws) || 0,
             bench: benchSum(ds, id, playedGws),
-            last: playedGws.length ? (gwScore(ds, id, playedGws[playedGws.length - 1]) || 0) : 0
+            last: lastGw ? (gwScore(ds, id, lastGw) || 0) : 0,
+            lastBench: lastGw ? gwBench(ds, id, lastGw) : 0
           };
         });
-        rows.sort(function (a, b) { return (b.score - a.score) || (b.last - a.last) || (b.bench - a.bench); });
+        // Rule 6: season score, then the last gameweek of the mini-season, then
+        // the Last Manager tie-breakers for that gameweek — bench points there,
+        // not across the whole season, then goals, clean sheets and assists.
+        rows.sort(function (a, b) {
+          return (b.score - a.score) || (b.last - a.last) ||
+                 (b.lastBench - a.lastBench) ||
+                 (lastGw ? lmsTieBreak(ds, b.id, a.id, [lastGw]) : 0);
+        });
         rows.forEach(function (r, i) { r.pos = i + 1; r.prize = div.prizes[i + 1] || 0; });
         return { key: div.key, name: div.name, prizes: div.prizes, rows: rows,
                  size: ids.length, played: playedGws.length, total: season.gws.length,
