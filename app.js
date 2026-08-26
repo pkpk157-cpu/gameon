@@ -723,22 +723,88 @@
   function renderH2h(host, ds) {
     var h2h = K.h2h(ds);
     var cfg = S.config();
-    var h = '';
-
-    // Group selector (dropdown) + group-stage GW progress
     if (state.group >= h2h.groups.length) state.group = 0;
-    h += '<div class="pickrow"><select class="in narrow" id="grpSel">' +
-      h2h.groups.map(function (g, i) {
-        return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
-      }).join("") + '</select>' +
-      '<div class="pickmeta">Group stage · GW ' + h2h.groupGwsPlayed + '/' + h2h.groupGwsTotal + '</div></div>';
-    h += '<div id="grpPanel">' + groupPanel(h2h.groups[state.group] || h2h.groups[0], cfg) + '</div>';
+    // once the knockouts are under way they lead; before then the groups do
+    var kickoff = (cfg.h2h.knockout && cfg.h2h.knockout[0] && cfg.h2h.knockout[0].gws[0]) || 0;
+    var cur = K.currentGw(ds) || 0;
+    if (!state.h2hStage) state.h2hStage = (kickoff && cur >= kickoff) ? "ko-ucl" : "groups";
 
+    var stages = [{ k: "groups", label: "Group stage" },
+                  { k: "ko-ucl", label: "UCL knockouts" },
+                  { k: "ko-uel", label: "UEL knockouts" }];
+    var h = '<div class="pickrow"><select class="in narrow" id="stageSel">' +
+      stages.map(function (st) {
+        return '<option value="' + st.k + '"' + (st.k === state.h2hStage ? ' selected' : '') + '>' + esc(st.label) + '</option>';
+      }).join("") + '</select>' +
+      '<span id="stageExtra"></span>' +
+      '<div class="pickmeta" id="stageMeta"></div></div>';
+    h += '<div id="grpPanel"></div>';
     host.innerHTML = h;
-    $("#grpSel", host).addEventListener("change", function () {
-      state.group = +this.value;
-      $("#grpPanel", host).innerHTML = groupPanel(h2h.groups[state.group], cfg);
+
+    function draw() {
+      var extra = $("#stageExtra", host), meta = $("#stageMeta", host), panel = $("#grpPanel", host);
+      var wrap = $("main.wrap");
+      if (wrap) wrap.classList.toggle("fill", state.h2hStage === "groups");
+      if (state.h2hStage === "groups") {
+        extra.innerHTML = '<select class="in narrow" id="grpSel">' + h2h.groups.map(function (g, i) {
+          return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
+        }).join("") + '</select>';
+        meta.textContent = "GW " + h2h.groupGwsPlayed + "/" + h2h.groupGwsTotal;
+        panel.innerHTML = groupPanel(h2h.groups[state.group] || h2h.groups[0], cfg);
+        $("#grpSel", host).addEventListener("change", function () {
+          state.group = +this.value;
+          panel.innerHTML = groupPanel(h2h.groups[state.group], cfg);
+        });
+      } else {
+        extra.innerHTML = "";
+        var B = K.knockout(ds, state.h2hStage === "ko-uel" ? "uel" : "ucl");
+        // a bracket scrolls; fill mode is for a single table fitted to the screen
+        if (!B) { meta.textContent = ""; panel.innerHTML = '<div class="callout">No knockout draw yet.</div>'; return; }
+        meta.textContent = "From GW " + B.startsGw;
+        panel.innerHTML = bracketPanel(B);
+      }
+    }
+    $("#stageSel", host).addEventListener("change", function () {
+      state.h2hStage = this.value; draw();
     });
+    draw();
+  }
+
+  // The knockout path, round by round. Ties nobody has reached yet name the
+  // ties they come from rather than inventing teams.
+  function bracketPanel(B) {
+    var h = "";
+    if (B.provisional) {
+      h += '<div class="callout" style="margin-bottom:12px">Projected from the group tables as they stand. ' +
+        'The ' + esc(B.label) + ' draw is settled once the group stage ends in GW' + (B.startsGw - 1) + '.</div>';
+    }
+    if (B.prizes) {
+      h += '<div class="korow"><span class="pill gold">Winner ' + money(B.prizes.winner) + '</span>' +
+        '<span class="pill">Runner-up ' + money(B.prizes.runnerUp) + '</span></div>';
+    }
+    h += B.rounds.map(function (r) {
+      var body = r.ties.map(function (t) {
+        if (t.home !== undefined) {
+          return '<div class="tie">' + '<span class="tn">' + t.n + '</span>' +
+            '<div class="ts">' + koSide(t.home) + koSide(t.away) + '</div></div>';
+        }
+        return '<div class="tie pending"><span class="tn">' + t.n + '</span>' +
+          '<div class="ts"><div class="side"><span class="nm">Winner of tie ' + t.fromA + '</span></div>' +
+          '<div class="side"><span class="nm">Winner of tie ' + t.fromB + '</span></div></div></div>';
+      }).join("");
+      return '<div class="section-title"><h2>' + esc(r.name) + '</h2><div class="rule"></div>' +
+        '<span class="chip">GW ' + r.gws.join("\u2013") + (r.legs === 2 ? ' \u00b7 2 legs' : '') + '</span></div>' +
+        '<div class="card"><div class="bd kobody">' + body + '</div></div>';
+    }).join("");
+    return h;
+  }
+  function koSide(s) {
+    if (!s) return '<div class="side"><span class="nm">\u2014</span></div>';
+    // just the group's letter — the full name does not fit beside a team
+    var m = /group\s+([A-Za-z0-9]+)/i.exec(s.group || "");
+    var badge = (m ? m[1].toUpperCase() : "?") + " #" + s.place;
+    return '<div class="side" data-entry="' + s.id + '"><span class="nm">' + esc(s.name) + '</span>' +
+      '<span class="sd">' + esc(badge) + '</span></div>';
   }
 
   function groupPanel(g, cfg) {

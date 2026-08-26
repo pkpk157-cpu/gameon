@@ -1309,5 +1309,77 @@
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
+  // The knockout path for either competition, seeded from the group tables.
+  // Until the group stage is over and a draw is made this is a projection —
+  // callers must say so rather than presenting it as the real draw.
+  C.knockout = function (ds, comp) {
+    if (!ds) return null;
+    comp = comp === "uel" ? "uel" : "ucl";
+    var conf = cfg(), q = conf.h2h.qualify || { uclPerGroup: 2, uelPerGroup: 2 };
+    var h = C.h2h(ds);
+    var groups = h.groups || [];
+    if (!groups.length) return null;
+
+    // who goes where: the top slice to the UCL, the next slice to the UEL
+    var from = comp === "ucl" ? 0 : q.uclPerGroup;
+    var take = comp === "ucl" ? q.uclPerGroup : (q.uelPerGroup || 0);
+    if (!take) return null;
+
+    var seeded = groups.map(function (g) {
+      return {
+        group: g.name,
+        slots: g.table.slice(from, from + take).map(function (t, i) {
+          return { id: t.id, name: t.name, player: t.player, place: from + i + 1, group: g.name };
+        })
+      };
+    });
+
+    // Adjacent groups cross-pair: each group's winner meets the other's
+    // runner-up, which is transparent and repeatable without a real draw.
+    var ties = [], n = 1;
+    for (var i = 0; i < seeded.length; i += 2) {
+      var a = seeded[i], b = seeded[i + 1] || seeded[i];
+      for (var k = 0; k < take; k++) {
+        var home = a.slots[k] || null;
+        var away = b.slots[take - 1 - k] || null;
+        if (a === b && home && away && home.id === away.id) away = null;
+        ties.push({ n: n++, home: home, away: away });
+      }
+    }
+
+    var rounds = (h.schedule || []).map(function (r, ri) {
+      return { key: r.key, name: r.name, gws: r.gws, legs: r.legs, index: ri, ties: [] };
+    });
+    if (!rounds.length) return null;
+    rounds[0].ties = ties;
+    // later rounds are placeholders until the round before them is decided
+    var count = ties.length;
+    for (var r2 = 1; r2 < rounds.length; r2++) {
+      count = Math.ceil(count / 2);
+      var prev = rounds[r2 - 1];
+      for (var t = 0; t < count; t++) {
+        rounds[r2].ties.push({
+          n: t + 1,
+          fromA: prev.ties[t * 2] ? prev.ties[t * 2].n : null,
+          fromB: prev.ties[t * 2 + 1] ? prev.ties[t * 2 + 1].n : null,
+          prevRound: prev.name
+        });
+      }
+    }
+
+    var finished = C.finishedGws(ds);
+    var lastGroupGw = (conf.h2h.groupStageGws || []).slice(-1)[0] || 0;
+    return {
+      comp: comp,
+      label: comp === "ucl" ? "UCL" : "UEL",
+      rounds: rounds,
+      qualified: ties.length * 2,
+      // the draw only means anything once the groups are settled
+      provisional: !(lastGroupGw && finished.indexOf(lastGroupGw) !== -1),
+      startsGw: rounds[0].gws ? rounds[0].gws[0] : null,
+      prizes: (conf.h2h.prizes || {})[comp] || null
+    };
+  };
+
   window.GO_COMPUTE = C;
 })();

@@ -730,3 +730,19 @@ table.t.prizetbl td.pstate .mgr { margin-top:2px; }
 table.t.prizetbl .mgr { font-size:10.5px; }
 /* the deadline matters more than the sync age when the bar is tight */
 @media (max-width:349px) { .barsub .syncago { display:none; } }
+
+/* ---- knockout bracket -------------------------------------------------- */
+.korow { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.kobody { display:flex; flex-direction:column; gap:8px; }
+.tie { display:flex; align-items:stretch; gap:10px; }
+.tie .tn { flex:none; width:22px; display:grid; place-items:center; font-size:10.5px; font-weight:800;
+  color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+.tie .ts { flex:1; min-width:0; border:1px solid var(--line); border-radius:var(--radius-xs); overflow:hidden; }
+.tie .side { display:flex; align-items:baseline; gap:8px; padding:7px 10px; }
+.tie .side + .side { border-top:1px solid var(--line); }
+.tie .side[data-entry] { cursor:pointer; }
+.tie .side[data-entry]:hover .nm { color:var(--accent); }
+.tie .nm { flex:1; min-width:0; font-size:12.5px; font-weight:700;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tie .sd { flex:none; font-size:10px; font-weight:700; color:var(--ink-faint); }
+.tie.pending .nm { color:var(--ink-faint); font-weight:600; font-style:italic; }
