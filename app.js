@@ -152,8 +152,9 @@
     return !!lsGet("go12.admin");
   }
 
-  // The gear opens *you*: who you are first, then your things, then the
-  // league's, then preferences, and only then anything administrative.
+  // The drawer opens *you*: who you are first, then your things, then the
+  // league's, then anything administrative, and the theme last — it is set
+  // once and then wants to be out of the way.
   function openProfile(opts) {
     var ds = S.dataset();
     var admin = isAdmin();
@@ -206,15 +207,7 @@
       menuItem("pfRules", "book", "Game rules") +
       '</div>';
 
-    // 4 — preferences
-    h += '<div class="menu"><div class="lab-sm">Appearance</div>' +
-      '<div class="seg" id="pfTheme">' +
-      segBtn("system", "auto", "System", theme) +
-      segBtn("light", "sun", "Light", theme) +
-      segBtn("dark", "moon", "Dark", theme) +
-      '</div></div>';
-
-    // 5 — admin, for whoever runs the league
+    // 4 — admin, for whoever runs the league
     if (admin) {
       h += '<div class="menu"><div class="lab-sm">Admin</div>' +
         menuItem("pfRefresh", "refresh", "Refresh from FPL") +
@@ -224,6 +217,14 @@
         menuItem("pfImport", "upload", "Import data file") +
         '</div>';
     }
+
+    // 5 — preferences, kept at the bottom: set once, then out of the way
+    h += '<div class="menu"><div class="lab-sm">Appearance</div>' +
+      '<div class="seg" id="pfTheme">' +
+      segBtn("system", "auto", "System", theme) +
+      segBtn("light", "sun", "Light", theme) +
+      segBtn("dark", "moon", "Dark", theme) +
+      '</div></div>';
 
     // 6 — where the numbers came from
     h += '<div class="pffoot">' +
@@ -355,19 +356,35 @@
       return r.moved || r.net;
     });
     var own = K.leagueOwnership(ds);
-    if (!state.priceSort) state.priceSort = "price";
     if (!state.pricePos) state.pricePos = "all";
-    if (!tracked && (state.priceSort === "rising" || state.priceSort === "falling")) state.priceSort = "price";
 
-    var sorts = { price: "Most expensive", cheap: "Cheapest",
-                  owned: "Most owned (FPL)", go: "Most owned (Game On)" };
-    if (tracked) { sorts.rising = "Rising hardest"; sorts.falling = "Falling hardest"; }
+    // Each column knows how to order itself and which way round it should read
+    // the first time you tap it: names run A to Z, numbers put the biggest
+    // first, since that is what anyone opening this table came to see.
+    var COLS = [
+      { k: "name",  t: "Player",  first: 1,
+        cmp: function (a, b) { return String(a.name).localeCompare(String(b.name)); } },
+      { k: "price", t: "Price",   num: 1, first: -1,
+        cmp: function (a, b) { return a.price - b.price; } },
+      { k: "owned", t: "FPL",     num: 1, first: -1,
+        cmp: function (a, b) { return a.owned - b.owned; } },
+      { k: "go",    t: "Game On", num: 1, first: -1,
+        cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
+    ];
+    if (tracked) COLS.push({ k: "move", t: "Moving", num: 1, first: -1,
+      cmp: function (a, b) { return a.pressure - b.pressure; } });
+
+    var colOf = function (k) {
+      for (var i = 0; i < COLS.length; i++) if (COLS[i].k === k) return COLS[i];
+      return null;
+    };
+    // A column that has gone away (Moving, before there is movement) must not
+    // leave the table sorted by something it can no longer show a header for.
+    if (!colOf(state.priceSort)) { state.priceSort = "price"; state.priceDir = 0; }
+    if (!state.priceDir) state.priceDir = colOf(state.priceSort).first;
+
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
-
     var h = '<div class="pickrow">' +
-      '<select class="in narrow" id="prSort">' + Object.keys(sorts).map(function (k) {
-        return '<option value="' + k + '"' + (k === state.priceSort ? ' selected' : '') + '>' + esc(sorts[k]) + '</option>';
-      }).join("") + '</select>' +
       '<select class="in narrow" id="prPos">' + Object.keys(poss).map(function (k) {
         return '<option value="' + k + '"' + (k === state.pricePos ? ' selected' : '') + '>' + esc(poss[k]) + '</option>';
       }).join("") + '</select>' +
@@ -375,32 +392,67 @@
     h += '<div id="prPanel"></div>';
     host.innerHTML = h;
 
+    var CAP = 400;
     var draw = function () {
       var list = rows.slice();
       if (state.pricePos !== "all") list = list.filter(function (r) { return String(r.type) === state.pricePos; });
-      var by = {
-        price: function (a, b) { return b.price - a.price; },
-        cheap: function (a, b) { return a.price - b.price; },
-        owned: function (a, b) { return b.owned - a.owned; },
-        go: function (a, b) { return (b.goOwned || 0) - (a.goOwned || 0); },
-        rising: function (a, b) { return b.pressure - a.pressure; },
-        falling: function (a, b) { return a.pressure - b.pressure; }
-      };
-      list.sort(by[state.priceSort] || by.price);
+      // Search all 600-odd players, not just the ones that made the cut below.
+      // Filtering the rendered rows would have hidden anyone the current sort
+      // pushed past the cap — searching for Salah by name found nothing.
+      var q = String(($("#prSearch", host) || {}).value || "").toLowerCase().trim();
+      if (q) list = list.filter(function (r) {
+        return (r.name + " " + r.pos + " " + r.team).toLowerCase().indexOf(q) !== -1;
+      });
+      var col = colOf(state.priceSort), dir = state.priceDir;
+      // Ties fall back to the name, and then to club and position, so the two
+      // players called Davies always sit in the same order however you arrived
+      // at the table — rather than in whatever order the last sort left them.
+      list.sort(function (a, b) {
+        return (col.cmp(a, b) * dir)
+          || String(a.name).localeCompare(String(b.name))
+          || String(a.team).localeCompare(String(b.team))
+          || String(a.pos).localeCompare(String(b.pos));
+      });
+
+      var head = COLS.map(function (c) {
+        var on = c.k === state.priceSort;
+        var arrow = on ? (dir === 1 ? "\u2191" : "\u2193") : "";
+        return '<th class="sortable' + (c.num ? " num" : "") + (on ? " sorted" : "") +
+          '" data-sort="' + c.k + '" role="button" tabindex="0" aria-sort="' +
+          (on ? (dir === 1 ? "ascending" : "descending") : "none") + '">' +
+          esc(c.t) + '<span class="sarrow">' + arrow + '</span></th>';
+      }).join("");
+
       var panel = $("#prPanel", host);
+      var body = list.length
+        ? priceRows(list.slice(0, CAP), tracked)
+        : '';
       panel.innerHTML = '<div class="card freeze"><table class="t pricetbl"><thead><tr>' +
-        '<th>Player</th><th class="num">Price</th><th class="num">FPL</th>' +
-        '<th class="num">Game On</th>' + (tracked ? '<th class="num">Moving</th>' : '') +
-        '</tr></thead><tbody>' + priceRows(list.slice(0, 400), tracked) + '</tbody></table></div>' +
-        '<div class="koline">' + list.length + ' players \u00b7 owned across FPL and across our ' +
-        (own ? own.managers : 245) + ' managers' +
+        head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+        (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
+        '<div class="koline">' +
+        (list.length > CAP ? "showing " + CAP + " of " + list.length : list.length + " players") +
+        ' \u00b7 owned across FPL and across our ' +
+        (own ? own.managers : 245) + ' managers \u00b7 tap a column to sort' +
         (tracked ? ' \u00b7 moving shows a recorded change, else net transfers since the last one'
                  : ' \u00b7 which way prices are moving appears from the next update') + '</div>';
-      filterRows(panel, $("#prSearch", host).value);
+
+      var hit = function (th) {
+        var k = th.getAttribute("data-sort");
+        // Same column reverses; a new one starts the way that column reads best.
+        if (k === state.priceSort) state.priceDir = -state.priceDir;
+        else { state.priceSort = k; state.priceDir = colOf(k).first; }
+        draw();
+      };
+      $all("th.sortable", panel).forEach(function (th) {
+        th.addEventListener("click", function () { hit(th); });
+        th.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); hit(th); }
+        });
+      });
     };
-    $("#prSort", host).addEventListener("change", function () { state.priceSort = this.value; draw(); });
     $("#prPos", host).addEventListener("change", function () { state.pricePos = this.value; draw(); });
-    $("#prSearch", host).addEventListener("input", function () { filterRows($("#prPanel", host), this.value); });
+    $("#prSearch", host).addEventListener("input", function () { draw(); });
     draw();
   }
 

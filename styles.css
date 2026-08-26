@@ -835,6 +835,19 @@ table.t.pricetbl td.name .mgr { display:block; overflow:hidden; text-overflow:el
 table.t.pricetbl td.name .who { font-size:13.5px; }
 table.t.pricetbl td.name .mgr { font-size:10.5px; }
 
+/* Tap a header to sort by it; tap again to reverse. The arrow only shows on
+   the column actually in use, and it reserves its width either way so the
+   columns do not shift as the sort moves between them. */
+table.t th.sortable { cursor:pointer; user-select:none; -webkit-user-select:none;
+  white-space:nowrap; position:relative; }
+table.t th.sortable:hover, table.t th.sortable:focus-visible { color:var(--accent); outline:none; }
+table.t th.sortable.sorted { color:var(--accent); }
+table.t th.sortable .sarrow { display:inline-block; margin-left:2px;
+  font-size:10px; font-weight:700; }
+/* Reserving the arrow's width on all five headers costs more than a 320px
+   screen has to give, so only the column wearing it pays for it. */
+table.t th.sortable .sarrow:empty { display:none; }
+
 /* The very narrow phones (320px) need a little more give still. */
 @media (max-width:360px) {
   table.t.pricetbl td.name { max-width:74px; }
