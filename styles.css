@@ -303,6 +303,11 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 .prog.down i { background:var(--prog-down); }
 .prog.up b { color:var(--prog-up-ink); }
 .prog.down b { color:var(--prog-down-ink); }
+/* a floor rather than a reading, so the fill is softened */
+.prog.floor i { opacity:.55; }
+/* ordering only, with no number to read: a slimmer bar so it does not look
+   like a measurement that has simply lost its label */
+.prog.bare { height:11px; }
 .prog.full i { background:var(--prog-go); }
 .prog.up.full b, .prog.down.full b { color:var(--prog-go-ink); }
 tr.zone-top td { background:var(--good-wash); }

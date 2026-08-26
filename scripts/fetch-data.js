@@ -233,10 +233,11 @@ async function h2hAll(id) {
   const prevIn = (prev.prices && prev.prices.tIn) || {};
   const prevOut = (prev.prices && prev.prices.tOut) || {};
   const prevNet = (prev.prices && prev.prices.netSince) || {};
+  const prevExact = (prev.prices && prev.prices.exact) || {};
   const priceLog = (prev.priceLog || []).slice();
 
-  const priceNow = {}, tIn = {}, tOut = {}, netSince = {},
-        changeEvent = {}, changeStart = {}, owned = {};
+  const priceNow = {}, tIn = {}, tOut = {}, netSince = {}, exact = {},
+        changeStart = {}, owned = {};
   const stamp = new Date().toISOString();
   // Ownership is published as a percentage; the threshold behaves like a count,
   // so we need to know how many people are playing to turn one into the other.
@@ -246,13 +247,16 @@ async function h2hAll(id) {
     const id = el.id;
     const cost = el.now_cost || 0;
     priceNow[id] = cost;
-    changeEvent[id] = el.cost_change_event || 0;
     changeStart[id] = el.cost_change_start || 0;
     owned[id] = parseFloat(el.selected_by_percent) || 0;
     tIn[id] = el.transfers_in || 0;
     tOut[id] = el.transfers_out || 0;
 
     const was = prevPrices[id];
+    const dIn = (tIn[id] - (prevIn[id] != null ? prevIn[id] : tIn[id]));
+    const dOut = (tOut[id] - (prevOut[id] != null ? prevOut[id] : tOut[id]));
+    const roll = (prevNet[id] || 0) + (dIn - dOut);
+
     if (was != null && was !== cost) {
       // A real change, dated by us because FPL does not date them. Record the
       // pressure that was on him as it happened: the counter resets on the next
@@ -262,19 +266,38 @@ async function h2hAll(id) {
       const ownerCount = total ? Math.round((owned[id] / 100) * total) : 0;
       priceLog.push([id, was, cost, stamp, (prevNet[id] || 0), ownerCount]);
       netSince[id] = 0;                       // the counter starts again
+      exact[id] = 1;                          // and we watched it happen
       moved++;
+    } else if (prevExact[id]) {
+      // We have seen this player's last change ourselves, so counting on from
+      // it is exact and must not be replaced by the season figure below — a
+      // player who rose and then fell back reads as unmoved all season.
+      netSince[id] = roll;
+      exact[id] = 1;
+    } else if (!changeStart[id]) {
+      // His price has never moved this season, so everything the season has
+      // done to him still counts towards his first move. Diffing our own runs
+      // would only hold the flow since we started watching, which on a player
+      // like this is a couple of thousand against a couple of hundred thousand.
+      netSince[id] = (tIn[id] - tOut[id]);
+      exact[id] = 1;
     } else {
-      const dIn = (tIn[id] - (prevIn[id] != null ? prevIn[id] : tIn[id]));
-      const dOut = (tOut[id] - (prevOut[id] != null ? prevOut[id] : tOut[id]));
-      netSince[id] = (prevNet[id] || 0) + (dIn - dOut);
+      // He moved before we started watching and FPL does not say when, so the
+      // flow before our first run is unknowable. This counts from first sight
+      // and is therefore a lower bound, which the table says out loud. It
+      // becomes exact the moment we see him change.
+      netSince[id] = roll;
+      exact[id] = 0;
     }
   });
   // a season's changes are small, but do not let the log grow without limit
   while (priceLog.length > 6000) priceLog.shift();
   if (moved) console.log(moved + " price change(s) recorded");
-  const prices = { at: stamp, now: priceNow, changeEvent, changeStart,
-                   owned, tIn, tOut, netSince, total,
-                   was: (prev.prices && prev.prices.at) || null };
+  // Published: what the app reads, plus what the next run needs to diff against.
+  // cost_change_event and cost_change_start are used within this run only —
+  // publishing them cost about 9KB a fetch and nothing ever read them back.
+  const prices = { at: stamp, now: priceNow, owned,
+                   tIn, tOut, netSince, exact, total };
 
   // A finished gameweek's deadline is history. FPL does move deadlines when
   // fixtures are rescheduled around European and cup weeks, and the app reads

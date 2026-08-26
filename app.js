@@ -336,18 +336,42 @@
   // the level where changes have actually been seen to happen; over full means
   // he is past it and should go tonight. Negative is the same journey the other
   // way — being sold rather than bought.
-  function progressCell(pct) {
-    if (pct == null) return '<span class="move flat">\u2013</span>';
-    var up = pct >= 0, mag = Math.abs(pct);
-    var cls = "prog " + (up ? "up" : "down") + (mag >= 100 ? " full" : "");
-    var fill = Math.max(2, Math.min(100, mag));
-    return '<span class="' + cls + '"><i style="width:' + fill.toFixed(0) + '%"></i>' +
-      '<b>' + (up ? "" : "\u2212") + mag.toFixed(0) + '%</b></span>';
+  // Two things this column can honestly say, depending on whether the level at
+  // which prices actually move has been measured yet.
+  //
+  //   measured   — how far along he is towards moving, as a percentage of it
+  //   not yet    — how hard he is being bought or sold next to everyone else
+  //
+  // The header names whichever it is, so one bar never means two things at
+  // once. A player who moved before we started watching carries only the flow
+  // since then, so his figure is a floor and is marked with a >= sign.
+  function progressCell(r, scale) {
+    var val = scale ? r.pressure : r.progress;
+    if (val == null) return '<span class="move flat">\u2013</span>';
+    var up = val >= 0, mag = Math.abs(val);
+    var fill, label;
+    if (scale) {
+      // relative to the busiest player in the table, so the bar is an ordering
+      // and carries no number it cannot stand behind
+      fill = scale ? Math.min(100, (mag / scale) * 100) : 0;
+      label = "";
+    } else {
+      fill = Math.min(100, mag);
+      // Past a point the exact multiple stops meaning anything and only costs
+      // column width — a player at ten times the level is going either way.
+      label = (r.atLeast ? "\u2265" : "") + (up ? "" : "\u2212") +
+        (mag > 999 ? "999+" : mag.toFixed(0) + "%");
+    }
+    var cls = "prog " + (up ? "up" : "down") +
+      (!scale && mag >= 100 ? " full" : "") + (r.atLeast ? " floor" : "") +
+      (scale ? " bare" : "");
+    return '<span class="' + cls + '"><i style="width:' + Math.max(2, fill).toFixed(0) + '%"></i>' +
+      (label ? '<b>' + label + '</b>' : '') + '</span>';
   }
 
-  function priceRows(rows, tracked) {
+  function priceRows(rows, tracked, scale) {
     return rows.map(function (r) {
-      var dir = progressCell(r.progress);
+      var dir = progressCell(r, scale);
       return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
         '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
         '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
@@ -369,8 +393,17 @@
     // capture has the record but nothing to compare it against — every row would
     // read as a dash, which looks broken rather than early, so hold the column
     // back until there is genuinely something to put in it.
-    var tracked = rows.some(function (r) { return r.progress != null; });
     var thr = K.priceThreshold(ds);
+    // Before the threshold is known the bar is scaled to the strongest pressure
+    // in the whole list, not the filtered view, so filtering or searching never
+    // changes how far along anyone looks.
+    var scale = thr.measured ? 0 : rows.reduce(function (m, r) {
+      return Math.max(m, Math.abs(r.pressure || 0));
+    }, 0);
+    // Nothing to say yet: on the very first capture there is no threshold and
+    // no flow either, and a column of dashes reads as broken rather than early.
+    var tracked = rows.some(function (r) { return r.pressure != null; }) &&
+      (thr.measured || scale > 0);
     if (!state.pricePos) state.pricePos = "all";
 
     // Each column knows how to order itself and which way round it should read
@@ -386,8 +419,8 @@
       { k: "go",    t: "Game On", num: 1, first: -1,
         cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
     ];
-    if (tracked) COLS.push({ k: "move", t: "Progress", num: 1, first: -1,
-      cmp: function (a, b) { return (a.progress || 0) - (b.progress || 0); } });
+    if (tracked) COLS.push({ k: "move", t: thr.measured ? "Progress" : "Pressure", num: 1, first: -1,
+      cmp: function (a, b) { return (a.pressure || 0) - (b.pressure || 0); } });
 
     var colOf = function (k) {
       for (var i = 0; i < COLS.length; i++) if (COLS[i].k === k) return COLS[i];
@@ -445,11 +478,12 @@
       // and wins on order, which left the rows unreachable by any gesture even
       // though scrollTop still moved them from script.
       panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
-        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked) + '</tbody></table></div>' +
+        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale) + '</tbody></table></div>' +
         (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
         (tracked && !thr.measured
-          ? '<div class="koline">Progress is a first estimate until we have seen a night ' +
-            'of real price changes to measure against.</div>'
+          ? '<div class="koline">Pressure orders who is being bought and sold hardest. ' +
+            'It becomes a distance to a price change once we have seen a night of real ' +
+            'changes to measure the level against \u2014 FPL does not publish it.</div>'
           : '');
 
       if (list.length > FIRST) {
@@ -460,7 +494,7 @@
           // table; appending the rest of a list nobody is looking at any more
           // would mix two sorts together.
           if (mine !== gen || !body.parentNode) return;
-          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked));
+          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked, scale));
         });
       }
 

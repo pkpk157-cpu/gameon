@@ -1540,23 +1540,21 @@
       var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
       var net = (pr.netSince && pr.netSince[id]) || 0;
       var fplOwners = playing ? Math.round((owned / 100) * playing) : 0;
+      // Whether the flow behind this player covers the whole run-up to his next
+      // change, or only the part since we started watching him.
+      var sure = !pr.exact || pr.exact[id] !== 0;
       return {
         id: +id, name: meta[0], full: meta[5] || "",
         type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
         price: ((has && pr.now[id] != null) ? pr.now[id] : (meta[3] || 0)) / 10,
-        gw: (pr.changeEvent && pr.changeEvent[id] || 0) / 10,
-        season: (pr.changeStart && pr.changeStart[id] || 0) / 10,
-        tracked: has,
         owned: owned,
         goOwned: own ? (own.pct[id] || 0) : null,
-        moved: last[id] ? { up: last[id][2] > last[id][1], at: last[id][3] } : null,
-        owners: own ? (own.count[id] || 0) : null,
         net: net,
-        // Pressure relative to how many people own him, which is what orders
-        // the table. Progress turns the same thing into a share of the level
-        // where changes have actually been seen to happen — see priceThreshold.
-        pressure: owned > 0 ? net / owned : 0,
-        fplOwners: fplOwners,
+        atLeast: !sure,
+        // The flow against how many people hold him. This orders the table
+        // whether or not the threshold is known, and is what progress is a
+        // share of once it is.
+        pressure: (has && fplOwners) ? (net / fplOwners) : null,
         // null, not zero, when there is nothing to work it out from: an empty
         // bar would claim he is going nowhere, which we would not know.
         progress: (function () {
@@ -1579,10 +1577,14 @@
   // and it is an answer measured from this season's real changes rather than a
   // constant someone once quoted.
   //
-  // Until enough changes have been seen, PROVISIONAL stands in. It is a
-  // starting guess and nothing more — the table says so while it is in use, and
-  // measurement replaces it after the first night of real changes.
-  var PROVISIONAL = 0.06, ENOUGH = 6;
+  // Until enough changes have been seen there is no threshold, and so no
+  // percentage — a distance to a line whose position we are guessing is not a
+  // distance. A guess was tried and thrown out: against the live table a 6%
+  // threshold put a fifth of the league past the line, which would have said a
+  // hundred players were changing that night when none of them were. Until it
+  // is measured the table orders players by pressure and says that is what it
+  // is doing.
+  var ENOUGH = 6;
 
   function median(a) {
     if (!a.length) return null;
@@ -1606,47 +1608,20 @@
     var res = {
       rise: median(up), fall: median(down),
       risen: up.length, fell: down.length,
-      measured: (up.length + down.length) >= ENOUGH,
-      provisional: PROVISIONAL
+      // Both directions must be measured before a percentage means anything in
+      // both: one side alone would leave half the table drawn against nothing
+      // while the table claimed to know.
+      measured: (up.length + down.length) >= ENOUGH && up.length > 0 && down.length > 0
     };
-    // one side can be measured while the other is not; fall back per direction
-    res.riseAt = (res.measured && res.rise) ? res.rise : PROVISIONAL;
-    res.fallAt = (res.measured && res.fall) ? res.fall : PROVISIONAL;
+    res.riseAt = res.measured ? res.rise : null;
+    res.fallAt = res.measured ? res.fall : null;
     if (ds) { try { Object.defineProperty(ds, "_thr", { value: res, enumerable: false }); } catch (e) {} }
     return res;
   };
 
     // Changes we have actually recorded, newest first. FPL publishes no history,
-  // so this only reaches back to the day the tracker started keeping one.
-  C.priceChanges = function (ds, limit) {
-    var log = (ds && ds.priceLog) || [];
-    var els = (ds && ds.elements) || {};
-    var out = log.slice().reverse().map(function (r) {
-      var meta = els[r[0]] || ["?", 0, "", 0, 0];
-      return { id: r[0], name: meta[0], pos: PPOS[meta[1]] || "", team: meta[2],
-               from: r[1] / 10, to: r[2] / 10, up: r[2] > r[1], at: r[3] };
-    });
-    return limit ? out.slice(0, limit) : out;
-  };
 
-  // When our record began, so the view can say how far back it goes.
-  C.priceLogFrom = function (ds) {
-    var log = (ds && ds.priceLog) || [];
-    return log.length ? log[0][3] : null;
-  };
 
-  // Who is under the most pressure each way. Ordered, not timed: the ordering
-  // holds without knowing the game's threshold, the night it lands does not.
-  C.priceWatch = function (ds, n) {
-    var rows = C.priceTable(ds);
-    if (!rows) return null;
-    var live = rows.filter(function (r) { return r.owned > 0 && r.net !== 0; });
-    var rising = live.filter(function (r) { return r.net > 0; })
-                     .sort(function (a, b) { return b.pressure - a.pressure; }).slice(0, n || 10);
-    var falling = live.filter(function (r) { return r.net < 0; })
-                      .sort(function (a, b) { return a.pressure - b.pressure; }).slice(0, n || 10);
-    return { rising: rising, falling: falling, tracked: live.length, at: ds.prices && ds.prices.at };
-  };
 
   window.GO_COMPUTE = C;
 })();
