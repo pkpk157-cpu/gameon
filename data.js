@@ -154,6 +154,20 @@
       .catch(function () { _dataset = stored; return _dataset; });
   };
 
+  // An explicit pull of whatever the updater last published, ignoring the
+  // stored copy. Used by the refresh button.
+  STORE.reload = function () {
+    return fetch("./data.json", { cache: "no-cache" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (bundle) {
+        if (!bundle) throw new Error("empty");
+        if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
+        if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
+        _dataset = bundle.dataset || bundle;
+        return _dataset;
+      });
+  };
+
   /* ---- Export / import a single shareable bundle ------------------------ */
   STORE.exportBundle = function () {
     return {

@@ -25,7 +25,8 @@
     gear: '<circle cx="12" cy="12" r="3"/><path d="M20 12a8 8 0 0 0-.12-1.36l1.9-1.48-2-3.46-2.24.9a7.9 7.9 0 0 0-2.36-1.36L14.7 3h-4L10.3 5.3a7.9 7.9 0 0 0-2.36 1.36l-2.24-.9-2 3.46 1.9 1.48A8 8 0 0 0 5.48 12a8 8 0 0 0 .12 1.36l-1.9 1.48 2 3.46 2.24-.9a7.9 7.9 0 0 0 2.36 1.36l.4 2.34h4l.4-2.34a7.9 7.9 0 0 0 2.36-1.36l2.24.9 2-3.46-1.9-1.48A8 8 0 0 0 20 12Z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5M12 7.8h.01"/>',
     back: '<path d="M15 5l-7 7 7 7"/>',
-    person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>'
+    person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
+    sync: '<path d="M20 11a8 8 0 0 0-14.3-4.4M4 13a8 8 0 0 0 14.3 4.4"/><path d="M5 3v4h4M19 21v-4h-4"/>'
   };
   function svg(name, size) {
     return '<svg viewBox="0 0 24 24" width="' + (size || 24) + '" height="' + (size || 24) +
@@ -303,6 +304,20 @@
     $("#btnProfile").innerHTML = svg("gear", 20);
     $("#btnProfile").setAttribute("title", "Settings");
     $("#btnProfile").addEventListener("click", openProfile);
+    $("#btnSync").innerHTML = svg("sync", 19);
+    $("#btnSync").addEventListener("click", function () {
+      var btn = this;
+      if (btn.classList.contains("spin")) return;
+      btn.classList.add("spin");
+      var before = (S.dataset() || {}).updatedAt;
+      S.reload()
+        .then(function (ds) {
+          render();
+          toast(ds && ds.updatedAt !== before ? "Updated" : "Already up to date");
+        })
+        .catch(function () { toast("Could not reach the league data"); })
+        .then(function () { btn.classList.remove("spin"); });
+    });
     $("#barBack").addEventListener("click", function () {
       if (state.view === "rules" && state.rulesBack) { location.hash = state.rulesBack; return; }
       goBack();
@@ -383,18 +398,24 @@
     if (state.view === "profile" && state.profileId) {
       var ds = S.dataset();
       var who = ds && K.managerMap(ds)[+state.profileId];
-      if (who) { title = who.entryName; sub = who.playerName; }
+      // a manager's own name — escaped, it is not ours to trust as markup
+      if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
-    // Competition tabs have no subtitle of their own, so the next deadline
-    // lives there — always visible, costing no extra space.
+    // Competition tabs have no subtitle of their own, so the next deadline and
+    // how old the numbers are live there, costing no extra space. On a very
+    // narrow screen the sync half drops rather than truncating the deadline.
     if (!sub && TABS.some(function (t) { return t.id === state.view; })) {
       var ds2 = S.dataset();
       var dl = ds2 ? K.nextDeadline(ds2) : null;
-      if (dl) sub = "GW" + dl.gw + " deadline " + untilText(dl.msLeft);
+      if (dl) sub += '<span>GW' + dl.gw + ' ' + esc(untilText(dl.msLeft)) + '</span>';
+      if (ds2 && ds2.updatedAt) {
+        sub += '<span class="syncago">' + (dl ? ' \u00b7 ' : '') + 'synced ' +
+          esc(agoText(Date.now() - Date.parse(ds2.updatedAt))) + '</span>';
+      }
     }
     $("#barTitle").textContent = title;
     var subEl = $("#barSub");
-    subEl.textContent = sub;
+    subEl.innerHTML = sub;
     subEl.style.display = sub ? "" : "none";
 
     var back = $("#barBack");
@@ -1121,23 +1142,36 @@
     // repeated here. One compact card per competition.
     var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : '';
 
-    h += '<div class="section-title"><h2>This season</h2><div class="rule"></div></div>';
+    // One prize-led section: every competition, and how near the money.
+    var W = K.winnings(ds, id);
+    var PS = K.prizeStatus(ds, id);
+    h += '<div class="section-title"><h2>Prize money</h2><div class="rule"></div></div>';
     h += '<div class="pcards">';
-    h += pcard("Classic", P.classic ? ("#" + P.classic.computedRank) : "—",
-      P.classic ? (num(P.classic.total) + " pts" + (P.classic.prize ? " · " + money(P.classic.prize) : "")) : "");
-    var lastM = P.monthly.length ? P.monthly[P.monthly.length - 1] : null;
-    h += pcard("Monthly", lastM ? ("#" + lastM.pos) : "—",
-      lastM ? ((lastM.label || lastM.name) + " · " + num(lastM.score) + " pts" +
-        (lastM.prize ? " · " + money(lastM.prize) : "")) : "no month scored yet");
-    var lmsTxt = P.lms.state === "in" ? "In" : (P.lms.state === "out" ? "Out" : "—");
-    h += pcard("Last Manager", lmsTxt,
-      P.lms.state === "in" ? "still surviving" : (P.lms.state === "out" ? ("eliminated GW" + P.lms.gw) : ""));
-    var pyl = P.pyramid.length ? P.pyramid[P.pyramid.length - 1] : null;
-    h += pcard("Pyramid", pyl ? ("#" + pyl.pos) : "—",
-      pyl ? (pyl.division + " · " + pyl.season + " · " + num(pyl.score) + " pts") : "");
-    h += pcard("UCL", P.h2h ? ("#" + P.h2h.pos) : "—",
-      P.h2h ? (P.h2h.group + " · " + P.h2h.w + "W " + P.h2h.d + "D " + P.h2h.l + "L · " + P.h2h.pts + " pts") : "");
+    h += pcard("Won", money(W.settled), W.settled ? "banked" : "nothing settled yet");
+    h += pcard("On track for", money(W.onTrack), W.onTrack ? "if it ended today" : "no prize position");
     h += '</div>';
+
+    if (PS.length) {
+      h += '<div class="card"><div class="tablewrap"><table class="t prizetbl"><tbody>';
+      h += PS.map(function (e) {
+        var pill = e.state === "in" ? '<span class="pill up">in the money</span>'
+                 : e.state === "alive" ? '<span class="pill">still in</span>'
+                 : '<span class="pill out">out</span>';
+        var dist = "";
+        if (e.gap !== null && e.gap !== undefined) {
+          // "off 3rd" already says behind; a minus sign on top reads as a negative score
+          dist = (e.state === "in" ? "+" : "") + num(Math.abs(e.gap)) + " " + esc(e.gapLabel);
+        }
+        return '<tr><td class="pcomp"><b>' + esc(e.comp) + '</b>' +
+            '<div class="mgr">' + esc(e.where) + '</div></td>' +
+          '<td class="num ppos">' + (e.pos ? "#" + e.pos : "\u2014") + '</td>' +
+          '<td class="pstate">' + pill + (dist ? '<div class="mgr">' + dist + '</div>' : '') + '</td>' +
+          '<td class="num">' + (e.prize ? '<span class="prize">' + money(e.prize) + '</span>' : '') + '</td></tr>';
+      }).join("");
+      h += '</tbody></table></div>';
+      h += '<div class="note" style="padding:10px 14px">Only a finished competition is settled — ' +
+        'everything else moves until its last gameweek is played.</div></div>';
+    }
 
     // All four chips, with the gameweek each was played.
     var chips = K.managerChips(ds, id);
@@ -1154,37 +1188,6 @@
     if (fm.length) {
       h += '<div class="section-title"><h2>Form</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="bd">' + sparkline(fm) + '</div></div>';
-    }
-
-    // Winnings, keeping what is settled apart from what is merely on course.
-    var W = K.winnings(ds, id);
-    var gap = K.prizeGap(ds, id);
-    if (W && (W.items.length || gap)) {
-      h += '<div class="section-title"><h2>Prize money</h2><div class="rule"></div></div>';
-      h += '<div class="pcards">';
-      h += pcard("Won", money(W.settled), W.settled ? "banked" : "nothing settled yet");
-      h += pcard("On track for", money(W.onTrack), W.onTrack ? "if it finished today" : "no prize position");
-      if (gap) {
-        h += gap.inMoney
-          ? pcard("Cut line", gap.cushion === null ? "—" : ("+" + num(gap.cushion)),
-              "pts clear of " + ordinal(gap.lastPaid))
-          : pcard("Off the money", num(gap.behind), "pts from " + ordinal(gap.lastPaid));
-      }
-      h += '</div>';
-      if (W.items.length) {
-        h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr>' +
-          '<th>Competition</th><th>Placing</th><th class="num">Amount</th></tr></thead><tbody>';
-        h += W.items.map(function (it) {
-          return '<tr><td>' + esc(it.comp) + '</td>' +
-            '<td>' + esc(it.label) + ' ' + (it.settled
-              ? '<span class="pill up">settled</span>'
-              : '<span class="pill">on track</span>') + '</td>' +
-            '<td class="num"><span class="prize">' + money(it.amount) + '</span></td></tr>';
-        }).join("");
-        h += '</tbody></table></div>';
-        h += '<div class="note" style="padding:10px 14px">Only finished competitions are settled. ' +
-          'Everything else moves until its last gameweek is played.</div></div>';
-      }
     }
 
     // Squad on a football pitch, steppable through every gameweek played.
@@ -1995,6 +1998,16 @@
   }
 
   function isMe(id) { return state.me && +id === +state.me; }
+
+  // "just now" / "8m ago" / "3h ago"
+  function agoText(ms) {
+    if (ms < 0) return "just now";
+    var m = Math.round(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    if (m < 1) return "just now";
+    if (h < 1) return m + "m ago";
+    if (d < 1) return h + "h ago";
+    return d + "d ago";
+  }
 
   // "in 2d 4h" / "in 40m" / "closed"
   function untilText(ms) {

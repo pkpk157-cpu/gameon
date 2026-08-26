@@ -1214,5 +1214,100 @@
     return count ? out.slice(-count) : out;
   };
 
+  // Where a manager stands against the money in every competition at once —
+  // in it and by how much, or out of it and by how far.
+  C.prizeStatus = function (ds, id) {
+    if (!ds || !id) return [];
+    id = +id;
+    var conf = cfg(), out = [];
+
+    function entry(comp, where, pos, prize, settled, state, gap, gapLabel) {
+      out.push({ comp: comp, where: where, pos: pos, prize: prize || 0, settled: !!settled,
+                 state: state, gap: gap, gapLabel: gapLabel });
+    }
+    // distance to a paid place inside an ordered table
+    function against(rows, myPos, paidTo, valueOf) {
+      var cut = rows[paidTo - 1];
+      if (!cut) return null;
+      var mine = rows[myPos - 1];
+      return (myPos <= paidTo) ? (valueOf(mine) - valueOf(cut)) : (valueOf(cut) - valueOf(mine));
+    }
+
+    /* Classic — paid down to the last funded rank */
+    var cl = C.classic(ds);
+    var mine = cl.filter(function (r) { return +r.id === id; })[0];
+    if (mine) {
+      var lastPaid = 0;
+      for (var r = cl.length; r >= 1; r--) { if (C.classicPrize(r)) { lastPaid = r; break; } }
+      var inMoney = mine.computedRank <= lastPaid;
+      var d = lastPaid ? against(cl, mine.computedRank, lastPaid, function (x) { return x.total; }) : null;
+      entry("Classic", "overall", mine.computedRank, mine.prize, false,
+        inMoney ? "in" : "out", d,
+        inMoney ? "pts clear of " + ordinalOf(lastPaid) : "pts off " + ordinalOf(lastPaid));
+    }
+
+    /* Monthly — the month currently being played */
+    var months = C.monthly(ds).filter(function (m) { return m.played > 0; });
+    var M = months[months.length - 1];
+    if (M) {
+      var row = M.rows.filter(function (x) { return +x.id === id; })[0];
+      if (row) {
+        var paid = Object.keys(M.prizes).length;
+        var inM = row.pos <= paid;
+        entry("Monthly", M.label || M.name, row.pos, row.prize, M.complete,
+          inM ? "in" : "out",
+          against(M.rows, row.pos, paid, function (x) { return x.score; }),
+          inM ? "pts clear of " + ordinalOf(paid) : "pts off " + ordinalOf(paid));
+      }
+    }
+
+    /* Last Manager Standing — being alive is the whole contest */
+    var lms = C.lms(ds);
+    var elimGw = lms.eliminatedAt[id];
+    if (elimGw) {
+      entry("Last Manager", "eliminated GW" + elimGw, null, 0, true, "out", null, "");
+    } else if (lms.survivors.some(function (s) { return +s.id === id; })) {
+      var champ = lms.champion && +lms.champion.id === id;
+      entry("Last Manager", lms.survivorsCount + " still standing", null,
+        champ ? (conf.lms.prizes || {}).champion : 0, !!champ,
+        champ ? "in" : "alive", null, "");
+    }
+
+    /* Pyramid — the mini-season being played, inside their division */
+    var pyr = C.pyramid(ds).seasons.filter(function (se) { return se.played > 0; });
+    var S2 = pyr[pyr.length - 1];
+    if (S2) {
+      S2.divisions.forEach(function (dv) {
+        var prow = dv.rows.filter(function (x) { return +x.id === id; })[0];
+        if (!prow) return;
+        var paidP = Object.keys(dv.prizes).length;
+        var inP = prow.pos <= paidP;
+        entry("Pyramid", dv.name + " · " + S2.name, prow.pos, prow.prize, S2.complete,
+          inP ? "in" : "out",
+          against(dv.rows, prow.pos, paidP, function (x) { return x.score; }),
+          inP ? "pts clear of " + ordinalOf(paidP) : "pts off " + ordinalOf(paidP));
+      });
+    }
+
+    /* UCL — group stage decides which knockout you land in */
+    var q = conf.h2h.qualify || { uclPerGroup: 2, uelPerGroup: 2 };
+    var ucl = q.uclPerGroup, uel = ucl + (q.uelPerGroup || 0);
+    C.h2h(ds).groups.forEach(function (g) {
+      var t = g.table.filter(function (x) { return +x.id === id; })[0];
+      if (!t) return;
+      var state = t.pos <= ucl ? "in" : (t.pos <= uel ? "alive" : "out");
+      var target = t.pos <= ucl ? ucl : uel;
+      entry("UCL", g.name + (t.dest ? " · " + t.dest : ""), t.pos, 0, false, state,
+        against(g.table, t.pos, target, function (x) { return x.pts; }),
+        (t.pos <= target ? "pts clear of " : "pts off ") + ordinalOf(target));
+    });
+
+    return out;
+  };
+  function ordinalOf(n) {
+    var s = ["th", "st", "nd", "rd"], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
   window.GO_COMPUTE = C;
 })();
