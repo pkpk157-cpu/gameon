@@ -301,7 +301,7 @@
   /* ====================================================================== */
   /* Player prices                                                          */
   /* ====================================================================== */
-  function priceRows(rows) {
+  function priceRows(rows, tracked) {
     return rows.map(function (r) {
       var mv = r.season > 0 ? '<span class="move up">\u25b2' + r.season.toFixed(1) + '</span>'
              : r.season < 0 ? '<span class="move down">\u25bc' + Math.abs(r.season).toFixed(1) + '</span>'
@@ -310,21 +310,27 @@
         '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
         '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
         '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
-        '<td class="num">' + mv + '</td></tr>';
+        (tracked ? '<td class="num">' + mv + '</td>' : '') + '</tr>';
     }).join("");
   }
 
   function renderPrices(host, ds) {
     var rows = ds ? K.priceTable(ds) : null;
     if (!rows || !rows.length) {
-      host.innerHTML = '<div class="callout">Player prices arrive with the next data update.</div>';
+      host.innerHTML = '<div class="callout">No player list in this data yet.</div>';
       return;
     }
+    // Prices are published already; how they have moved only exists once the
+    // updater has been recording, so those columns and sorts appear with it.
+    var tracked = rows.length > 0 && rows[0].tracked;
     if (!state.priceSort) state.priceSort = "price";
     if (!state.pricePos) state.pricePos = "all";
+    if (!tracked && (state.priceSort === "risen" || state.priceSort === "fallen")) state.priceSort = "price";
 
-    var sorts = { price: "Most expensive", cheap: "Cheapest", owned: "Most owned",
-                  risen: "Risen most", fallen: "Fallen most" };
+    var sorts = tracked
+      ? { price: "Most expensive", cheap: "Cheapest", owned: "Most owned",
+          risen: "Risen most", fallen: "Fallen most" }
+      : { price: "Most expensive", cheap: "Cheapest", owned: "Most owned" };
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
     var h = '<div class="pickrow">' +
@@ -351,9 +357,11 @@
       list.sort(by[state.priceSort] || by.price);
       var panel = $("#prPanel", host);
       panel.innerHTML = '<div class="card freeze"><table class="t"><thead><tr>' +
-        '<th>Player</th><th class="num">Price</th><th class="num">Owned</th><th class="num">Season</th>' +
-        '</tr></thead><tbody>' + priceRows(list.slice(0, 400)) + '</tbody></table></div>' +
-        '<div class="koline">' + list.length + ' players \u00b7 prices as FPL publishes them</div>';
+        '<th>Player</th><th class="num">Price</th><th class="num">Owned</th>' +
+        (tracked ? '<th class="num">Season</th>' : '') +
+        '</tr></thead><tbody>' + priceRows(list.slice(0, 400), tracked) + '</tbody></table></div>' +
+        '<div class="koline">' + list.length + ' players \u00b7 prices as FPL publishes them' +
+        (tracked ? '' : ' \u00b7 how they have moved starts recording with the next update') + '</div>';
       filterRows(panel, $("#prSearch", host).value);
     };
     $("#prSort", host).addEventListener("change", function () { state.priceSort = this.value; draw(); });
@@ -379,8 +387,11 @@
 
   function renderPriceChange(host, ds) {
     var watch = ds ? K.priceWatch(ds, 12) : null;
-    if (!watch) {
-      host.innerHTML = '<div class="callout">Price tracking starts with the next data update.</div>';
+    if (!watch || (!watch.tracked && !(ds.priceLog || []).length)) {
+      host.innerHTML = '<div class="callout">Prices themselves are on the ' +
+        '<a href="#prices">Player prices</a> page. What is missing here is how they have ' +
+        '<b>moved</b> — FPL publishes no history of price changes and no dates for them, so ' +
+        'the tracker keeps its own from the next update onward.</div>';
       return;
     }
     var changes = K.priceChanges(ds, 60);

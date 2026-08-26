@@ -1490,19 +1490,25 @@
 
   // Every player, with what the game says about his price and what our own
   // record says about the flow behind it.
+  // Price and ownership have been in every publish since the squad views
+  // needed them, so this reads the player table and treats the price record as
+  // an enrichment — the list works from the first load, and gains its change
+  // and flow columns once the updater has been keeping them.
   C.priceTable = function (ds) {
-    var pr = ds && ds.prices;
-    if (!pr || !pr.now) return null;
-    var els = ds.elements || {};
-    return Object.keys(pr.now).map(function (id) {
+    var els = (ds && ds.elements) || null;
+    if (!els) return null;
+    var pr = (ds && ds.prices) || {};
+    var has = !!pr.now;
+    return Object.keys(els).map(function (id) {
       var meta = els[id] || ["?", 0, "", 0, 0];
       var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
       var net = (pr.netSince && pr.netSince[id]) || 0;
       return {
         id: +id, name: meta[0], type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
-        price: (pr.now[id] || 0) / 10,
+        price: ((has && pr.now[id] != null) ? pr.now[id] : (meta[3] || 0)) / 10,
         gw: (pr.changeEvent && pr.changeEvent[id] || 0) / 10,
         season: (pr.changeStart && pr.changeStart[id] || 0) / 10,
+        tracked: has,
         owned: owned,
         net: net,
         // Pressure relative to how many people own him. The threshold the game
