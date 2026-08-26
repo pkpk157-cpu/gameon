@@ -13,12 +13,49 @@
   function cfg() { return window.GO_STORE.config(); }
   function ov() { return window.GO_STORE.overrides(); }
 
-  // Net GW score for a manager (includes hits). Missing => null (not played).
+  // The score every competition is settled on. Missing => null (not played).
+  // FPL reports a gameweek's points and its transfer cost in separate fields,
+  // and one gameweek on its own cannot tell you whether points already has the
+  // hit taken off it. The cumulative total settles it: whichever reading adds
+  // up to total_points is the one FPL means. Until somebody actually takes a
+  // hit the two readings are identical, so this is right from the first
+  // gameweek that has one — and the league's rules say hits count.
+  var _hitCache = null;
+  function hitsAlreadyOff(ds) {
+    if (_hitCache && _hitCache.ds === ds) return _hitCache.v;
+    var settled = {};
+    C.finishedGws(ds).forEach(function (g) { settled[g] = true; });
+    var already = 0, still = 0;
+    var ids = Object.keys(ds.history || {});
+    for (var i = 0; i < ids.length && already + still < 50; i++) {
+      var h = ds.history[ids[i]] || {};
+      var gws = Object.keys(h).map(Number).filter(function (g) { return settled[g]; })
+                  .sort(function (a, b) { return a - b; });
+      if (!gws.length) continue;
+      var last = h[gws[gws.length - 1]];
+      if (!last || typeof last.t !== "number") continue;
+      var sp = 0, sh = 0;
+      for (var j = 0; j < gws.length; j++) { sp += h[gws[j]].p || 0; sh += h[gws[j]].h || 0; }
+      if (!sh) continue;                       // no hit taken: tells us nothing
+      if (Math.abs(last.t - sp) <= 0.5) already++;
+      else if (Math.abs(last.t - (sp - sh)) <= 0.5) still++;
+    }
+    // No evidence either way means nobody has taken a hit, where both agree.
+    var v = already > still;
+    _hitCache = { ds: ds, v: v };
+    return v;
+  }
+  C._hitsAlreadyOff = hitsAlreadyOff;   // so the check can be asserted in tests
+
+  // The score a competition is settled on: net of hits, however FPL reports it.
   function gwScore(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return null;
-    return h[gw].p;
+    var row = h[gw];
+    if (typeof row.p !== "number") return null;
+    return hitsAlreadyOff(ds) ? row.p : row.p - (row.h || 0);
   }
+  C.gwScore = gwScore;
   function gwBench(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return 0;
@@ -78,15 +115,63 @@
   };
 
   /* ---- 1. Classic league ------------------------------------------------ */
+  // How many completed months each manager has won, which is the league's first
+  // tie-break for the classic table. Managers level at the top of a month are
+  // all credited with winning it: the monthly table pays only its first row,
+  // but that order can come down to bench points, and it would be wrong to let
+  // that decide the classic standings as well.
+  C.monthlyWins = function (ds) {
+    var wins = {};
+    C.monthly(ds).forEach(function (m) {
+      if (!m.complete || !m.rows.length) return;
+      var top = m.rows[0].score;
+      m.rows.forEach(function (r) { if (r.score === top) wins[r.id] = (wins[r.id] || 0) + 1; });
+    });
+    return wins;
+  };
+
+  // Rule: "Tie breakers settled with monthly wins between tied managers, else
+  // prize split as average of prize for the tied spots." So managers level on
+  // points are separated by months won; any still level share one position and
+  // split the money for the places they occupy, rather than being ordered by
+  // something the table never shows.
   C.classic = function (ds) {
+    var wins = C.monthlyWins(ds);
     var rows = ds.managers.slice().sort(function (a, b) {
-      return (b.total - a.total) || (a.rank - b.rank);
+      return (b.total - a.total) ||
+             ((wins[b.id] || 0) - (wins[a.id] || 0)) ||
+             (a.rank - b.rank);
     });
     rows.forEach(function (r, i) {
-      r.computedRank = i + 1;
+      r.order = i + 1;                       // where it sits in the list
+      r.computedRank = i + 1;                // the position shown, joint on a tie
+      r.monthWins = wins[r.id] || 0;
       r.prize = C.classicPrize(i + 1);
+      r.tiedWith = 0;
       r.move = (r.lastRank && r.lastRank > 0) ? (r.lastRank - (i + 1)) : 0;
     });
+    // Anyone still level after months won shares the position and the money.
+    for (var i = 0; i < rows.length; ) {
+      var j = i;
+      while (j + 1 < rows.length &&
+             rows[j + 1].total === rows[i].total &&
+             rows[j + 1].monthWins === rows[i].monthWins) j++;
+      if (j > i) {
+        var pot = 0, n = j - i + 1;
+        for (var k = i; k <= j; k++) pot += C.classicPrize(k + 1);
+        // Whole rupees, and the pot has to come out exactly: a three-way split
+        // of an odd amount hands the odd rupees to the higher places rather
+        // than leaving paise on the table.
+        var base = Math.floor(pot / n), extra = pot - base * n;
+        for (var k2 = i; k2 <= j; k2++) {
+          rows[k2].computedRank = i + 1;     // joint position
+          rows[k2].prize = base + ((k2 - i) < extra ? 1 : 0);
+          rows[k2].tiedWith = n;
+          rows[k2].move = (rows[k2].lastRank && rows[k2].lastRank > 0) ? (rows[k2].lastRank - (i + 1)) : 0;
+        }
+      }
+      i = j + 1;
+    }
     return rows;
   };
 
@@ -663,7 +748,8 @@
     // League context for this gameweek: average and the best score.
     var hrow = (ds.history[id] || {})[gw] || null;
     var hits = hrow ? (hrow.h || 0) : 0;
-    var net = hrow && typeof hrow.p === "number" ? hrow.p : (total - hits);
+    var scored = gwScore(ds, id, gw);
+    var net = scored === null ? (total - hits) : scored;
     var sum = 0, n = 0, top = null;
     (ds.managers || []).forEach(function (m) {
       var r = (ds.history[m.id] || {})[gw];

@@ -641,8 +641,13 @@
              : r.move < 0 ? '<span class="move down">▼' + Math.abs(r.move) + '</span>'
              : '<span class="move flat">–</span>';
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
+      // Managers still level after months won share the place and the money,
+      // so say so rather than showing an order the table cannot justify.
+      var eq = r.tiedWith > 1
+        ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
+          (r.tiedWith > 2 ? 's' : '') + ' — prize shared">=</span>' : '';
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
-        '<td class="num"><span class="rankcell"><span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
+        '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="num">' + num(r.eventTotal) + '</td>' +
         '<td class="num"><b>' + num(r.total) + '</b></td>' +
