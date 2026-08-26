@@ -308,24 +308,6 @@
   /* ====================================================================== */
   /* Player prices                                                          */
   /* ====================================================================== */
-  // 32,790 becomes 32.8k. On the narrowest phones the difference between these
-  // two is whether the direction column fits on screen at all.
-  function kNum(n) {
-    n = Math.abs(n);
-    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "m";
-    if (n >= 10000) return Math.round(n / 1000) + "k";
-    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
-    return String(n);
-  }
-
-  // String.prototype.localeCompare builds a collator on every call, which on 600
-  // players is most of the cost of a sort — the first tap measured three times
-  // slower than the ones after it. One shared collator, and one key per row
-  // rather than three comparisons, keeps every tap the same speed.
-  var COLL = (function () {
-    try { return new Intl.Collator(undefined, { sensitivity: "base", numeric: true }); }
-    catch (e) { return { compare: function (a, b) { return a < b ? -1 : a > b ? 1 : 0; } }; }
-  })();
   // "Garcia" should find "García", and "erling" should find Haaland. Strip the
   // accents once per player and keep the full name alongside the short one FPL
   // prints, so the search matches the name people actually know.
@@ -338,24 +320,34 @@
     return r._h;
   }
 
+  // String.prototype.localeCompare builds a collator on every call, which on 600
+  // players is most of the cost of a sort. One shared collator, and one key per
+  // row rather than three comparisons, keeps every tap the same speed.
+  var COLL = (function () {
+    try { return new Intl.Collator(undefined, { sensitivity: "base", numeric: true }); }
+    catch (e) { return { compare: function (a, b) { return a < b ? -1 : a > b ? 1 : 0; } }; }
+  })();
   function sortKey(r) {
     if (r._k == null) r._k = r.name + "\u0000" + r.team + "\u0000" + r.pos;
     return r._k;
   }
 
+  // How far along he is towards his price moving, as a bar. Full means he is at
+  // the level where changes have actually been seen to happen; over full means
+  // he is past it and should go tonight. Negative is the same journey the other
+  // way — being sold rather than bought.
+  function progressCell(pct) {
+    if (pct == null) return '<span class="move flat">\u2013</span>';
+    var up = pct >= 0, mag = Math.abs(pct);
+    var cls = "prog " + (up ? "up" : "down") + (mag >= 100 ? " full" : "");
+    var fill = Math.max(2, Math.min(100, mag));
+    return '<span class="' + cls + '"><i style="width:' + fill.toFixed(0) + '%"></i>' +
+      '<b>' + (up ? "" : "\u2212") + mag.toFixed(0) + '%</b></span>';
+  }
+
   function priceRows(rows, tracked) {
     return rows.map(function (r) {
-      // What the price is doing: a change we actually recorded is fact; short
-      // of that, the direction of real transfer flow since it last moved.
-      var dir = '<span class="move flat">\u2013</span>';
-      if (r.moved) {
-        dir = '<span class="move ' + (r.moved.up ? "up" : "down") + '">' +
-          (r.moved.up ? "\u25b2" : "\u25bc") + ' ' + esc(agoText(Date.now() - Date.parse(r.moved.at))) + '</span>';
-      } else if (r.net > 0) {
-        dir = '<span class="move up">\u25b2 ' + kNum(r.net) + '</span>';
-      } else if (r.net < 0) {
-        dir = '<span class="move down">\u25bc ' + kNum(r.net) + '</span>';
-      }
+      var dir = progressCell(r.progress);
       return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
         '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
         '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
@@ -377,9 +369,8 @@
     // capture has the record but nothing to compare it against — every row would
     // read as a dash, which looks broken rather than early, so hold the column
     // back until there is genuinely something to put in it.
-    var tracked = rows[0].tracked && rows.some(function (r) {
-      return r.moved || r.net;
-    });
+    var tracked = rows.some(function (r) { return r.progress != null; });
+    var thr = K.priceThreshold(ds);
     if (!state.pricePos) state.pricePos = "all";
 
     // Each column knows how to order itself and which way round it should read
@@ -395,8 +386,8 @@
       { k: "go",    t: "Game On", num: 1, first: -1,
         cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
     ];
-    if (tracked) COLS.push({ k: "move", t: "Moving", num: 1, first: -1,
-      cmp: function (a, b) { return a.pressure - b.pressure; } });
+    if (tracked) COLS.push({ k: "move", t: "Progress", num: 1, first: -1,
+      cmp: function (a, b) { return (a.progress || 0) - (b.progress || 0); } });
 
     var colOf = function (k) {
       for (var i = 0; i < COLS.length; i++) if (COLS[i].k === k) return COLS[i];
@@ -455,7 +446,11 @@
       // though scrollTop still moved them from script.
       panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
         head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked) + '</tbody></table></div>' +
-        (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>');
+        (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
+        (tracked && !thr.measured
+          ? '<div class="koline">Progress is a first estimate until we have seen a night ' +
+            'of real price changes to measure against.</div>'
+          : '');
 
       if (list.length > FIRST) {
         var mine = gen, body = $("tbody", panel);

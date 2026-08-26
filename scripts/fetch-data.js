@@ -238,6 +238,9 @@ async function h2hAll(id) {
   const priceNow = {}, tIn = {}, tOut = {}, netSince = {},
         changeEvent = {}, changeStart = {}, owned = {};
   const stamp = new Date().toISOString();
+  // Ownership is published as a percentage; the threshold behaves like a count,
+  // so we need to know how many people are playing to turn one into the other.
+  const total = Number(bs.total_players) || 0;
   let moved = 0;
   (bs.elements || []).forEach((el) => {
     const id = el.id;
@@ -251,8 +254,13 @@ async function h2hAll(id) {
 
     const was = prevPrices[id];
     if (was != null && was !== cost) {
-      // a real change, dated by us because FPL does not date them
-      priceLog.push([id, was, cost, stamp]);
+      // A real change, dated by us because FPL does not date them. Record the
+      // pressure that was on him as it happened: the counter resets on the next
+      // line and the number is gone for good otherwise. These are the only
+      // observations of where the game's own threshold actually sits, so they
+      // are what the progress bar is later calibrated against.
+      const ownerCount = total ? Math.round((owned[id] / 100) * total) : 0;
+      priceLog.push([id, was, cost, stamp, (prevNet[id] || 0), ownerCount]);
       netSince[id] = 0;                       // the counter starts again
       moved++;
     } else {
@@ -265,7 +273,8 @@ async function h2hAll(id) {
   while (priceLog.length > 6000) priceLog.shift();
   if (moved) console.log(moved + " price change(s) recorded");
   const prices = { at: stamp, now: priceNow, changeEvent, changeStart,
-                   owned, tIn, tOut, netSince };
+                   owned, tIn, tOut, netSince, total,
+                   was: (prev.prices && prev.prices.at) || null };
 
   // A finished gameweek's deadline is history. FPL does move deadlines when
   // fixtures are rescheduled around European and cup weeks, and the app reads

@@ -35,6 +35,9 @@
      left to work on and the rows read straight through — this carries the
      opacity itself instead. */
   --head-solid:#fbf8fc;
+  --prog-up:#9fe6c4; --prog-up-ink:#0d5136;
+  --prog-down:#ffc0b0; --prog-down-ink:#7a2413;
+  --prog-go:#25c274; --prog-go-ink:#05301e;
   --glass-hi:rgba(255,255,255,.9); --glass-shadow:0 10px 34px -12px rgba(30,30,70,.22);
   --field:rgba(255,255,255,.6); --chip:rgba(20,20,45,.05);
   /* wallpaper */
@@ -65,6 +68,9 @@
     --glass:rgba(38,38,52,.46); --glass-2:rgba(30,30,44,.4);
     --glass-bar:rgba(24,24,36,.55); --glass-border:rgba(255,255,255,.14);
   --head-solid:#171724;
+  --prog-up:#1d6347; --prog-up-ink:#b7f4d8;
+  --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
+  --prog-go:#25c274; --prog-go-ink:#042416;
     --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
     --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
     --wall:
@@ -91,6 +97,9 @@
   --glass:rgba(38,38,52,.46); --glass-2:rgba(30,30,44,.4);
   --glass-bar:rgba(24,24,36,.55); --glass-border:rgba(255,255,255,.14);
   --head-solid:#171724;
+  --prog-up:#1d6347; --prog-up-ink:#b7f4d8;
+  --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
+  --prog-go:#25c274; --prog-go-ink:#042416;
   --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
   --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
   --wall:
@@ -281,6 +290,21 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 .rankcell .r, table.t .r { font-weight:800; min-width:22px; display:inline-block; font-variant-numeric:tabular-nums; }
 .prize { color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums; }
 .move.up { color:var(--good); } .move.down { color:var(--bad); } .move.flat { color:var(--ink-faint); }
+
+/* How far along a player is towards his price moving. The bar fills from the
+   left in both directions — the colour says which way he is going, so the fill
+   only has to say how far. Full and over-full read as "tonight". */
+.prog { position:relative; display:block; width:100%; height:19px; border-radius:5px;
+  background:var(--chip); overflow:hidden; }
+.prog i { position:absolute; left:0; top:0; bottom:0; display:block; border-radius:5px; }
+.prog b { position:relative; display:block; line-height:19px; text-align:center;
+  font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums; }
+.prog.up i { background:var(--prog-up); }
+.prog.down i { background:var(--prog-down); }
+.prog.up b { color:var(--prog-up-ink); }
+.prog.down b { color:var(--prog-down-ink); }
+.prog.full i { background:var(--prog-go); }
+.prog.up.full b, .prog.down.full b { color:var(--prog-go-ink); }
 tr.zone-top td { background:var(--good-wash); }
 tr.zone-bot td { background:var(--bad-wash); }
 tr.me td { box-shadow:inset 3px 0 0 var(--accent); }

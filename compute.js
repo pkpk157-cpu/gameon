@@ -1526,6 +1526,11 @@
     var pr = (ds && ds.prices) || {};
     var has = !!pr.now;
     var own = C.leagueOwnership(ds);
+    var thr = C.priceThreshold(ds);
+    // Ownership arrives as a percentage of everyone playing FPL; the threshold
+    // behaves like a head count, so turn one into the other where we know how
+    // many are playing. Older data has no such number and gets no progress.
+    var playing = Number(pr.total) || 0;
     // the most recent recorded change per player, so a move that has already
     // happened is shown as fact rather than as pressure
     var last = {};
@@ -1534,6 +1539,7 @@
       var meta = els[id] || ["?", 0, "", 0, 0];
       var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
       var net = (pr.netSince && pr.netSince[id]) || 0;
+      var fplOwners = playing ? Math.round((owned / 100) * playing) : 0;
       return {
         id: +id, name: meta[0], full: meta[5] || "",
         type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
@@ -1546,16 +1552,71 @@
         moved: last[id] ? { up: last[id][2] > last[id][1], at: last[id][3] } : null,
         owners: own ? (own.count[id] || 0) : null,
         net: net,
-        // Pressure relative to how many people own him. The threshold the game
-        // uses is not published, so this is not a percentage of anything — it
-        // orders players by how hard they are being bought or sold, which is
-        // the part that can be said without inventing a constant.
-        pressure: owned > 0 ? net / owned : 0
+        // Pressure relative to how many people own him, which is what orders
+        // the table. Progress turns the same thing into a share of the level
+        // where changes have actually been seen to happen — see priceThreshold.
+        pressure: owned > 0 ? net / owned : 0,
+        fplOwners: fplOwners,
+        // null, not zero, when there is nothing to work it out from: an empty
+        // bar would claim he is going nowhere, which we would not know.
+        progress: (function () {
+          if (!has || !fplOwners) return null;
+          var ratio = net / fplOwners;
+          var at = ratio >= 0 ? thr.riseAt : thr.fallAt;
+          return at ? (ratio / at) * 100 : null;
+        })()
       };
     });
   };
 
-  // Changes we have actually recorded, newest first. FPL publishes no history,
+  // How close a player is to his price moving.
+  //
+  // FPL does not publish the threshold, so there is nothing to look it up in.
+  // What we can do is watch where it actually falls: every change the updater
+  // records now carries the net transfers behind it and the number of people
+  // who owned him at that moment, and the ratio of those two is one reading of
+  // the threshold. The median of those readings is the best answer available,
+  // and it is an answer measured from this season's real changes rather than a
+  // constant someone once quoted.
+  //
+  // Until enough changes have been seen, PROVISIONAL stands in. It is a
+  // starting guess and nothing more — the table says so while it is in use, and
+  // measurement replaces it after the first night of real changes.
+  var PROVISIONAL = 0.06, ENOUGH = 6;
+
+  function median(a) {
+    if (!a.length) return null;
+    var b = a.slice().sort(function (x, y) { return x - y; });
+    var m = b.length >> 1;
+    return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
+  }
+
+  C.priceThreshold = function (ds) {
+    if (ds && ds._thr) return ds._thr;
+    var up = [], down = [];
+    ((ds && ds.priceLog) || []).forEach(function (r) {
+      // entries logged before the updater kept the pressure carry only 4 fields
+      if (!r || r.length < 6) return;
+      var net = r[4], owners = r[5];
+      if (!owners || !isFinite(net)) return;
+      var ratio = net / owners;
+      if (r[2] > r[1]) { if (ratio > 0) up.push(ratio); }
+      else { if (ratio < 0) down.push(-ratio); }
+    });
+    var res = {
+      rise: median(up), fall: median(down),
+      risen: up.length, fell: down.length,
+      measured: (up.length + down.length) >= ENOUGH,
+      provisional: PROVISIONAL
+    };
+    // one side can be measured while the other is not; fall back per direction
+    res.riseAt = (res.measured && res.rise) ? res.rise : PROVISIONAL;
+    res.fallAt = (res.measured && res.fall) ? res.fall : PROVISIONAL;
+    if (ds) { try { Object.defineProperty(ds, "_thr", { value: res, enumerable: false }); } catch (e) {} }
+    return res;
+  };
+
+    // Changes we have actually recorded, newest first. FPL publishes no history,
   // so this only reaches back to the day the tracker started keeping one.
   C.priceChanges = function (ds, limit) {
     var log = (ds && ds.priceLog) || [];
