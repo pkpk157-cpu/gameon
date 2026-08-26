@@ -318,6 +318,19 @@
     return String(n);
   }
 
+  // String.prototype.localeCompare builds a collator on every call, which on 600
+  // players is most of the cost of a sort — the first tap measured three times
+  // slower than the ones after it. One shared collator, and one key per row
+  // rather than three comparisons, keeps every tap the same speed.
+  var COLL = (function () {
+    try { return new Intl.Collator(undefined, { sensitivity: "base", numeric: true }); }
+    catch (e) { return { compare: function (a, b) { return a < b ? -1 : a > b ? 1 : 0; } }; }
+  })();
+  function sortKey(r) {
+    if (r._k == null) r._k = r.name + "\u0000" + r.team + "\u0000" + r.pos;
+    return r._k;
+  }
+
   function priceRows(rows, tracked) {
     return rows.map(function (r) {
       // What the price is doing: a change we actually recorded is fact; short
@@ -355,7 +368,6 @@
     var tracked = rows[0].tracked && rows.some(function (r) {
       return r.moved || r.net;
     });
-    var own = K.leagueOwnership(ds);
     if (!state.pricePos) state.pricePos = "all";
 
     // Each column knows how to order itself and which way round it should read
@@ -363,7 +375,7 @@
     // first, since that is what anyone opening this table came to see.
     var COLS = [
       { k: "name",  t: "Player",  first: 1,
-        cmp: function (a, b) { return String(a.name).localeCompare(String(b.name)); } },
+        cmp: function (a, b) { return COLL.compare(a.name, b.name); } },
       { k: "price", t: "Price",   num: 1, first: -1,
         cmp: function (a, b) { return a.price - b.price; } },
       { k: "owned", t: "FPL",     num: 1, first: -1,
@@ -392,26 +404,30 @@
     h += '<div id="prPanel"></div>';
     host.innerHTML = h;
 
-    var CAP = 400;
+    // Every player is in the table, so nobody is unreachable by scrolling. But
+    // laying out 600 rows before the first paint cost more than two seconds on a
+    // slow phone, so the rows that fit go in first and the rest follow on the
+    // next frame — by which time the reader is still looking at the top of a
+    // list they can already scroll and sort.
+    var FIRST = 80, pending = 0, gen = 0;
     var draw = function () {
+      gen++;
+      if (pending) { cancelAnimationFrame(pending); pending = 0; }
       var list = rows.slice();
       if (state.pricePos !== "all") list = list.filter(function (r) { return String(r.type) === state.pricePos; });
-      // Search all 600-odd players, not just the ones that made the cut below.
-      // Filtering the rendered rows would have hidden anyone the current sort
-      // pushed past the cap — searching for Salah by name found nothing.
+      // Search all 600-odd players, not just the ones on screen. Filtering the
+      // rendered rows used to hide anyone the current sort had pushed down.
       var q = String(($("#prSearch", host) || {}).value || "").toLowerCase().trim();
       if (q) list = list.filter(function (r) {
         return (r.name + " " + r.pos + " " + r.team).toLowerCase().indexOf(q) !== -1;
       });
       var col = colOf(state.priceSort), dir = state.priceDir;
-      // Ties fall back to the name, and then to club and position, so the two
-      // players called Davies always sit in the same order however you arrived
-      // at the table — rather than in whatever order the last sort left them.
+      // Ties fall back to name, then club, then position — all three folded into
+      // one key — so the two players called Davies always sit in the same order
+      // however you arrived at the table, rather than in whatever order the
+      // last sort happened to leave them.
       list.sort(function (a, b) {
-        return (col.cmp(a, b) * dir)
-          || String(a.name).localeCompare(String(b.name))
-          || String(a.team).localeCompare(String(b.team))
-          || String(a.pos).localeCompare(String(b.pos));
+        return (col.cmp(a, b) * dir) || COLL.compare(sortKey(a), sortKey(b));
       });
 
       var head = COLS.map(function (c) {
@@ -424,18 +440,21 @@
       }).join("");
 
       var panel = $("#prPanel", host);
-      var body = list.length
-        ? priceRows(list.slice(0, CAP), tracked)
-        : '';
       panel.innerHTML = '<div class="card freeze"><table class="t pricetbl"><thead><tr>' +
-        head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
-        (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
-        '<div class="koline">' +
-        (list.length > CAP ? "showing " + CAP + " of " + list.length : list.length + " players") +
-        ' \u00b7 owned across FPL and across our ' +
-        (own ? own.managers : 245) + ' managers \u00b7 tap a column to sort' +
-        (tracked ? ' \u00b7 moving shows a recorded change, else net transfers since the last one'
-                 : ' \u00b7 which way prices are moving appears from the next update') + '</div>';
+        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked) + '</tbody></table></div>' +
+        (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>');
+
+      if (list.length > FIRST) {
+        var mine = gen, body = $("tbody", panel);
+        pending = requestAnimationFrame(function () {
+          pending = 0;
+          // A tap or a keystroke while this was queued has already redrawn the
+          // table; appending the rest of a list nobody is looking at any more
+          // would mix two sorts together.
+          if (mine !== gen || !body.parentNode) return;
+          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked));
+        });
+      }
 
       var hit = function (th) {
         var k = th.getAttribute("data-sort");
@@ -658,7 +677,7 @@
     $all(".navitem").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === state.view); });
     $all(".view").forEach(function (v) { v.classList.toggle("active", v.getAttribute("data-view") === state.view); });
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
-    var fill = ["classic", "monthly", "lms", "pyramid", "h2h"].indexOf(state.view) !== -1;
+    var fill = ["classic", "monthly", "lms", "pyramid", "h2h", "prices"].indexOf(state.view) !== -1;
     var wrap = $("main.wrap"); if (wrap) wrap.classList.toggle("fill", fill);
     updateBanner();
   }

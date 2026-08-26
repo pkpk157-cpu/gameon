@@ -30,6 +30,11 @@
   /* glass */
   --glass:rgba(255,255,255,.55); --glass-2:rgba(255,255,255,.4);
   --glass-bar:rgba(255,255,255,.62); --glass-border:rgba(255,255,255,.7);
+  /* A sticky table header needs to hide the rows sliding under it. The blur on
+     .freeze already owns the backdrop, so a nested backdrop-filter has nothing
+     left to work on and the rows read straight through — this carries the
+     opacity itself instead. */
+  --head-solid:#fbf8fc;
   --glass-hi:rgba(255,255,255,.9); --glass-shadow:0 10px 34px -12px rgba(30,30,70,.22);
   --field:rgba(255,255,255,.6); --chip:rgba(20,20,45,.05);
   /* wallpaper */
@@ -59,6 +64,7 @@
     --cyan:#38bdf8; --purple:#b388ff;
     --glass:rgba(38,38,52,.46); --glass-2:rgba(30,30,44,.4);
     --glass-bar:rgba(24,24,36,.55); --glass-border:rgba(255,255,255,.14);
+  --head-solid:#171724;
     --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
     --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
     --wall:
@@ -84,6 +90,7 @@
   --cyan:#38bdf8; --purple:#b388ff;
   --glass:rgba(38,38,52,.46); --glass-2:rgba(30,30,44,.4);
   --glass-bar:rgba(24,24,36,.55); --glass-border:rgba(255,255,255,.14);
+  --head-solid:#171724;
   --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
   --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
   --wall:
@@ -483,7 +490,8 @@ td.name[data-entry]:hover .who { color:var(--accent); text-decoration-color:var(
 main.wrap.fill { display:flex; flex-direction:column; padding-top:16px; padding-bottom:0; overflow:hidden;
   height:calc(100vh - var(--topbar-h) - var(--nav-h)); height:calc(100dvh - var(--topbar-h) - var(--nav-h)); }
 main.wrap.fill .view.active { flex:1; min-height:0; display:flex; flex-direction:column; }
-main.wrap.fill #monthPanel, main.wrap.fill #pyrPanel, main.wrap.fill #grpPanel, main.wrap.fill #lmsGwPanel { display:contents; }
+main.wrap.fill #monthPanel, main.wrap.fill #pyrPanel, main.wrap.fill #grpPanel,
+main.wrap.fill #lmsGwPanel, main.wrap.fill #prPanel { display:contents; }
 main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }
 
 
@@ -821,6 +829,7 @@ table.t.prizetbl .mgr { font-size:10.5px; }
    the generic table metrics push the last two off the edge — and those two are
    the whole point of the table — so it gets its own tighter spacing. */
 table.t.pricetbl { width:100%; table-layout:auto; }
+.freeze table.t.pricetbl thead th { background:var(--head-solid); }
 table.t.pricetbl th, table.t.pricetbl td { padding:9px 4px; }
 .freeze table.t.pricetbl th:first-child, .freeze table.t.pricetbl td:first-child { padding-left:9px; }
 .freeze table.t.pricetbl th:last-child, .freeze table.t.pricetbl td:last-child { padding-right:9px; }
