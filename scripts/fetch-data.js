@@ -85,7 +85,11 @@ async function h2hFixtures(id) {
       if (!m || !m.entry_1_entry || !m.entry_2_entry || !m.event) return;
       fx.push([m.event, put(m.entry_1_entry), put(m.entry_2_entry)]);
     });
-    if (!(d && d.has_next)) break;
+    // Stop on an empty page as well as on has_next:false. If the field ever
+    // moves or disappears we keep paging until a page comes back empty rather
+    // than silently storing half a schedule.
+    if (!res.length) break;
+    if (d && d.has_next === false) break;
   }
   return { ents: ents, fx: fx };
 }
