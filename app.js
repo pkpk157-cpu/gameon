@@ -103,7 +103,13 @@
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function num(n) { if (n == null || isNaN(n)) return "—"; return Number(n).toLocaleString("en-US"); }
-  function money(n) { return num(n); }
+  // Prizes are rupees in an Indian league, so they group in lakhs: 4,04,250
+  // rather than 404,250. Points and ranks keep the plain grouping — they are
+  // counts, not money, and only money is written this way here.
+  function money(n) {
+    if (n == null || isNaN(n)) return "\u2014";
+    try { return Number(n).toLocaleString("en-IN"); } catch (e) { return num(n); }
+  }
   function lsGet(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function ordinal(n) { var s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); }
@@ -1291,25 +1297,117 @@
       if (R) return renderCompRules(host, R);
     }
 
-    // General overview (reached from the settings menu) — no competition to
-    // return to, so the bar's back arrow falls through to the last tab.
+    // The whole picture, reached from the menu — no competition to return to,
+    // so the bar's back arrow falls through to the last tab.
     state.rulesBack = null;
-    var h = '<div class="section-title"><h2>General Rules</h2><div class="rule"></div>' +
-      '<span class="chip">Fair play</span></div>';
-    cfg.rules.forEach(function (r) {
-      h += '<div class="card"><div class="hd"><h3>' + r.n + '. ' + esc(r.title) + '</h3></div>' +
-        '<div class="bd"><div class="note" style="color:var(--ink-soft);font-size:13.5px;line-height:1.6">' + esc(r.body) + '</div></div></div>';
+    host.innerHTML = overviewRules(cfg);
+    $all("[data-topic]", host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        location.hash = "rules/" + b.getAttribute("data-topic");
+      });
     });
+  }
+
+  /* ---- what every competition is worth ---------------------------------- */
+  // Read off the prize tables rather than written down anywhere, so the pot
+  // always agrees with what the tables actually pay.
+  function potTotals(cfg) {
+    var sum = function (o) {
+      return Object.keys(o || {}).reduce(function (t, k) { return t + (+o[k] || 0); }, 0);
+    };
+    var classic = sum(cfg.classicPrizes.exact);
+    (cfg.classicPrizes.ranges || []).forEach(function (r) {
+      classic += (r.to - r.from + 1) * r.amount;
+    });
+    var monthly = (cfg.months || []).reduce(function (t, m) { return t + sum(m.prizes); }, 0);
+    var lms = sum(cfg.lms.prizes);
+    var perSeason = (cfg.pyramid.divisions || []).reduce(function (t, d) { return t + sum(d.prizes); }, 0);
+    var pyramid = perSeason * (cfg.pyramid.seasons || []).length;
+    var hp = cfg.h2h.prizes;
+    var h2h = hp.ucl.winner + hp.ucl.runnerUp + hp.uel.winner + hp.uel.runnerUp;
+    return { classic: classic, monthly: monthly, lms: lms, pyramid: pyramid,
+             pyramidPerSeason: perSeason, h2h: h2h,
+             total: classic + monthly + lms + pyramid + h2h };
+  }
+
+  function overviewRules(cfg) {
+    var pot = potTotals(cfg);
+    var n = cfg.expectedManagers || 245;
+    var comps = [
+      { k: "classic", amt: pot.classic, paid: "Top 45 places" },
+      { k: "monthly", amt: pot.monthly, paid: "Top 3, every month" },
+      { k: "lms",     amt: pot.lms,     paid: "Last three standing" },
+      { k: "pyramid", amt: pot.pyramid, paid: "Top 3 per division, three times" },
+      { k: "h2h",     amt: pot.h2h,     paid: "Both finals" }
+    ].map(function (c) {
+      var R = compRules(c.k, cfg) || {};
+      c.name = R.name || c.k; c.lede = R.lede || "";
+      return c;
+    });
+    var most = comps.reduce(function (m, c) { return Math.max(m, c.amt); }, 1);
+
+    var h = '<div class="section-title"><h2>' + esc(cfg.seasonLabel || "The season") +
+      '</h2><div class="rule"></div><span class="chip">Rules</span></div>';
+    h += '<div class="rulelede">Five competitions running off one Fantasy Premier League team. ' +
+      'This is how each of them decides who progresses and who gets paid.</div>';
+
+    h += '<div class="grid cols-4">' +
+      '<div class="stat"><div class="k">' + num(n) + '</div><div class="l">Managers</div></div>' +
+      '<div class="stat"><div class="k">' + cfg.totalGameweeks + '</div><div class="l">Gameweeks</div></div>' +
+      '<div class="stat"><div class="k">' + comps.length + '</div><div class="l">Competitions</div></div>' +
+      '<div class="stat"><div class="k">' + money(pot.total) + '</div><div class="l">Total prize money</div></div>' +
+      '</div>';
+
+    /* where the money goes */
+    h += '<div class="section-title"><h2>Where the money goes</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="bd"><div class="potlist">' + comps.map(function (c) {
+      return '<button type="button" class="potrow" data-topic="' + c.k + '">' +
+        '<span class="pr-n">' + esc(c.name) + '</span>' +
+        '<span class="pr-bar"><i style="width:' + Math.max(3, (c.amt / most) * 100).toFixed(1) + '%"></i></span>' +
+        '<span class="pr-a">' + money(c.amt) + '</span>' +
+        '<span class="pr-p">' + esc(c.paid) + '</span>' +
+        '</button>';
+    }).join("") + '</div>' +
+      '<div class="note" style="margin-top:12px">Totals are added up from the prize tables themselves, ' +
+      'so they always agree with what each competition actually pays. Tap one to read its rules.</div>' +
+      '</div></div>';
+
+    /* the rules behind all of them */
+    h += '<div class="section-title"><h2>Rules that apply everywhere</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="bd"><ul class="rulelist">' +
+      everywhereRules().map(function (x) { return '<li>' + x + '</li>'; }).join("") +
+      '</ul></div></div>';
+
+    /* one line each, then the way in */
+    h += '<div class="section-title"><h2>The five competitions</h2><div class="rule"></div></div>';
+    h += comps.map(function (c) {
+      return '<button type="button" class="compcard" data-topic="' + c.k + '">' +
+        '<span class="cc-h"><span class="cc-n">' + esc(c.name) + '</span>' +
+        '<span class="cc-a">' + money(c.amt) + '</span></span>' +
+        '<span class="cc-s">' + c.lede + '</span>' +
+        '<span class="cc-go">Read the rules \u2192</span></button>';
+    }).join("");
+
+    /* the league's own wording, kept verbatim */
+    h += '<div class="section-title"><h2>As written by the league</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="bd"><ol class="verbatim">' +
+      (cfg.rules || []).map(function (r) {
+        return '<li><b>' + esc(r.title) + '</b><span>' + esc(r.body) + '</span></li>';
+      }).join("") + '</ol></div></div>';
+
     h += '<div class="section-title"><h2>Monthly prizes</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
-    h += '<div class="section-title"><h2>Pyramid prizes (per mini-season)</h2><div class="rule"></div></div>' + pyramidPrizeCard(cfg);
-    // The attribution the tab pages used to carry lives here now.
+    h += '<div class="section-title"><h2>Pyramid prizes</h2><div class="rule"></div><span class="chip">per mini-season</span></div>' +
+      pyramidPrizeCard(cfg) +
+      '<div class="note" style="margin:8px 2px 0">' + money(pot.pyramidPerSeason) +
+      ' a mini-season, paid ' + (cfg.pyramid.seasons || []).length + ' times across the season.</div>';
+
     h += '<div class="section-title"><h2>About</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd"><div class="note" style="line-height:1.7">' +
       'Game On V12 is a community tracker built for this league by <b>PK</b>.<br>' +
-      'Player and scoring data © the Fantasy Premier League. ' +
+      'Player and scoring data \u00a9 the Fantasy Premier League. ' +
       'Not affiliated with, endorsed by, or connected to the Premier League or FPL.' +
       '</div></div></div>';
-    host.innerHTML = h;
+    return h;
   }
 
   // A rules page is a lede, then blocks. A block is prose, a list of rules, or

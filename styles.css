@@ -951,3 +951,57 @@ table.t th.sortable .sarrow:empty { display:none; }
 }
 .rulechain .rc-t { display: block; font-weight: 700; color: var(--ink); }
 .rulechain .rc-s { display: block; color: var(--ink-soft); margin-top: 1px; }
+
+/* ---------- rules overview: the whole season on one page --------------- */
+/* Where the money goes. The bar is each competition against the biggest, so
+   the shape of the pot is readable before any number is. */
+.potlist { display: flex; flex-direction: column; gap: 2px; }
+.potrow {
+  display: grid;
+  grid-template-columns: 1fr 78px;
+  grid-template-areas: "name amount" "bar bar" "paid paid";
+  gap: 3px 10px;
+  align-items: center;
+  width: 100%; text-align: left;
+  background: transparent; border: 0; border-radius: 10px;
+  padding: 9px 10px; cursor: pointer; font: inherit; color: inherit;
+}
+.potrow:hover, .potrow:focus-visible { background: var(--chip); outline: none; }
+.potrow:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.pr-n { grid-area: name; font-weight: 700; font-size: 14px; }
+.pr-a {
+  grid-area: amount; text-align: right; font-weight: 700; font-size: 14px;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.pr-bar { grid-area: bar; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+.pr-bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .75; }
+.pr-p { grid-area: paid; font-size: 11.5px; color: var(--ink-faint); }
+
+/* One card per competition, and the way into its own rules. */
+.compcard {
+  display: flex; flex-direction: column; gap: 5px;
+  width: 100%; text-align: left; font: inherit; color: inherit;
+  background: var(--glass); border: 1px solid var(--glass-border);
+  border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+  cursor: pointer; box-shadow: var(--glass-shadow);
+}
+.compcard:hover, .compcard:focus-visible { border-color: var(--accent); outline: none; }
+.cc-h { display: flex; align-items: baseline; gap: 10px; }
+.cc-n { font-weight: 700; font-size: 15px; flex: 1; }
+.cc-a { font-weight: 700; font-size: 13.5px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.cc-s { font-size: 13px; line-height: 1.55; color: var(--ink-soft); }
+.cc-go { font-size: 11.5px; font-weight: 700; color: var(--accent); letter-spacing: .01em; }
+
+/* The league's own wording, kept exactly as written. */
+ol.verbatim { list-style: none; margin: 0; padding: 0; counter-reset: vr; }
+ol.verbatim li {
+  counter-increment: vr; position: relative; padding-left: 26px; margin-bottom: 13px;
+}
+ol.verbatim li:last-child { margin-bottom: 0; }
+ol.verbatim li::before {
+  content: counter(vr); position: absolute; left: 0; top: 1px;
+  font-size: 11px; font-weight: 700; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+ol.verbatim b { display: block; font-size: 13.5px; font-weight: 700; }
+ol.verbatim span { display: block; font-size: 13px; line-height: 1.6; color: var(--ink-soft); margin-top: 2px; }
