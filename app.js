@@ -618,8 +618,27 @@
   }
 
   /* ---- boot ------------------------------------------------------------ */
+  // The header and the tab bar are content-sized — icon metrics, the safe-area
+  // inset, and the device's own text scaling all move them. The fill-mode
+  // height was working off two hardcoded guesses (56 and 66) against real
+  // heights of 60 and 70, which left the last row of every table sitting a few
+  // pixels under the tab bar. Measure them instead, and again whenever the
+  // window changes shape.
+  function measureChrome() {
+    var bar = $("header.topbar") || $(".topbar");
+    var nav = $("nav.navbar") || $(".navbar");
+    var r = document.documentElement;
+    if (bar) r.style.setProperty("--topbar-h", Math.round(bar.getBoundingClientRect().height) + "px");
+    if (nav) r.style.setProperty("--nav-h", Math.round(nav.getBoundingClientRect().height) + "px");
+  }
+
   function boot() {
     buildNav();
+    measureChrome();
+    var remeasure = function () { measureChrome(); };
+    window.addEventListener("resize", remeasure);
+    window.addEventListener("orientationchange", remeasure);
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", remeasure);
     isAdmin(); // persist ?admin flag on first visit
     $("#btnSync").innerHTML = svg("sync", 19);
     $("#btnSync").addEventListener("click", function () {
@@ -721,17 +740,23 @@
     render();
   }
 
+  // Fill mode sizes the wrap to the screen and lets one table scroll inside it.
+  // The body's bottom padding exists to clear the fixed tab bar, and in fill
+  // mode it is pure overhang — but the two must be switched together. They were
+  // not: the knockout bracket turns fill off so it can scroll the page, and the
+  // body was left with no room, which cut the last tie under the bar.
+  function setFill(on) {
+    var wrap = $("main.wrap");
+    if (wrap) wrap.classList.toggle("fill", !!on);
+    document.body.classList.toggle("fill", !!on);
+  }
+
   function setActiveView() {
     $all(".navitem").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === state.view); });
     $all(".view").forEach(function (v) { v.classList.toggle("active", v.getAttribute("data-view") === state.view); });
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
     var fill = ["classic", "monthly", "lms", "pyramid", "h2h", "prices"].indexOf(state.view) !== -1;
-    var wrap = $("main.wrap"); if (wrap) wrap.classList.toggle("fill", fill);
-    // In fill mode the wrap is already sized to stop above the tab bar, so the
-    // body padding that clears that bar is pure overhang — 34px of page the
-    // reader could drag, carrying the frozen filter row and headers up with it
-    // once the table underneath had run out.
-    document.body.classList.toggle("fill", fill);
+    setFill(fill);
     updateBanner();
   }
 
@@ -1115,8 +1140,7 @@
 
     function draw() {
       var extra = $("#stageExtra", host), meta = $("#stageMeta", host), panel = $("#grpPanel", host);
-      var wrap = $("main.wrap");
-      if (wrap) wrap.classList.toggle("fill", state.h2hStage === "groups");
+      setFill(state.h2hStage === "groups");
       if (state.h2hStage === "groups") {
         extra.innerHTML = '<select class="in narrow" id="grpSel">' + h2h.groups.map(function (g, i) {
           return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
@@ -1173,9 +1197,12 @@
 
   function bracketPanel(B, idx) {
     var h = "";
-    if (B.provisional) {
-      h += '<div class="callout" style="margin-bottom:12px">Projected from the group tables as they stand. ' +
-        'The ' + esc(B.label) + ' draw is settled once the group stage ends in GW' + (B.startsGw - 1) + '.</div>';
+    if (!B.drawn) {
+      h += '<div class="callout" style="margin-bottom:12px"><b>The ' + esc(B.label) +
+        ' draw has not been made.</b> It is made when the group stage ends in GW' +
+        (B.groupEndsGw || (B.startsGw - 1)) + ' \u2014 ' +
+        (B.gwsLeft === 1 ? 'one gameweek to go' : num(B.gwsLeft) + ' gameweeks to go') +
+        '. The rounds and their gameweeks are below.</div>';
     }
     if (B.prizes) {
       h += '<div class="korow"><span class="pill gold">Winner ' + money(B.prizes.winner) + '</span>' +
@@ -1183,6 +1210,12 @@
     }
     var only = B.rounds[idx] ? [B.rounds[idx]] : B.rounds;
     h += only.map(function (r) {
+      if (!r.ties.length) {
+        return '<div class="koline">GW\u00a0' + r.gws.join("\u2013") +
+          (r.legs === 2 ? ' \u00b7 two legs' : ' \u00b7 one leg') + '</div>' +
+          '<div class="card"><div class="bd"><div class="note" style="text-align:center;padding:6px 0">' +
+          'Waiting on the draw</div></div></div>';
+      }
       var body = r.ties.map(function (t) {
         if (t.home !== undefined) {
           return '<div class="tie">' + '<span class="tn">' + t.n + '</span>' +
@@ -1262,6 +1295,18 @@
       var SEA = pyr.seasons.filter(function (s) { return s.key === state.seasonKey; })[0];
       var div = SEA.divisions.filter(function (d) { return d.key === state.pyrDiv; })[0];
       $("#pyrMeta", host).innerHTML = gwChips(SEA.gws, statusFn);
+      // A mini-season nobody has played yet has no table — everyone would sit
+      // level on nothing, in an order that means nothing. Say it has not
+      // started and say when it does.
+      if (!SEA.played) {
+        $("#pyrPanel", host).innerHTML =
+          '<div class="callout"><b>' + esc(SEA.name) + ' has not started.</b><br>' +
+          'It runs GW\u00a0' + SEA.gws[0] + '\u2013' + SEA.gws[SEA.gws.length - 1] +
+          '. Divisions are set by how ' +
+          (SEA.key === "s2" ? "Mini Season 1" : "the mini-season before it") +
+          ' finishes, so the table appears once its first gameweek is played.</div>';
+        return;
+      }
       $("#pyrPanel", host).innerHTML = divisionCard(div, cfg);
     }
     $("#pyrSeason", host).addEventListener("change", function () { state.seasonKey = this.value; draw(); });
@@ -1271,11 +1316,18 @@
 
   function divisionCard(div, cfg) {
     var pcfg = cfg.pyramid;
+    // There is nowhere above Elite and nowhere below Conference, so those two
+    // do not carry the marker for the direction that does not exist for them.
+    var order = (pcfg.divisions || []).map(function (d) { return d.key; });
+    var at = order.indexOf(div.key);
+    var canRise = at > 0;
+    var canFall = at !== -1 && at < order.length - 1;
     var body = div.rows.map(function (r) {
-      var zone = r.pos <= pcfg.promoteCount ? "zone-top"
-        : (r.pos > div.rows.length - pcfg.relegateCount ? "zone-bot" : "");
-      var badge = r.pos <= pcfg.promoteCount ? '<span class="pill up">▲</span>'
-        : (r.pos > div.rows.length - pcfg.relegateCount ? '<span class="pill down">▼</span>' : '');
+      var top = canRise && r.pos <= pcfg.promoteCount;
+      var bot = canFall && r.pos > div.rows.length - pcfg.relegateCount;
+      var zone = top ? "zone-top" : (bot ? "zone-bot" : "");
+      var badge = top ? '<span class="pill up">▲</span>'
+        : (bot ? '<span class="pill down">▼</span>' : '');
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr class="' + zone + (isMe(r.id) ? ' me' : '') + '"><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.name) + '</span> ' + badge + '<div class="mgr">' + esc(r.player) + '</div></td>' +
@@ -1605,11 +1657,35 @@
     return '<div class="section-title"><h2>Elimination grid</h2><div class="rule"></div><span class="chip">SOG=start · EOG=end</span></div>' +
       '<div class="lmsgrid">' + gridTable(rows.slice(0, mid)) + gridTable(rows.slice(mid)) + '</div>';
   }
+  // 1,2,3 -> "GW 1-3"; 1,2,5 -> "GW 1, 2, 5". A month that lost a gameweek to a
+  // rearranged fixture should look different from one that did not.
+  function gwRange(gws) {
+    if (!gws || !gws.length) return "\u2014";
+    var runs = [], start = gws[0], prev = gws[0];
+    for (var i = 1; i <= gws.length; i++) {
+      if (i < gws.length && gws[i] === prev + 1) { prev = gws[i]; continue; }
+      runs.push(start === prev ? String(start) : (start + "\u2013" + prev));
+      start = prev = gws[i];
+    }
+    return "GW " + runs.join(", ");
+  }
+
   function monthlyPrizeCard(cfg) {
+    // The gameweeks a month owns are worked out from the real fixture deadlines,
+    // so read them back from the computed months rather than from the config's
+    // placeholder calendar — otherwise this table and the Monthly tab disagree
+    // about which gameweeks August is, and the tab is the one that is right.
+    var ds = S.dataset(), derived = {};
+    if (ds) {
+      try {
+        (K.monthly(ds) || []).forEach(function (m) { derived[m.key] = m.gws; });
+      } catch (e) { /* fall back to the config below */ }
+    }
     var rows = cfg.months.map(function (m) {
+      var gws = derived[m.key] || m.gws;
       return '<tr><td>' + esc(m.name) + '</td><td class="num prize">' + money(m.prizes[1]) + '</td>' +
         '<td class="num">' + money(m.prizes[2]) + '</td><td class="num">' + money(m.prizes[3]) + '</td>' +
-        '<td class="note">GW ' + m.gws.join(", ") + '</td></tr>';
+        '<td class="note">' + gwRange(gws) + '</td></tr>';
     }).join("");
     return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">1st</th><th class="num">2nd</th><th class="num">3rd</th><th>Gameweeks</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }

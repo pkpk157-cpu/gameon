@@ -527,6 +527,10 @@ main.wrap.fill .view.active { flex:1; min-height:0; display:flex; flex-direction
 main.wrap.fill #monthPanel, main.wrap.fill #pyrPanel, main.wrap.fill #grpPanel,
 main.wrap.fill #lmsGwPanel, main.wrap.fill #prPanel { display:contents; }
 main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }
+/* A little room at the foot of the scroller so the last row can always clear
+   the tab bar, even before the measured heights land on first paint. */
+main.wrap.fill .freeze table.t tbody tr:last-child td { padding-bottom:14px; }
+
 
 
 /* ---- profile: squad on a pitch (FPL-style) ---------------------------- */

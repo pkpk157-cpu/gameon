@@ -1573,6 +1573,14 @@
     var groups = h.groups || [];
     if (!groups.length) return null;
 
+    // The draw is made when the group stage is over, not before. Pairing off a
+    // table that is one gameweek old would show sixteen ties that have nothing
+    // to do with who will actually meet.
+    var done = {}; C.finishedGws(ds).forEach(function (x) { done[x] = true; });
+    var gs = conf.h2h.groupStageGws || [];
+    var left = gs.filter(function (x) { return !done[x]; });
+    var drawn = gs.length > 0 && left.length === 0;
+
     // who goes where: the top slice to the UCL, the next slice to the UEL
     var from = comp === "ucl" ? 0 : q.uclPerGroup;
     var take = comp === "ucl" ? q.uclPerGroup : (q.uelPerGroup || 0);
@@ -1604,7 +1612,7 @@
       return { key: r.key, name: r.name, gws: r.gws, legs: r.legs, index: ri, ties: [] };
     });
     if (!rounds.length) return null;
-    rounds[0].ties = ties;
+    if (drawn) rounds[0].ties = ties;
     // later rounds are placeholders until the round before them is decided
     var count = ties.length;
     for (var r2 = 1; r2 < rounds.length; r2++) {
@@ -1620,15 +1628,17 @@
       }
     }
 
-    var finished = C.finishedGws(ds);
-    var lastGroupGw = (conf.h2h.groupStageGws || []).slice(-1)[0] || 0;
     return {
       comp: comp,
       label: comp === "ucl" ? "UCL" : "UEL",
       rounds: rounds,
       qualified: ties.length * 2,
-      // the draw only means anything once the groups are settled
-      provisional: !(lastGroupGw && finished.indexOf(lastGroupGw) !== -1),
+      // Whether the draw has actually been made, and how much group stage is
+      // left before it can be. The bracket shows its shape either way.
+      drawn: drawn,
+      provisional: !drawn,
+      gwsLeft: left.length,
+      groupEndsGw: gs.length ? gs[gs.length - 1] : null,
       startsGw: rounds[0].gws ? rounds[0].gws[0] : null,
       prizes: (conf.h2h.prizes || {})[comp] || null
     };
