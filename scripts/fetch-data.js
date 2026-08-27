@@ -67,6 +67,29 @@ async function classicAll() {
   return { managers: all, name };
 }
 
+// Who plays whom, gameweek by gameweek. FPL's standings endpoint gives the
+// table but not the fixtures, and the app had no way to say who anyone faces
+// next. Only the schedule is stored: it never changes, so it is fetched once
+// and kept, and the scores are read from the gameweek history we already hold —
+// which means a fixture shows live points, provisional bonus and all, without
+// any of this being fetched again.
+async function h2hFixtures(id) {
+  const ents = [], idx = {};
+  const put = (e) => { if (idx[e] == null) { idx[e] = ents.length; ents.push(e); } return idx[e]; };
+  const fx = [];
+  for (let page = 1; page <= 60; page++) {
+    const d = await getJSON("/leagues-h2h-matches/league/" + id + "/?page=" + page);
+    const res = (d && d.results) || [];
+    res.forEach((m) => {
+      // FPL pads odd-sized leagues with a phantom "AVERAGE" entry that has no id
+      if (!m || !m.entry_1_entry || !m.entry_2_entry || !m.event) return;
+      fx.push([m.event, put(m.entry_1_entry), put(m.entry_2_entry)]);
+    });
+    if (!(d && d.has_next)) break;
+  }
+  return { ents: ents, fx: fx };
+}
+
 async function h2hAll(id) {
   let all = [], name = "";
   for (let page = 1; ; page++) {
@@ -119,8 +142,30 @@ async function h2hAll(id) {
   console.log("  histories done, failed " + hist.failed);
 
   console.log("Fetching H2H group standings…");
+  // What we published last time: the h2h schedule and the price record are both
+  // carried forward from it rather than fetched again.
+  let prev = {};
+  try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
+
   const h2h = {};
   await pool(H2H, async (id) => { h2h[id] = await h2hAll(id); }, 4);
+
+  // The schedule is static, so keep whatever we already have and only ask for
+  // the leagues we are missing. A first run pays for all sixteen; every run
+  // after that pays for none.
+  const prevFx = (prev.h2hFixtures || {});
+  const h2hFx = {};
+  const needFx = H2H.filter((id) => !(prevFx[id] && (prevFx[id].fx || []).length));
+  H2H.forEach((id) => { if (prevFx[id]) h2hFx[id] = prevFx[id]; });
+  if (needFx.length) {
+    console.log("fetching h2h fixtures for " + needFx.length + " league(s)");
+    await pool(needFx, async (id) => {
+      try {
+        const got = await h2hFixtures(id);
+        if (got.fx.length) h2hFx[id] = got;
+      } catch (e) { console.log("  h2h fixtures " + id + " failed (non-fatal): " + e.message); }
+    }, 3);
+  }
 
   // Squads for every gameweek played so far. These power the LMS "players
   // played" column and the pitch on each manager's profile, which can be
@@ -232,9 +277,6 @@ async function h2hAll(id) {
     elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
                        el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra];
   });
-
-  let prev = {};
-  try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
 
   /* ---- prices, and the transfer flow that moves them -------------------- */
   // FPL publishes no history of price changes and no record of when one
@@ -440,7 +482,7 @@ async function h2hAll(id) {
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
-    managers, history, h2h, pastSeasons: pastSeasons, _failed: hist.failed || 0,
+    managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips,
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog
   };

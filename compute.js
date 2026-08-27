@@ -1565,6 +1565,90 @@
   // The knockout path for either competition, seeded from the group tables.
   // Until the group stage is over and a draw is made this is a projection —
   // callers must say so rather than presenting it as the real draw.
+  /* ---- who plays whom, gameweek by gameweek ---------------------------- */
+  // The updater stores only the schedule. Scores come from the gameweek history
+  // we already hold, which means a fixture in a live gameweek shows the same
+  // number the tables do, provisional bonus included, without anything extra
+  // being fetched.
+  function fixtureRows(ds) {
+    if (ds && ds._fx) return ds._fx;
+    var src = (ds && ds.h2hFixtures) || {};
+    var ids = cfg().h2hGroupLeagueIds || [];
+    var out = [];
+    ids.forEach(function (lid, gi) {
+      var L = src[lid];
+      if (!L || !L.fx || !L.ents) return;
+      var gname = ((ds.h2h && ds.h2h[lid] && ds.h2h[lid].league) || {}).name ||
+        ("Group " + String.fromCharCode(65 + gi));
+      L.fx.forEach(function (f) {
+        var a = L.ents[f[1]], b = L.ents[f[2]];
+        if (!a || !b) return;
+        out.push({ gw: f[0], group: gname, groupIndex: gi, a: a, b: b });
+      });
+    });
+    if (ds) { try { Object.defineProperty(ds, "_fx", { value: out, enumerable: false }); } catch (e) {} }
+    return out;
+  }
+
+  // Does the dataset carry a schedule at all? Everything below degrades to
+  // nothing rather than guessing when it does not.
+  C.hasFixtures = function (ds) { return fixtureRows(ds).length > 0; };
+
+  C.fixtureGws = function (ds) {
+    var seen = {};
+    fixtureRows(ds).forEach(function (f) { seen[f.gw] = 1; });
+    return Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+  };
+
+  function decorate(ds, f, mm) {
+    var sa = gwScore(ds, f.a, f.gw), sb = gwScore(ds, f.b, f.gw);
+    var played = sa != null && sb != null;
+    return {
+      gw: f.gw, group: f.group, groupIndex: f.groupIndex,
+      a: { id: f.a, name: nm(mm, f.a), player: pl(mm, f.a), score: sa },
+      b: { id: f.b, name: nm(mm, f.b), player: pl(mm, f.b), score: sb },
+      played: played,
+      result: !played ? null : (sa > sb ? "a" : (sb > sa ? "b" : "draw"))
+    };
+  }
+
+  // Every fixture in one gameweek, optionally narrowed to one group.
+  C.fixtures = function (ds, gw, groupIndex) {
+    var mm = managerMap(ds);
+    return fixtureRows(ds)
+      .filter(function (f) {
+        return +f.gw === +gw && (groupIndex == null || f.groupIndex === +groupIndex);
+      })
+      .map(function (f) { return decorate(ds, f, mm); });
+  };
+
+  // One manager's whole head-to-head season: who they have played, who they
+  // have left, and how each one went.
+  C.h2hRecord = function (ds, entryId) {
+    entryId = +entryId;
+    var mm = managerMap(ds);
+    var rows = fixtureRows(ds).filter(function (f) { return f.a === entryId || f.b === entryId; });
+    if (!rows.length) return null;
+    var w = 0, d = 0, l = 0, pf = 0, pa = 0;
+    var out = rows.map(function (f) {
+      var m = decorate(ds, f, mm);
+      var mine = f.a === entryId ? m.a : m.b;
+      var opp = f.a === entryId ? m.b : m.a;
+      var res = null;
+      if (m.played) {
+        res = mine.score > opp.score ? "W" : (mine.score < opp.score ? "L" : "D");
+        if (res === "W") w++; else if (res === "L") l++; else d++;
+        pf += mine.score; pa += opp.score;
+      }
+      return { gw: f.gw, group: f.group, me: mine, opp: opp, played: m.played, result: res };
+    }).sort(function (x, y) { return x.gw - y.gw; });
+    var h = cfg().h2h;
+    return { rows: out, w: w, d: d, l: l, played: w + d + l,
+             pts: w * h.pointsWin + d * h.pointsDraw + l * h.pointsLoss,
+             pointsFor: pf, pointsAgainst: pa,
+             group: out.length ? out[0].group : null };
+  };
+
   C.knockout = function (ds, comp) {
     if (!ds) return null;
     comp = comp === "uel" ? "uel" : "ucl";

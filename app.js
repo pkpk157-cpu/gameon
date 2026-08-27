@@ -103,9 +103,9 @@
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function num(n) { if (n == null || isNaN(n)) return "—"; return Number(n).toLocaleString("en-US"); }
-  // Prizes are rupees in an Indian league, so they group in lakhs: 4,04,250
-  // rather than 404,250. Points and ranks keep the plain grouping — they are
-  // counts, not money, and only money is written this way here.
+  // Reward figures group in lakhs: 4,04,250 rather than 404,250. Points and
+  // ranks keep the plain grouping — they are counts, and only the reward
+  // tables are written this way.
   function money(n) {
     if (n == null || isNaN(n)) return "\u2014";
     try { return Number(n).toLocaleString("en-IN"); } catch (e) { return num(n); }
@@ -909,7 +909,7 @@
       '<input class="in" id="classicSearch" placeholder="Search manager or team…"></label>';
 
     h += '<div class="freeze"><table class="t"><thead><tr>' +
-      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num">Move</th><th class="num">Prize</th>' +
+      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num">Move</th><th class="num">Reward</th>' +
       '</tr></thead><tbody id="classicBody">' + classicRows(rows) + '</tbody></table></div>';
 
     host.innerHTML = h;
@@ -929,11 +929,11 @@
              : r.move < 0 ? '<span class="move down">▼' + Math.abs(r.move) + '</span>'
              : '<span class="move flat">–</span>';
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
-      // Managers still level after months won share the place and the money,
+      // Managers still level after months won share the place and the reward,
       // so say so rather than showing an order the table cannot justify.
       var eq = r.tiedWith > 1
         ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
-          (r.tiedWith > 2 ? 's' : '') + ' — prize shared">=</span>' : '';
+          (r.tiedWith > 2 ? 's' : '') + ' — reward shared">=</span>' : '';
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
         '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
@@ -955,7 +955,7 @@
       var label = r.from === r.to ? ordinal(r.from) : (ordinal(r.from) + " – " + ordinal(r.to));
       rows += '<tr><td>' + label + '</td><td class="num">' + money(r.amount) + '</td></tr>';
     });
-    return '<div class="card"><div class="hd"><h3>Prize breakdown</h3></div><div class="bd">' +
+    return '<div class="card"><div class="hd"><h3>Reward breakdown</h3></div><div class="bd">' +
       '<table class="prizetable">' + rows + '</table></div></div>';
   }
 
@@ -998,7 +998,7 @@
     if (!M.rows.length) { return '<div class="callout">No gameweeks scored yet for this month.</div>'; }
     var h = '';
 
-    h += '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Bench</th><th class="num">Prize</th></tr></thead><tbody>';
+    h += '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Bench</th><th class="num">Reward</th></tr></thead><tbody>';
     h += M.rows.map(function (r) {
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
@@ -1126,9 +1126,11 @@
     var cur = K.currentGw(ds) || 0;
     if (!state.h2hStage) state.h2hStage = (kickoff && cur >= kickoff) ? "ko-ucl" : "groups";
 
-    var stages = [{ k: "groups", label: "Group stage" },
-                  { k: "ko-ucl", label: "UCL knockouts" },
-                  { k: "ko-uel", label: "UEL knockouts" }];
+    var stages = [{ k: "groups", label: "Group stage" }];
+    if (K.hasFixtures(ds)) stages.push({ k: "fixtures", label: "Fixtures" });
+    stages.push({ k: "ko-ucl", label: "UCL knockouts" },
+                { k: "ko-uel", label: "UEL knockouts" });
+    if (!stages.some(function (st) { return st.k === state.h2hStage; })) state.h2hStage = "groups";
     var h = '<div class="pickrow"><select class="in narrow" id="stageSel">' +
       stages.map(function (st) {
         return '<option value="' + st.k + '"' + (st.k === state.h2hStage ? ' selected' : '') + '>' + esc(st.label) + '</option>';
@@ -1140,7 +1142,42 @@
 
     function draw() {
       var extra = $("#stageExtra", host), meta = $("#stageMeta", host), panel = $("#grpPanel", host);
-      setFill(state.h2hStage === "groups");
+      setFill(state.h2hStage === "groups" || state.h2hStage === "fixtures");
+      if (state.h2hStage === "fixtures") {
+        var gws = K.fixtureGws(ds);
+        var live = K.currentGw(ds) || gws[0];
+        if (!state.fxGw || gws.indexOf(+state.fxGw) === -1) {
+          // open on the gameweek being played, or the next one with fixtures
+          state.fxGw = gws.filter(function (g) { return g >= live; })[0] || gws[gws.length - 1];
+        }
+        var groups = h2h.groups || [];
+        if (state.fxGroup == null || state.fxGroup === "") state.fxGroup = "all";
+        extra.innerHTML =
+          '<select class="in narrow" id="fxGw">' + gws.map(function (g) {
+            return '<option value="' + g + '"' + (+g === +state.fxGw ? ' selected' : '') +
+              '>GW ' + g + '</option>';
+          }).join("") + '</select>' +
+          '<select class="in narrow" id="fxGroup">' +
+          '<option value="all"' + (state.fxGroup === "all" ? ' selected' : '') + '>All groups</option>' +
+          groups.map(function (g, i) {
+            return '<option value="' + i + '"' + (String(i) === String(state.fxGroup) ? ' selected' : '') +
+              '>' + esc(g.name) + '</option>';
+          }).join("") + '</select>';
+        meta.textContent = "";
+        var drawFx = function () {
+          panel.innerHTML = fixturesPanel(ds,
+            +state.fxGw, state.fxGroup === "all" ? null : +state.fxGroup);
+          $all("[data-entry]", panel).forEach(function (el) {
+            el.addEventListener("click", function () {
+              location.hash = "profile/" + el.getAttribute("data-entry");
+            });
+          });
+        };
+        $("#fxGw", host).addEventListener("change", function () { state.fxGw = +this.value; drawFx(); });
+        $("#fxGroup", host).addEventListener("change", function () { state.fxGroup = this.value; drawFx(); });
+        drawFx();
+        return;
+      }
       if (state.h2hStage === "groups") {
         extra.innerHTML = '<select class="in narrow" id="grpSel">' + h2h.groups.map(function (g, i) {
           return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
@@ -1241,6 +1278,35 @@
       '<span class="sd">' + esc(badge) + '</span></div>';
   }
 
+  // A gameweek's fixtures. A played tie shows both scores with the winner
+  // marked; one still to come shows the two names and nothing else, because
+  // nothing else is known yet.
+  function fixturesPanel(ds, gw, groupIndex) {
+    var list = K.fixtures(ds, gw, groupIndex);
+    if (!list.length) {
+      return '<div class="callout">No fixtures for GW' + gw + '.</div>';
+    }
+    var byGroup = {}, order = [];
+    list.forEach(function (f) {
+      if (!byGroup[f.group]) { byGroup[f.group] = []; order.push(f.group); }
+      byGroup[f.group].push(f);
+    });
+    var side = function (t, win, played) {
+      return '<div class="fxs' + (win ? " win" : "") + '" data-entry="' + t.id + '">' +
+        '<span class="fxn">' + esc(t.name) + '</span>' +
+        '<span class="fxp">' + (played ? num(t.score) : "\u2013") + '</span></div>';
+    };
+    return '<div class="freeze"><div class="fxwrap">' + order.map(function (gname) {
+      var rows = byGroup[gname].map(function (f) {
+        return '<div class="fx' + (f.played ? "" : " ahead") + '">' +
+          side(f.a, f.result === "a", f.played) +
+          '<span class="fxv">' + (f.played ? (f.result === "draw" ? "draw" : "v") : "v") + '</span>' +
+          side(f.b, f.result === "b", f.played) + '</div>';
+      }).join("");
+      return (groupIndex == null ? '<div class="fxg">' + esc(gname) + '</div>' : '') + rows;
+    }).join("") + '</div></div>';
+  }
+
   function groupPanel(g, cfg) {
     if (!g) return '';
     var rows = g.table.map(function (t) {
@@ -1335,7 +1401,7 @@
         (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
     if (!div.rows.length) return '<div class="callout">No managers assigned to this division.</div>';
-    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Prize</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Reward</th></tr></thead><tbody>' + body + '</tbody></table></div>';
   }
 
   /* ====================================================================== */
@@ -1401,17 +1467,17 @@
     var h = '<div class="section-title"><h2>' + esc(cfg.seasonLabel || "The season") +
       '</h2><div class="rule"></div><span class="chip">Rules</span></div>';
     h += '<div class="rulelede">Five competitions running off one Fantasy Premier League team. ' +
-      'This is how each of them decides who progresses and who gets paid.</div>';
+      'This is how each of them decides who progresses and where you finish.</div>';
 
     h += '<div class="grid cols-4">' +
       '<div class="stat"><div class="k">' + num(n) + '</div><div class="l">Managers</div></div>' +
       '<div class="stat"><div class="k">' + cfg.totalGameweeks + '</div><div class="l">Gameweeks</div></div>' +
       '<div class="stat"><div class="k">' + comps.length + '</div><div class="l">Competitions</div></div>' +
-      '<div class="stat"><div class="k">' + money(pot.total) + '</div><div class="l">Total prize money</div></div>' +
+      '<div class="stat"><div class="k">' + money(pot.total) + '</div><div class="l">Total rewards</div></div>' +
       '</div>';
 
-    /* where the money goes */
-    h += '<div class="section-title"><h2>Where the money goes</h2><div class="rule"></div></div>';
+    /* how the rewards are shared */
+    h += '<div class="section-title"><h2>How the rewards are shared</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd"><div class="potlist">' + comps.map(function (c) {
       return '<button type="button" class="potrow" data-topic="' + c.k + '">' +
         '<span class="pr-n">' + esc(c.name) + '</span>' +
@@ -1420,7 +1486,7 @@
         '<span class="pr-p">' + esc(c.paid) + '</span>' +
         '</button>';
     }).join("") + '</div>' +
-      '<div class="note" style="margin-top:12px">Totals are added up from the prize tables themselves, ' +
+      '<div class="note" style="margin-top:12px">Totals are added up from the reward tables themselves, ' +
       'so they always agree with what each competition actually pays. Tap one to read its rules.</div>' +
       '</div></div>';
 
@@ -1447,18 +1513,18 @@
         return '<li><b>' + esc(r.title) + '</b><span>' + esc(r.body) + '</span></li>';
       }).join("") + '</ol></div></div>';
 
-    h += '<div class="section-title"><h2>Monthly prizes</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
-    h += '<div class="section-title"><h2>Pyramid prizes</h2><div class="rule"></div><span class="chip">per mini-season</span></div>' +
+    h += '<div class="section-title"><h2>Monthly rewards</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
+    h += '<div class="section-title"><h2>Pyramid rewards</h2><div class="rule"></div><span class="chip">per mini-season</span></div>' +
       pyramidPrizeCard(cfg) +
       '<div class="note" style="margin:8px 2px 0">' + money(pot.pyramidPerSeason) +
-      ' a mini-season, paid ' + (cfg.pyramid.seasons || []).length + ' times across the season.</div>';
+      ' a mini-season, awarded ' + (cfg.pyramid.seasons || []).length + ' times across the season.</div>';
 
     // Two different things, and the credit should not run them together: the
     // league is Lasil's, the app is PK's.
     h += '<div class="section-title"><h2>About</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd">' +
       '<div class="credit"><div class="cr-l">The league</div>' +
-      '<div class="cr-b"><b>Game On</b> is a paid Fantasy Premier League league system ' +
+      '<div class="cr-b"><b>Game On</b> is a Fantasy Premier League league system ' +
       'created by <b>Lasil Dias</b>. ' +
       esc(cfg.version ? ("V" + cfg.version) : (cfg.seasonLabel || "This")) +
       ' is this season\u2019s edition.</div></div>' +
@@ -1531,18 +1597,18 @@
         { h: "How you progress", list: [
           "Ranked on your <b>total points across the season</b>, net of hits.",
           "Nobody is eliminated \u2014 the table simply stands at GW\u00a0" + cfg.totalGameweeks + ".",
-          "The <b>top 45 places</b> are paid."
+          "The <b>top 45 places</b> are rewarded."
         ] },
         { h: "If two managers finish level", chain: [
           { t: "Months won", s: "Whoever has won more monthly competitions finishes ahead." },
-          { t: "Share the place and split the money",
-            s: "Still level, and they take the same joint position. The prize money for all the tied places is pooled and divided evenly, in whole rupees, with any remainder going to the higher places." }
+          { t: "Share the place and split the reward",
+            s: "Still level, and they take the same joint position. The rewards for all the tied places are pooled and divided evenly, with any remainder going to the higher places." }
         ] }
       ] };
 
     if (topic === "monthly") return {
       name: "Monthly Winners", back: "monthly",
-      lede: "Ten separate mini-competitions, one per calendar month from August to May. Top three in each are paid.",
+      lede: "Ten separate mini-competitions, one per calendar month from August to May. Top three in each are rewarded.",
       extra: prizesBlock(monthlyPrizeCard(cfg)),
       blocks: [
         { h: "How you progress", list: [
@@ -1594,7 +1660,7 @@
           "Your score in a mini-season is the sum of your gameweek scores in it, <b>hits included</b>.",
           "Between mini-seasons the <b>top " + cfg.pyramid.promoteCount + " of each division go up</b> and the <b>bottom " +
             cfg.pyramid.relegateCount + " go down</b>.",
-          "The <b>top three in every division</b> are paid at the end of every mini-season."
+          "The <b>top three in every division</b> are rewarded at the end of every mini-season."
         ] },
         { h: "If two managers finish level in a division", chain: [
           { t: "The last gameweek of the mini-season", s: "Higher score in that gameweek finishes ahead." },
@@ -1634,12 +1700,12 @@
   }
 
   function prizesBlock(card) {
-    return '<div class="section-title"><h2>Prizes</h2><div class="rule"></div></div>' + card;
+    return '<div class="section-title"><h2>Rewards</h2><div class="rule"></div></div>' + card;
   }
   function pyramidVisualCard() {
     return '<div class="section-title"><h2>The pyramid</h2><div class="rule"></div></div>' +
       '<div class="card"><div class="bd"><div class="pyr">' +
-      '<div class="lvl elite">ELITE<small>promotion top · biggest prizes</small></div>' +
+      '<div class="lvl elite">ELITE<small>promotion top · biggest rewards</small></div>' +
       '<div class="lvl championship">CHAMPIONSHIP</div>' +
       '<div class="lvl challenger">CHALLENGER</div>' +
       '<div class="lvl conference">CONFERENCE<small>climb up · top 5 promoted, bottom 5 relegated</small></div>' +
@@ -1925,10 +1991,10 @@
     // repeated here. One compact card per competition.
     var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : '';
 
-    // One prize-led section: every competition, and how near the money.
+    // One section per competition, and how near the places each one is.
     var W = K.winnings(ds, id);
     var PS = K.prizeStatus(ds, id);
-    h += '<div class="section-title"><h2>Prize money</h2><div class="rule"></div></div>';
+    h += '<div class="section-title"><h2>Rewards</h2><div class="rule"></div></div>';
     h += '<div class="pcards">';
     h += pcard("Won", money(W.settled), W.settled ? "banked" : "nothing settled yet");
     h += pcard("On track for", money(W.onTrack), W.onTrack ? "if it ended today" : "no prize position");
@@ -1937,7 +2003,7 @@
     if (PS.length) {
       h += '<div class="card"><div class="tablewrap"><table class="t prizetbl"><tbody>';
       h += PS.map(function (e) {
-        var pill = e.state === "in" ? '<span class="pill up">in the money</span>'
+        var pill = e.state === "in" ? '<span class="pill up">in the places</span>'
                  : e.state === "alive" ? '<span class="pill">still in</span>'
                  : '<span class="pill out">out</span>';
         var dist = "";
@@ -1982,7 +2048,7 @@
 
     if (P.monthly.length) {
       h += '<div class="section-title"><h2>Monthly</h2><div class="rule"></div></div>';
-      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">Prize</th></tr></thead><tbody>';
+      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">Reward</th></tr></thead><tbody>';
       h += P.monthly.map(function (m) {
         return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
           '<td class="num">' + (m.prize ? '<span class="prize">' + money(m.prize) + '</span>' : '') + '</td></tr>';
@@ -2289,7 +2355,7 @@
     }).filter(function (x) { return x.total > 0; })
       .sort(function (a, b) { return (b.settled - a.settled) || (b.onTrack - a.onTrack); });
     if (purse.length) {
-      h += '<div class="section-title"><h2>Prize money</h2><div class="rule"></div></div>';
+      h += '<div class="section-title"><h2>Rewards</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="bd">';
       h += hlist("On course to win", purse.slice(0, 8), function (x) {
         return { id: x.id, name: x.name, tag: x.settled ? money(x.settled) + " settled" : "", val: money(x.total) };
@@ -2615,8 +2681,8 @@
     h += '<div class="card"><div class="bd">';
     h += '<div class="note" style="margin-bottom:12px">The app auto-computes everything it can. Use these to lock outcomes that need human judgement or the real draw. Each opens a JSON editor with the current auto value pre-filled.</div>';
     h += '<div class="btnrow">' +
-      '<button class="btn" data-ov="months">Month → GW map & prizes</button>' +
-      '<button class="btn" data-ov="classicPrizes">Classic prizes</button>' +
+      '<button class="btn" data-ov="months">Month → GW map & rewards</button>' +
+      '<button class="btn" data-ov="classicPrizes">Classic rewards</button>' +
       '<button class="btn" data-ov="lmsElim">LMS manual eliminations</button>' +
       '<button class="btn" data-ov="pyramidRosters">Pyramid rosters</button>' +
       '<button class="btn" data-ov="h2hGroups">H2H groups</button>' +
@@ -2696,7 +2762,7 @@
     var title, path, value, help;
     if (kind === "months") { title = "Month → GW map & prizes"; path = ["_configMonths"]; value = cfg.months;
       help = "Set which gameweeks belong to each month and the prizes. This drives the Monthly tab."; }
-    else if (kind === "classicPrizes") { title = "Classic prizes"; path = ["_configClassicPrizes"]; value = cfg.classicPrizes;
+    else if (kind === "classicPrizes") { title = "Classic rewards"; path = ["_configClassicPrizes"]; value = cfg.classicPrizes;
       help = "exact = rank→amount; ranges = inclusive from/to bands."; }
     else if (kind === "lmsElim") { title = "LMS manual eliminations"; path = ["lms", "elim"]; value = (ov.lms && ov.lms.elim) || {};
       help = 'Override who is eliminated in a GW: { "5": [entryId, entryId] }. Leave empty to auto-compute.'; }
