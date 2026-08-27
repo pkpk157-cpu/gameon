@@ -1401,9 +1401,18 @@
       '<div class="note" style="margin:8px 2px 0">' + money(pot.pyramidPerSeason) +
       ' a mini-season, paid ' + (cfg.pyramid.seasons || []).length + ' times across the season.</div>';
 
+    // Two different things, and the credit should not run them together: the
+    // league is Lasil's, the app is PK's.
     h += '<div class="section-title"><h2>About</h2><div class="rule"></div></div>';
-    h += '<div class="card"><div class="bd"><div class="note" style="line-height:1.7">' +
-      'Game On V12 is a community tracker built for this league by <b>PK</b>.<br>' +
+    h += '<div class="card"><div class="bd">' +
+      '<div class="credit"><div class="cr-l">The league</div>' +
+      '<div class="cr-b"><b>Game On</b> is a paid Fantasy Premier League league system ' +
+      'created by <b>Lasil Dias</b>. ' +
+      esc(cfg.version ? ("V" + cfg.version) : (cfg.seasonLabel || "This")) +
+      ' is this season\u2019s edition.</div></div>' +
+      '<div class="credit"><div class="cr-l">The app</div>' +
+      '<div class="cr-b">This tracker was brought to life by <b>PK</b>.</div></div>' +
+      '<div class="note" style="line-height:1.7;margin-top:12px">' +
       'Player and scoring data \u00a9 the Fantasy Premier League. ' +
       'Not affiliated with, endorsed by, or connected to the Premier League or FPL.' +
       '</div></div></div>';
