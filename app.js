@@ -787,10 +787,17 @@
     // narrow screen the sync half drops rather than truncating the deadline.
     if (!sub && TABS.some(function (t) { return t.id === state.view; })) {
       var ds2 = S.dataset();
-      var dl = ds2 ? K.nextDeadline(ds2) : null;
-      if (dl) sub += '<span>GW' + dl.gw + ' ' + esc(untilText(dl.msLeft)) + '</span>';
+      // While a gameweek is being played the bar names IT, not the next
+      // deadline — a weekend of "GW3 in 6d" over live GW2 tables reads wrong.
+      var liveNow = ds2 ? K.liveGwId(ds2) : null;
+      if (liveNow) {
+        sub += '<span>GW' + liveNow + ' live</span>';
+      } else {
+        var dl = ds2 ? K.nextDeadline(ds2) : null;
+        if (dl) sub += '<span>GW' + dl.gw + ' ' + esc(untilText(dl.msLeft)) + '</span>';
+      }
       if (ds2 && ds2.updatedAt) {
-        sub += '<span class="syncago">' + (dl ? ' \u00b7 ' : '') + 'synced ' +
+        sub += '<span class="syncago">' + (sub ? ' \u00b7 ' : '') + 'synced ' +
           esc(agoText(Date.now() - Date.parse(ds2.updatedAt))) + '</span>';
       }
     }
