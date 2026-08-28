@@ -424,8 +424,12 @@
       var need = elimGrid[liveGw] || 0;
       var ltable = aliveIds.map(function (id) {
         var hh = (ds.history[id] && ds.history[id][liveGw]) ? ds.history[id][liveGw] : null;
+        // The same live-aware scoring every other view uses — FPL's history
+        // row lags during a live gameweek, and reading it raw left this table
+        // on zeros while the rest of the app moved.
+        var sc = gwScore(ds, id, liveGw);
         return { id: id, name: nm(mm, id), player: pl(mm, id),
-                 score: hh ? hh.p : 0, bench: hh ? hh.b : 0, hit: hh ? hh.h : 0,
+                 score: sc == null ? 0 : sc, bench: gwBench(ds, id, liveGw), hit: hh ? hh.h : 0,
                  played: (hh && hh.pl != null) ? hh.pl : null, playedTotal: (hh && hh.plt) ? hh.plt : 12,
                  eliminated: false, atRisk: false };
       }).sort(function (a, b) { return (a.score - b.score) || (a.bench - b.bench); });
