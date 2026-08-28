@@ -573,11 +573,25 @@ async function h2hAll(id) {
     }
   }
 
+  // The current gameweek's real-world fixtures, by club short name, so a
+  // player's card can say who he faces before he has played: [home, away,
+  // started, finished] per match. One request; refreshed every run so the
+  // started flags track the afternoon.
+  let gwFixtures = {};
+  if (curEv) {
+    try {
+      const fx = await getJSON("/fixtures/?event=" + curEv.id);
+      gwFixtures[curEv.id] = (fx || []).map((f) =>
+        [teamShort[f.team_h] || "?", teamShort[f.team_a] || "?", f.started ? 1 : 0, f.finished ? 1 : 0]);
+      console.log("GW " + curEv.id + " — " + gwFixtures[curEv.id].length + " real fixtures published");
+    } catch (e) { console.log("  gw fixtures failed (non-fatal): " + e.message); }
+  }
+
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
-    elements, pitchGw, picksV: 2, livePoints, picks, chips,
+    elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort,
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog
   };
   // Refuse to publish something clearly worse than what is already live: a

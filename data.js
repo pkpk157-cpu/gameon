@@ -235,7 +235,13 @@
       });
       // nothing new to say: identical points and bonus leave the app alone
       var oldP = (ds.livePoints || {})[gw] || {}, oldB = (ds.liveBonus || {})[gw] || {};
-      var same = Object.keys(pts).length === Object.keys(oldP).length &&
+      var oldFx = JSON.stringify((ds.gwFixtures || {})[gw] || null);
+      var newFx = ds.teams ? JSON.stringify((fixtures || []).map(function (f) {
+        return [ds.teams[f.team_h] || "?", ds.teams[f.team_a] || "?",
+                f.started ? 1 : 0, f.finished ? 1 : 0];
+      })) : oldFx;
+      var same = oldFx === newFx &&
+        Object.keys(pts).length === Object.keys(oldP).length &&
         Object.keys(pts).every(function (k) { return oldP[k] === pts[k]; }) &&
         Object.keys(bonus).length === Object.keys(oldB).length &&
         Object.keys(bonus).every(function (k) { return oldB[k] === bonus[k]; });
@@ -251,6 +257,14 @@
       nd.livePoints = merge1(ds.livePoints, gw, pts);
       nd.liveBonus = merge1(ds.liveBonus, gw, bonus);
       nd.liveStats = merge1(ds.liveStats, gw, { g: goals, c: cs, a: assists });
+      // the started/finished flags on the real fixtures move with the
+      // afternoon, and the pitch cards flip from opponent to points on them
+      if (ds.teams) {
+        nd.gwFixtures = merge1(ds.gwFixtures, gw, (fixtures || []).map(function (f) {
+          return [ds.teams[f.team_h] || "?", ds.teams[f.team_a] || "?",
+                  f.started ? 1 : 0, f.finished ? 1 : 0];
+        }));
+      }
       _dataset = nd;
       return true;
     }).catch(function () { return false; });

@@ -91,7 +91,7 @@
   /* Section title with an info button that opens the competition's rules page. */
   var TABS = [
     { id: "classic", label: "Classic", icon: "classic" },
-    { id: "monthly", label: "Monthly", icon: "monthly" },
+    { id: "monthly", label: "MoM", icon: "monthly" },
     { id: "lms",     label: "LMS",     icon: "lms" },
     { id: "pyramid", label: "Pyramid", icon: "pyramid" },
     { id: "h2h",     label: "UCL",     icon: "h2h" }
@@ -532,7 +532,7 @@
     var backTo = TABS.map(function (t) { return t.id; }).indexOf(state.backView) === -1
       ? "classic" : state.backView;
     var items = [
-      { k: "league", go: backTo, t: "Game On tournament", s: "Classic, Monthly, LMS, Pyramid and UCL" },
+      { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL" },
       { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving" }
     ];
     var inLeague = here !== "prices";
@@ -787,7 +787,7 @@
 
   var VIEW_META = {
     classic: { t: "Classic League", topic: "classic" },
-    monthly: { t: "Monthly", topic: "monthly" },
+    monthly: { t: "Manager of the Month", topic: "monthly" },
     lms:     { t: "Last Manager Standing", topic: "lms" },
     pyramid: { t: "Pyramid", topic: "pyramid" },
     h2h:     { t: "Game On UCL", topic: "h2h" },
@@ -1620,7 +1620,7 @@
         return '<li><b>' + esc(r.title) + '</b><span>' + esc(r.body) + '</span></li>';
       }).join("") + '</ol></div></div>';
 
-    h += '<div class="section-title"><h2>Monthly XP</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
+    h += '<div class="section-title"><h2>Manager of the Month XP</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
     h += '<div class="section-title"><h2>Pyramid XP</h2><div class="rule"></div><span class="chip">per mini-season</span></div>' +
       pyramidPrizeCard(cfg) +
       '<div class="note" style="margin:8px 2px 0">' + xpa(pot.pyramidPerSeason) +
@@ -1714,7 +1714,7 @@
       ] };
 
     if (topic === "monthly") return {
-      name: "Monthly Winners", back: "monthly",
+      name: "Manager of the Month", back: "monthly",
       lede: "Ten separate mini-competitions, one per calendar month from August to May. Top three in each earn XP.",
       extra: prizesBlock(monthlyPrizeCard(cfg)),
       blocks: [
@@ -1952,12 +1952,21 @@
   function pp(p, showPos, metric) {
     var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
     if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star">★</i>';
+    // Before his match kicks off a player's card names the opponent — MUN (A)
+    // — the way the official app does; the points take the slot the moment
+    // the fixture starts.
+    var footer;
+    if ((!metric || metric === "pts") && p.waiting && p.opp) {
+      footer = '<div class="ppts opp">' + esc(p.opp) + '</div>';
+    } else {
+      footer = '<div class="ppts' + (metric && metric !== "pts" ? ' alt' : '') + '">' + esc(metricOf(p, metric)) + '</div>';
+    }
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
       '<div class="pcard">' + badge +
         '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
         '<div class="pname">' + esc(p.name) + '</div>' +
-        '<div class="ppts' + (metric && metric !== "pts" ? ' alt' : '') + '">' + esc(metricOf(p, metric)) + '</div>' +
+        footer +
       '</div></div>';
   }
 
@@ -2007,7 +2016,12 @@
       '<div class="pstat"><div class="v">' + esc(left) + '</div><div class="l">' + leftLabel + '</div></div>' +
       '<div class="pstat main"><div class="v">' + esc(mid) + '</div><div class="l">' + midLabel + '</div></div>' +
       rightOpen + '<div class="v">' + esc(right) + '</div><div class="l">' + rightLabel + '</div></div>' +
-      '</div>';
+      '</div>' +
+      // FPL-wide "selected by" lives on the prices tab; the pitch counts the
+      // league. Comparing the two without this line has already confused one
+      // reader, and 245 will read it.
+      (metric === "eo" ? '<div class="note" style="margin:2px 2px 8px">Ownership here is within ' +
+        'Game On\u2019s 245 managers. FPL-wide ownership is in Player prices.</div>' : '');
   }
 
   function mountPitch(box, ds, id, gw, mode, metric) {
@@ -2159,7 +2173,7 @@
     }
 
     if (P.monthly.length) {
-      h += '<div class="section-title"><h2>Monthly</h2><div class="rule"></div></div>';
+      h += '<div class="section-title"><h2>Manager of the Month</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>';
       h += P.monthly.map(function (m) {
         return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
@@ -2898,7 +2912,7 @@
     var cfg = S.config(), ov = S.overrides(), ds = S.dataset();
     var title, path, value, help;
     if (kind === "months") { title = "Month → GW map & prizes"; path = ["_configMonths"]; value = cfg.months;
-      help = "Set which gameweeks belong to each month and the prizes. This drives the Monthly tab."; }
+      help = "Set which gameweeks belong to each month and the prizes. This drives the Manager of the Month tab."; }
     else if (kind === "classicPrizes") { title = "Classic XP"; path = ["_configClassicPrizes"]; value = cfg.classicPrizes;
       help = "exact = rank→amount; ranges = inclusive from/to bands."; }
     else if (kind === "lmsElim") { title = "LMS manual eliminations"; path = ["lms", "elim"]; value = (ov.lms && ov.lms.elim) || {};

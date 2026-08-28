@@ -886,15 +886,30 @@
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 
     var eot = eoTable(ds, gw);
+    // Who each club faces this gameweek, from the published real fixtures:
+    // club short name -> [{opp, home, started, finished}] (a double gameweek
+    // gives a club two entries). Absent for past gameweeks, which is fine —
+    // everyone there has played.
+    var clubFx = {};
+    (((ds.gwFixtures || {})[gw]) || []).forEach(function (f) {
+      (clubFx[f[0]] = clubFx[f[0]] || []).push({ opp: f[1], home: true, started: !!f[2], finished: !!f[3] });
+      (clubFx[f[1]] = clubFx[f[1]] || []).push({ opp: f[0], home: false, started: !!f[2], finished: !!f[3] });
+    });
     function build(el, mult, isCap, isVice) {
       var meta = els[el] || ["?", 0, "", 0, 0];
       // While a fixture is in play FPL withholds bonus, so a squad reads up to
       // three points light per bonus-earning player unless it is added back.
       var prov = pb[el] || 0;
       var base = (lp[el] || 0) + prov;
+      var fx = clubFx[meta[2]] || [];
+      // The card shows the opponent until the player's match kicks off, then
+      // the points take over. "Yet to play" is every fixture still unstarted.
+      var waiting = fx.length > 0 && fx.every(function (x) { return !x.started; });
+      var oppText = fx.map(function (x) { return x.opp + (x.home ? " (H)" : " (A)"); }).join(" · ");
       return { el: el, name: meta[0], type: meta[1], team: meta[2], pos: POS[meta[1]] || "",
                pts: base * (mult || 1), base: base, prov: prov,
                price: meta[3] || 0, eo: (eot && eot.eo[el]) || 0,
+               opp: oppText, waiting: waiting,
                cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
 
