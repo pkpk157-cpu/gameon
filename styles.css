@@ -314,7 +314,10 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 .prog.up.full b, .prog.down.full b { color:var(--prog-go-ink); }
 tr.zone-top td { background:var(--good-wash); }
 tr.zone-bot td { background:var(--bad-wash); }
-tr.me td { box-shadow:inset 3px 0 0 var(--accent); }
+tr.me td { background:var(--accent-wash); }
+tr.me td:first-child { box-shadow:inset 3px 0 0 var(--accent); }
+/* my row keeps its wash even where zebra striping or zone tints apply */
+tr.me:nth-child(even) td { background:var(--accent-wash); }
 
 .pill { display:inline-block; font-size:10.5px; font-weight:600; padding:2px 9px; border-radius:999px;
   border:1px solid var(--line-strong); color:var(--ink-soft); letter-spacing:.2px; background:var(--chip); }
@@ -427,6 +430,24 @@ select.in.narrow { width:auto; min-width:120px; max-width:250px; padding-right:3
 .segsub { display:flex; gap:8px; min-width:0; }
 .segsub select.in.narrow { min-width:0; max-width:none; flex:0 0 auto; }
 .segsub select.in.narrow.grow { flex:1 1 auto; }
+
+/* My own fixture wears the official app's banner: the cyan-to-violet sweep,
+   white type, and the score pill unchanged for contrast. */
+.fx.mine {
+  background:linear-gradient(100deg, #04d9f0 0%, #4f7df9 55%, #8b5cf6 100%);
+  border-radius:14px; margin:5px 6px;
+}
+.fx.mine .fxm { color:#fff; }
+.fx.mine .fxt { color:rgba(255,255,255,.82); }
+.fx.mine .fxw { color:rgba(255,255,255,.85); }
+.fx.mine .fxsc.ahead { background:rgba(20,10,50,.35); color:#fff; }
+/* no hairline into or out of the banner */
+.fxgrp .fx.mine::before, .fxgrp .fx.mine + .fx::before { display:none; }
+
+/* me, in a knockout tie and on the stats lists */
+.side.me { background:var(--accent-wash); border-radius:8px; }
+.side.me .nm { color:var(--accent); }
+.hrow.me { background:var(--accent-wash); border-radius:10px; }
 
 /* The corner chip that swaps the finished group stage in and out once the
    knockouts have taken the tab over. */

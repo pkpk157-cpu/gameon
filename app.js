@@ -6,7 +6,7 @@
 
   var S = window.GO_STORE, K = window.GO_COMPUTE;
   var ME_KEY = "go12.me", THEME_KEY = "go12.theme";
-  var state = { view: "classic", me: lsGet(ME_KEY), monthKey: null, seasonKey: null, group: 0, h2hComp: "UCL" };
+  var state = { view: "classic", me: lsGet(ME_KEY), monthKey: null, seasonKey: null, group: null, h2hComp: "UCL" };
 
   /* Minimal line icons (24px, currentColor). */
   var ICONS = {
@@ -1118,7 +1118,11 @@
   function renderH2h(host, ds) {
     var h2h = K.h2h(ds);
     var cfg = S.config();
-    if (state.group >= h2h.groups.length) state.group = 0;
+    if (state.group == null) {
+      var mg = myGroupIndex(h2h.groups);
+      if (mg >= 0) state.group = mg;
+    }
+    if (state.group == null || state.group >= h2h.groups.length) state.group = 0;
 
     // No stage dropdown. The tab is the group stage until every group
     // gameweek is played, then it becomes the knockouts by itself; the
@@ -1166,7 +1170,10 @@
           }
           // one group at a time reads best, so open on the first; "All groups"
           // stays on the list for anyone who wants the whole gameweek at once
-          if (state.fxGroup == null || state.fxGroup === "") state.fxGroup = "0";
+          if (state.fxGroup == null || state.fxGroup === "") {
+            var mfg = myGroupIndex(groups);
+            state.fxGroup = String(mfg >= 0 ? mfg : 0);
+          }
           extra.innerHTML = seg + '<div class="segsub">' +
             '<select class="in narrow" id="fxGw">' + gws.map(function (g) {
               return '<option value="' + g + '"' + (+g === +state.fxGw ? ' selected' : '') +
@@ -1313,7 +1320,7 @@
     // just the group's letter — the full name does not fit beside a team
     var m = /group\s+([A-Za-z0-9]+)/i.exec(s.group || "");
     var badge = (m ? m[1].toUpperCase() : "?") + " #" + s.place;
-    return '<div class="side" data-entry="' + s.id + '"><span class="nm">' + esc(s.name) + '</span>' +
+    return '<div class="side' + (isMe(s.id) ? ' me' : '') + '" data-entry="' + s.id + '"><span class="nm">' + esc(s.name) + '</span>' +
       '<span class="sd">' + esc(badge) + '</span></div>';
   }
 
@@ -1344,7 +1351,8 @@
           ? '<div class="fxsc"><span class="fxp' + (f.result === "b" ? " lost" : "") + '">' + num(f.a.score) + '</span>' +
             '<span class="fxp' + (f.result === "a" ? " lost" : "") + '">' + num(f.b.score) + '</span></div>'
           : '<div class="fxsc ahead"><span class="fxv">V</span></div>';
-        return '<div class="fx' + (f.played ? "" : " ahead") + '">' +
+        var mine = isMe(f.a.id) || isMe(f.b.id);
+        return '<div class="fx' + (f.played ? "" : " ahead") + (mine ? " mine" : "") + '">' +
           side(f.a, "l") + pill + side(f.b, "r") +
           '<div class="fxw">Gameweek ' + f.gw + (f.played && f.result === "draw" ? " \u00b7 draw" : "") + '</div>' +
           '</div>';
@@ -1384,7 +1392,12 @@
 
     var cfg = S.config();
     var divKeys = pyr.divisions.map(function (d) { return d.key; });
-    var curDiv = (state.pyrDiv && divKeys.indexOf(state.pyrDiv) >= 0) ? state.pyrDiv : divKeys[0];
+    var curDiv = (state.pyrDiv && divKeys.indexOf(state.pyrDiv) >= 0) ? state.pyrDiv : null;
+    if (!curDiv) {
+      // open on the division my team sits in for the season being shown
+      var seaNow = pyr.seasons.filter(function (x) { return x.key === state.seasonKey; })[0];
+      curDiv = myDivKey(seaNow) || divKeys[0];
+    }
     state.pyrDiv = curDiv;
 
     h += '<div class="selrow">' +
@@ -2168,7 +2181,7 @@
     return '<div class="hlist"><div class="lab-sm">' + esc(title) + '</div>' +
       items.map(function (x, i) {
         var f = fmt(x);
-        return '<div class="hrow"' + (f.id ? ' data-entry="' + f.id + '"' : '') + '>' +
+        return '<div class="hrow' + (isMe(f.id) ? ' me' : '') + '"' + (f.id ? ' data-entry="' + f.id + '"' : '') + '>' +
           '<span class="hi">' + (i + 1) + '</span>' +
           '<span class="hn">' + esc(f.name) + (f.tag ? ' <span class="htag">' + esc(f.tag) + '</span>' : '') + '</span>' +
           '<span class="hp">' + esc(f.val) + '</span></div>';
@@ -2923,6 +2936,26 @@
   }
 
   function isMe(id) { return state.me && +id === +state.me; }
+
+  // Which group or division holds my team. Everything with a picker opens on
+  // it; without a chosen team the pickers keep their plain defaults.
+  function myGroupIndex(groups) {
+    if (!state.me) return -1;
+    for (var i = 0; i < (groups || []).length; i++) {
+      var t = groups[i].table || [];
+      for (var j = 0; j < t.length; j++) if (isMe(t[j].id)) return i;
+    }
+    return -1;
+  }
+  function myDivKey(SEA) {
+    if (!state.me || !SEA) return null;
+    var divs = SEA.divisions || [];
+    for (var i = 0; i < divs.length; i++) {
+      var t = divs[i].table || divs[i].rows || [];
+      for (var j = 0; j < t.length; j++) if (isMe(t[j].id)) return divs[i].key;
+    }
+    return null;
+  }
 
   // "just now" / "8m ago" / "3h ago"
   function agoText(ms) {
