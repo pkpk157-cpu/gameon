@@ -947,10 +947,12 @@
     var net = scored === null ? (total - hits) : scored;
     var sum = 0, n = 0, top = null;
     (ds.managers || []).forEach(function (m) {
-      var r = (ds.history[m.id] || {})[gw];
-      if (!r || typeof r.p !== "number") return;
-      sum += r.p; n++;
-      if (!top || r.p > top.pts) top = { id: m.id, name: m.entryName, pts: r.p };
+      // live-aware, like the total above these tiles — the raw history row
+      // lags all afternoon
+      var sc = gwScore(ds, m.id, gw);
+      if (sc === null) return;
+      sum += sc; n++;
+      if (!top || sc > top.pts) top = { id: m.id, name: m.entryName, pts: sc };
     });
 
     // Ownership and price for the squad as a whole. Effective ownership is
@@ -1001,7 +1003,9 @@
         if (!r) return;
         hits += r.h || 0;
         bench += r.b || 0;
-        if (typeof r.p === "number") {
+        // records come from finished gameweeks only — a half-played
+        // afternoon must not become somebody's "worst gameweek"
+        if (g !== cur && typeof r.p === "number") {
           if (!best || r.p > best.p) best = { gw: g, p: r.p };
           if (!worst || r.p < worst.p) worst = { gw: g, p: r.p };
         }
@@ -1028,7 +1032,10 @@
       return {
         id: id, name: nm(mm, id), player: pl(mm, id),
         pitch: C.managerPitch(ds, id, gw),
-        gwPts: row && typeof row.p === "number" ? row.p : null,
+        // the same live-aware scoring every tab uses — FPL's history row lags
+        // during a live gameweek, and this header read it raw while the
+        // pitches beneath it were already counting the afternoon
+        gwPts: gwScore(ds, id, gw),
         gwHits: row ? (row.h || 0) : 0,
         gwBench: row ? (row.b || 0) : 0,
         total: last, hits: hits, bench: bench, best: best, worst: worst, chips: chips,
@@ -1042,17 +1049,19 @@
 
     // Classic-league standing for each.
     C.classic(ds).forEach(function (r) {
-      if (+r.id === aId) A.rank = r.computedRank;
-      if (+r.id === bId) B.rank = r.computedRank;
+      // the classic table is live-adjusted, so its totals lead the raw
+      // history by the gameweek being played — take rank and total from it
+      if (+r.id === aId) { A.rank = r.computedRank; if (typeof r.total === "number") A.total = r.total; }
+      if (+r.id === bId) { B.rank = r.computedRank; if (typeof r.total === "number") B.total = r.total; }
     });
 
     // Notional head-to-head: who scored more, gameweek by gameweek.
     var rec = { w: 0, d: 0, l: 0, gws: [] };
     played.forEach(function (g) {
-      var x = (ds.history[aId] || {})[g], y = (ds.history[bId] || {})[g];
-      if (!x || !y || typeof x.p !== "number" || typeof y.p !== "number") return;
-      if (x.p > y.p) rec.w++; else if (x.p < y.p) rec.l++; else rec.d++;
-      rec.gws.push({ gw: g, a: x.p, b: y.p });
+      var xp = gwScore(ds, aId, g), yp = gwScore(ds, bId, g);
+      if (xp === null || yp === null) return;
+      if (xp > yp) rec.w++; else if (xp < yp) rec.l++; else rec.d++;
+      rec.gws.push({ gw: g, a: xp, b: yp });
     });
 
     // Who owns whom this gameweek.
@@ -1132,8 +1141,9 @@
     ds.managers.forEach(function (m) {
       var r = (ds.history[m.id] || {})[gw];
       if (!r || typeof r.p !== "number") return;
+      var sc = gwScore(ds, m.id, gw);
       rows.push({ id: m.id, name: nm(mm, m.id), player: pl(mm, m.id),
-                  p: r.p, hits: r.h || 0, bench: r.b || 0,
+                  p: sc === null ? r.p : sc, hits: r.h || 0, bench: gwBench(ds, m.id, gw) || r.b || 0,
                   value: r.v || 0, bank: r.bk || 0, transfers: r.tr || 0 });
     });
     var gwStats = null;
