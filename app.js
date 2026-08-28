@@ -1126,10 +1126,15 @@
     var cur = K.currentGw(ds) || 0;
     if (!state.h2hStage) state.h2hStage = (kickoff && cur >= kickoff) ? "ko-ucl" : "groups";
 
-    var stages = [{ k: "groups", label: "Group stage" }];
-    if (K.hasFixtures(ds)) stages.push({ k: "fixtures", label: "Fixtures" });
-    stages.push({ k: "ko-ucl", label: "UCL knockouts" },
-                { k: "ko-uel", label: "UEL knockouts" });
+    // Matches and Standings are one stage with a two-way slider, the shape
+    // the official app gives them; the slider only appears once a schedule
+    // is stored, so a dataset without one still reads as plain standings.
+    var hasFx = K.hasFixtures(ds);
+    if (state.h2hStage === "fixtures") { state.h2hStage = "groups"; state.h2hMode = "matches"; }
+    if (state.h2hMode !== "matches" || !hasFx) state.h2hMode = "standings";
+    var stages = [{ k: "groups", label: "Group stage" },
+                  { k: "ko-ucl", label: "UCL knockouts" },
+                  { k: "ko-uel", label: "UEL knockouts" }];
     if (!stages.some(function (st) { return st.k === state.h2hStage; })) state.h2hStage = "groups";
     var h = '<div class="pickrow"><select class="in narrow" id="stageSel">' +
       stages.map(function (st) {
@@ -1142,75 +1147,88 @@
 
     function draw() {
       var extra = $("#stageExtra", host), meta = $("#stageMeta", host), panel = $("#grpPanel", host);
-      setFill(state.h2hStage === "groups" || state.h2hStage === "fixtures");
-      if (state.h2hStage === "fixtures") {
-        var gws = K.fixtureGws(ds);
-        var live = K.currentGw(ds) || gws[0];
-        if (!state.fxGw || gws.indexOf(+state.fxGw) === -1) {
-          // open on the gameweek being played, or the next one with fixtures
-          state.fxGw = gws.filter(function (g) { return g >= live; })[0] || gws[gws.length - 1];
-        }
+      setFill(state.h2hStage === "groups");
+      if (state.h2hStage === "groups") {
         var groups = h2h.groups || [];
-        if (state.fxGroup == null || state.fxGroup === "") state.fxGroup = "all";
-        // two pickers, so they take a line of their own rather than pushing the
-        // group name down to a third row
-        extra.className = "two";
-        extra.innerHTML =
-          '<select class="in narrow" id="fxGw">' + gws.map(function (g) {
-            return '<option value="' + g + '"' + (+g === +state.fxGw ? ' selected' : '') +
-              '>GW ' + g + '</option>';
-          }).join("") + '</select>' +
-          '<select class="in narrow" id="fxGroup">' +
-          '<option value="all"' + (state.fxGroup === "all" ? ' selected' : '') + '>All groups</option>' +
-          groups.map(function (g, i) {
-            return '<option value="' + i + '"' + (String(i) === String(state.fxGroup) ? ' selected' : '') +
-              '>' + esc(g.name) + '</option>';
-          }).join("") + '</select>';
-        meta.textContent = "";
-        var drawFx = function () {
-          panel.innerHTML = fixturesPanel(ds,
-            +state.fxGw, state.fxGroup === "all" ? null : +state.fxGroup);
-          $all("[data-entry]", panel).forEach(function (el) {
-            el.addEventListener("click", function () {
-              location.hash = "profile/" + el.getAttribute("data-entry");
+        var matches = state.h2hMode === "matches";
+        // the two-way slider, then that mode's own pickers beneath it
+        var seg = hasFx
+          ? '<div class="seg" role="tablist">' +
+            '<button type="button" class="segb' + (matches ? ' active' : '') + '" data-mode="matches" role="tab" aria-selected="' + matches + '">Matches</button>' +
+            '<button type="button" class="segb' + (!matches ? ' active' : '') + '" data-mode="standings" role="tab" aria-selected="' + !matches + '">Standings</button></div>'
+          : '';
+        extra.className = "col";
+        if (matches) {
+          var gws = K.fixtureGws(ds);
+          var live = K.currentGw(ds) || gws[0];
+          if (!state.fxGw || gws.indexOf(+state.fxGw) === -1) {
+            // open on the gameweek being played, or the next one with fixtures
+            state.fxGw = gws.filter(function (g) { return g >= live; })[0] || gws[gws.length - 1];
+          }
+          if (state.fxGroup == null || state.fxGroup === "") state.fxGroup = "all";
+          extra.innerHTML = seg + '<div class="segsub">' +
+            '<select class="in narrow" id="fxGw">' + gws.map(function (g) {
+              return '<option value="' + g + '"' + (+g === +state.fxGw ? ' selected' : '') +
+                '>GW ' + g + '</option>';
+            }).join("") + '</select>' +
+            '<select class="in narrow grow" id="fxGroup">' +
+            '<option value="all"' + (state.fxGroup === "all" ? ' selected' : '') + '>All groups</option>' +
+            groups.map(function (g, i) {
+              return '<option value="' + i + '"' + (String(i) === String(state.fxGroup) ? ' selected' : '') +
+                '>' + esc(g.name) + '</option>';
+            }).join("") + '</select></div>';
+          meta.textContent = "";
+          var drawFx = function () {
+            panel.innerHTML = fixturesPanel(ds,
+              +state.fxGw, state.fxGroup === "all" ? null : +state.fxGroup);
+            $all("[data-entry]", panel).forEach(function (el) {
+              el.addEventListener("click", function () {
+                location.hash = "profile/" + el.getAttribute("data-entry");
+              });
             });
+          };
+          $("#fxGw", host).addEventListener("change", function () { state.fxGw = +this.value; drawFx(); });
+          $("#fxGroup", host).addEventListener("change", function () { state.fxGroup = this.value; drawFx(); });
+          drawFx();
+        } else {
+          extra.innerHTML = seg + '<div class="segsub">' +
+            '<select class="in narrow grow" id="grpSel">' + groups.map(function (g, i) {
+              return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
+            }).join("") + '</select></div>';
+          meta.textContent = "GW " + h2h.groupGwsPlayed + "/" + h2h.groupGwsTotal;
+          panel.innerHTML = groupPanel(groups[state.group] || groups[0], cfg);
+          $("#grpSel", host).addEventListener("change", function () {
+            state.group = +this.value;
+            panel.innerHTML = groupPanel(groups[state.group], cfg);
           });
-        };
-        $("#fxGw", host).addEventListener("change", function () { state.fxGw = +this.value; drawFx(); });
-        $("#fxGroup", host).addEventListener("change", function () { state.fxGroup = this.value; drawFx(); });
-        drawFx();
+        }
+        $all(".segb", extra).forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            if ((state.h2hMode === "matches") === (btn.getAttribute("data-mode") === "matches")) return;
+            state.h2hMode = btn.getAttribute("data-mode");
+            draw();
+          });
+        });
         return;
       }
       extra.className = "";
-      if (state.h2hStage === "groups") {
-        extra.innerHTML = '<select class="in narrow" id="grpSel">' + h2h.groups.map(function (g, i) {
-          return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
-        }).join("") + '</select>';
-        meta.textContent = "GW " + h2h.groupGwsPlayed + "/" + h2h.groupGwsTotal;
-        panel.innerHTML = groupPanel(h2h.groups[state.group] || h2h.groups[0], cfg);
-        $("#grpSel", host).addEventListener("change", function () {
-          state.group = +this.value;
-          panel.innerHTML = groupPanel(h2h.groups[state.group], cfg);
-        });
-      } else {
-        var B = K.knockout(ds, state.h2hStage === "ko-uel" ? "uel" : "ucl");
-        // a bracket scrolls; fill mode is for a single table fitted to the screen
-        if (!B) { extra.innerHTML = ""; meta.textContent = ""; panel.innerHTML = '<div class="callout">No knockout draw yet.</div>'; return; }
-        // Five rounds stacked one under another is a long scroll to reach the
-        // final. Pick a round the way the group stage picks a group.
-        var ri = koRoundIndex(ds, B);
-        extra.innerHTML = '<select class="in narrow" id="koRoundSel">' + B.rounds.map(function (r, i) {
-          return '<option value="' + i + '"' + (i === ri ? ' selected' : '') + '>' + esc(r.name) + '</option>';
-        }).join("") + '</select>';
-        var drawRound = function () {
-          meta.textContent = "";   // the round's own line carries its detail
-          panel.innerHTML = bracketPanel(B, state.koRound);
-        };
-        $("#koRoundSel", host).addEventListener("change", function () {
-          state.koRound = +this.value; drawRound();
-        });
-        drawRound();
-      }
+      var B = K.knockout(ds, state.h2hStage === "ko-uel" ? "uel" : "ucl");
+      // a bracket scrolls; fill mode is for a single table fitted to the screen
+      if (!B) { extra.innerHTML = ""; meta.textContent = ""; panel.innerHTML = '<div class="callout">No knockout draw yet.</div>'; return; }
+      // Five rounds stacked one under another is a long scroll to reach the
+      // final. Pick a round the way the group stage picks a group.
+      var ri = koRoundIndex(ds, B);
+      extra.innerHTML = '<select class="in narrow" id="koRoundSel">' + B.rounds.map(function (r, i) {
+        return '<option value="' + i + '"' + (i === ri ? ' selected' : '') + '>' + esc(r.name) + '</option>';
+      }).join("") + '</select>';
+      var drawRound = function () {
+        meta.textContent = "";   // the round's own line carries its detail
+        panel.innerHTML = bracketPanel(B, state.koRound);
+      };
+      $("#koRoundSel", host).addEventListener("change", function () {
+        state.koRound = +this.value; drawRound();
+      });
+      drawRound();
     }
     $("#stageSel", host).addEventListener("change", function () {
       state.h2hStage = this.value; draw();

@@ -420,13 +420,30 @@ select.in.narrow { width:auto; min-width:120px; max-width:250px; padding-right:3
 
 /* month/season picker row: narrow dropdown + GW status chips beside it */
 .pickrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-/* One extra picker sits inline beside the stage; two get a line to themselves
-   so a long group name is not squeezed onto a third row. */
+/* One extra picker sits inline beside the stage; the group stage instead
+   stacks a Matches/Standings slider over that mode's own pickers. */
 .pickrow #stageExtra { display:contents; }
-.pickrow #stageExtra.two { display:flex; gap:8px; flex:1 0 100%; min-width:0; }
-.pickrow #stageExtra.two select.in.narrow { min-width:0; max-width:none; }
-.pickrow #stageExtra.two #fxGw { flex:0 0 auto; }
-.pickrow #stageExtra.two #fxGroup { flex:1 1 auto; }
+.pickrow #stageExtra.col { display:flex; flex-direction:column; gap:10px; flex:1 0 100%; min-width:0; }
+.segsub { display:flex; gap:8px; min-width:0; }
+.segsub select.in.narrow { min-width:0; max-width:none; flex:0 0 auto; }
+.segsub select.in.narrow.grow { flex:1 1 auto; }
+
+/* The two-way slider, as the official app draws it: a soft track holding two
+   equal tabs, the active one lifted on its own card. */
+.seg {
+  display:flex; padding:3px; border-radius:15px;
+  background:var(--chip); border:1px solid var(--line);
+}
+.segb {
+  flex:1; min-width:0; appearance:none; border:0; background:transparent;
+  font-family:inherit; font-size:14.5px; font-weight:600; color:var(--ink-soft);
+  padding:10px 8px; border-radius:12px; cursor:pointer;
+  transition:background .15s ease, color .15s ease;
+}
+.segb.active {
+  background:var(--head-solid); color:var(--ink); font-weight:700;
+  box-shadow:0 1px 5px rgba(20,20,45,.14), inset 0 1px 0 var(--glass-hi);
+}
 .pickmeta { min-width:0; font-size:13px; font-weight:600; color:var(--ink-soft); }
 .gwchips { display:flex; flex-wrap:wrap; gap:4px; }
 .gwchip { font-size:10.5px; font-weight:700; min-width:22px; text-align:center; padding:2px 5px; border-radius:6px;
