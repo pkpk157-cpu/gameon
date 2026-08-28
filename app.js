@@ -1162,10 +1162,14 @@
           : '';
         if (matches) {
           var gws = K.fixtureGws(ds);
-          var live = K.currentGw(ds) || gws[0];
           if (!state.fxGw || gws.indexOf(+state.fxGw) === -1) {
-            // open on the gameweek being played, or the next one with fixtures
-            state.fxGw = gws.filter(function (g) { return g >= live; })[0] || gws[gws.length - 1];
+            // Open on the first gameweek that has not finished: the live one
+            // while matches are on, otherwise the upcoming one — who you face
+            // next is the question this stage exists to answer. Once the
+            // whole schedule is done, the last gameweek stands.
+            var doneFx = {};
+            K.finishedGws(ds).forEach(function (g) { doneFx[g] = true; });
+            state.fxGw = gws.filter(function (g) { return !doneFx[g]; })[0] || gws[gws.length - 1];
           }
           // one group at a time reads best, so open on the first; "All groups"
           // stays on the list for anyone who wants the whole gameweek at once
@@ -1353,7 +1357,8 @@
         var mine = isMe(f.a.id) || isMe(f.b.id);
         return '<div class="fx' + (f.played ? "" : " ahead") + (mine ? " mine" : "") + '">' +
           side(f.a, "l") + pill + side(f.b, "r") +
-          '<div class="fxw">Gameweek ' + f.gw + (f.played && f.result === "draw" ? " \u00b7 draw" : "") + '</div>' +
+          '<div class="fxw">Gameweek ' + f.gw +
+            (f.live ? " \u00b7 live" : (f.played && f.result === "draw" ? " \u00b7 draw" : "")) + '</div>' +
           '</div>';
       }).join("");
       return (groupIndex == null ? '<div class="fxg">' + esc(gname) + '</div>' : '') +
@@ -2133,14 +2138,15 @@
           var pill = r.played
             ? '<div class="fxsc"><span class="fxp' + (r.result === "L" ? " lost" : "") + '">' + num(r.me.score) + '</span>' +
               '<span class="fxp' + (r.result === "W" ? " lost" : "") + '">' + num(r.opp.score) + '</span></div>'
-            : '<div class="fxsc ahead"><span class="fxv">V</span></div>';
+            : '<div class="fxsc ahead"><span class="fxv">V</span></div>'; // live: result is null, so neither side dims
           return '<div class="fx' + (r.played ? "" : " ahead") + '">' +
             '<div class="fxs l"><span class="fxm">' + esc(r.me.player || r.me.name) + '</span>' +
             '<span class="fxt">' + esc(r.me.name) + '</span></div>' + pill +
             '<div class="fxs r"' + (r.opp.known ? ' data-entry="' + r.opp.id + '" role="button" tabindex="0"' : '') + '>' +
             '<span class="fxm">' + esc(r.opp.average ? "AVERAGE" : (r.opp.player || r.opp.name)) + '</span>' +
             '<span class="fxt">' + esc(r.opp.average ? "Gameweek average" : r.opp.name) + '</span></div>' +
-            '<div class="fxw">Gameweek ' + r.gw + (r.result === "D" ? " \u00b7 draw" : "") + '</div></div>';
+            '<div class="fxw">Gameweek ' + r.gw +
+              (r.live ? " \u00b7 live" : (r.result === "D" ? " \u00b7 draw" : "")) + '</div></div>';
         }).join("") + '</div></div></div>';
     }
 

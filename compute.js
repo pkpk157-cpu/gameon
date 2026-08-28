@@ -1626,7 +1626,13 @@
   function gwAverage(ds, gw) {
     var ev = (ds && ds.bootstrap && ds.bootstrap.events) || [];
     for (var i = 0; i < ev.length; i++) {
-      if (+ev[i].id === +gw) return ev[i].average > 0 ? ev[i].average : null;
+      if (+ev[i].id === +gw) {
+        if (ev[i].average > 0) return ev[i].average;
+        // From the deadline the average exists and is simply 0 until a ball
+        // is kicked — the same 0 every manager shows. Before the deadline
+        // there is nothing to show.
+        return C.liveGwId(ds) === +gw ? 0 : null;
+      }
     }
     return null;
   }
@@ -1663,12 +1669,16 @@
   function decorate(ds, f, mm) {
     var A = fxSide(ds, f.a, f.gw, mm), B = fxSide(ds, f.b, f.gw, mm);
     var sa = A.score, sb = B.score;
-    var played = sa != null && sb != null;
+    var scored = sa != null && sb != null;
+    // While the gameweek is being played the scores are live: shown, but not
+    // a verdict. Marking a mid-gameweek leader as the winner — or a 0-0 at
+    // the deadline as a draw — would state a result that does not exist yet.
+    var live = scored && C.liveGwId(ds) === +f.gw;
     return {
       gw: f.gw, group: f.group, groupIndex: f.groupIndex,
       a: A, b: B,
-      played: played,
-      result: !played ? null : (sa > sb ? "a" : (sb > sa ? "b" : "draw"))
+      played: scored, live: live,
+      result: (!scored || live) ? null : (sa > sb ? "a" : (sb > sa ? "b" : "draw"))
     };
   }
 
@@ -1695,12 +1705,15 @@
       var mine = f.a === entryId ? m.a : m.b;
       var opp = f.a === entryId ? m.b : m.a;
       var res = null;
-      if (m.played) {
+      // A live match shows its score but does not join the record until the
+      // gameweek is done — the same rule FPL's own standings follow.
+      if (m.played && !m.live) {
         res = mine.score > opp.score ? "W" : (mine.score < opp.score ? "L" : "D");
         if (res === "W") w++; else if (res === "L") l++; else d++;
         pf += mine.score; pa += opp.score;
       }
-      return { gw: f.gw, group: f.group, me: mine, opp: opp, played: m.played, result: res };
+      return { gw: f.gw, group: f.group, me: mine, opp: opp,
+               played: m.played, live: m.live, result: res };
     }).sort(function (x, y) { return x.gw - y.gw; });
     var h = cfg().h2h;
     // FPL keeps its own record for every manager, and that is what the group
