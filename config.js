@@ -237,7 +237,7 @@
       { n: 1, title: "One team per manager",
         body: "Only one team per manager for all competitions." },
       { n: 2, title: "Classic league tie breakers",
-        body: "Tie breakers settled with monthly wins between tied managers, else the reward is split as an average of the rewards for the tied spots." },
+        body: "Tie breakers settled with monthly wins between tied managers, else the XP is split as an average of the XP for the tied spots." },
       { n: 3, title: "LMS scoring",
         body: "LMS scores are for that GW alone, includes hits taken. Scores reset every week." },
       { n: 4, title: "LMS tie breaker rules",

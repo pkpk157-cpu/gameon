@@ -103,13 +103,11 @@
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function num(n) { if (n == null || isNaN(n)) return "—"; return Number(n).toLocaleString("en-US"); }
-  // Reward figures group in lakhs: 4,04,250 rather than 404,250. Points and
-  // ranks keep the plain grouping — they are counts, and only the reward
-  // tables are written this way.
-  function money(n) {
-    if (n == null || isNaN(n)) return "\u2014";
-    try { return Number(n).toLocaleString("en-IN"); } catch (e) { return num(n); }
-  }
+  // Experience points. Bare inside a table whose column head already says XP;
+  // xpa() carries the unit for anything standing on its own. Plain grouping —
+  // nothing about these figures should read as a currency.
+  function xp(n) { return num(n); }
+  function xpa(n) { return n == null || isNaN(n) ? "\u2014" : num(n) + " XP"; }
   function lsGet(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function ordinal(n) { var s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); }
@@ -909,7 +907,7 @@
       '<input class="in" id="classicSearch" placeholder="Search manager or team…"></label>';
 
     h += '<div class="freeze"><table class="t"><thead><tr>' +
-      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num">Move</th><th class="num">Reward</th>' +
+      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num">Move</th><th class="num">XP</th>' +
       '</tr></thead><tbody id="classicBody">' + classicRows(rows) + '</tbody></table></div>';
 
     host.innerHTML = h;
@@ -929,18 +927,18 @@
              : r.move < 0 ? '<span class="move down">▼' + Math.abs(r.move) + '</span>'
              : '<span class="move flat">–</span>';
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
-      // Managers still level after months won share the place and the reward,
+      // Managers still level after months won share the place and the XP,
       // so say so rather than showing an order the table cannot justify.
       var eq = r.tiedWith > 1
         ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
-          (r.tiedWith > 2 ? 's' : '') + ' — reward shared">=</span>' : '';
+          (r.tiedWith > 2 ? 's' : '') + ' — XP shared">=</span>' : '';
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
         '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="num">' + num(r.eventTotal) + '</td>' +
         '<td class="num"><b>' + num(r.total) + '</b></td>' +
         '<td class="num">' + mv + '</td>' +
-        '<td class="num">' + (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td>' +
+        '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
         '</tr>';
     }).join("");
   }
@@ -949,13 +947,13 @@
     var p = S.config().classicPrizes;
     var rows = '';
     Object.keys(p.exact).forEach(function (k) {
-      rows += '<tr><td>' + ordinal(+k) + ' place</td><td class="num">' + money(p.exact[k]) + '</td></tr>';
+      rows += '<tr><td>' + ordinal(+k) + ' place</td><td class="num">' + xp(p.exact[k]) + '</td></tr>';
     });
     (p.ranges || []).forEach(function (r) {
       var label = r.from === r.to ? ordinal(r.from) : (ordinal(r.from) + " – " + ordinal(r.to));
-      rows += '<tr><td>' + label + '</td><td class="num">' + money(r.amount) + '</td></tr>';
+      rows += '<tr><td>' + label + '</td><td class="num">' + xp(r.amount) + '</td></tr>';
     });
-    return '<div class="card"><div class="hd"><h3>Reward breakdown</h3></div><div class="bd">' +
+    return '<div class="card"><div class="hd"><h3>XP breakdown</h3></div><div class="bd">' +
       '<table class="prizetable">' + rows + '</table></div></div>';
   }
 
@@ -998,13 +996,13 @@
     if (!M.rows.length) { return '<div class="callout">No gameweeks scored yet for this month.</div>'; }
     var h = '';
 
-    h += '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Bench</th><th class="num">Reward</th></tr></thead><tbody>';
+    h += '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Bench</th><th class="num">XP</th></tr></thead><tbody>';
     h += M.rows.map(function (r) {
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td><td class="num">' + num(r.bench) + '</td>' +
-        '<td class="num">' + (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td></tr>';
+        '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
     h += '</tbody></table></div>';
     return h;
@@ -1093,7 +1091,7 @@
     return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>GW</th><th class="num">SOG</th><th class="num">Out</th><th class="num">EOG</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
   function prizeTile(label, amount, cls) {
-    return '<div class="stat"><div class="k">' + money(amount) + '</div><div class="l">' + esc(label) + '</div></div>';
+    return '<div class="stat"><div class="k">' + xpa(amount) + '</div><div class="l">' + esc(label) + '</div></div>';
   }
 
   function lmsGwTable(g, opts) {
@@ -1283,8 +1281,8 @@
         '. The rounds and their gameweeks are below.</div>';
     }
     if (B.prizes) {
-      h += '<div class="korow"><span class="pill gold">Winner ' + money(B.prizes.winner) + '</span>' +
-        '<span class="pill">Runner-up ' + money(B.prizes.runnerUp) + '</span></div>';
+      h += '<div class="korow"><span class="pill gold">Winner ' + xpa(B.prizes.winner) + '</span>' +
+        '<span class="pill">Runner-up ' + xpa(B.prizes.runnerUp) + '</span></div>';
     }
     var only = B.rounds[idx] ? [B.rounds[idx]] : B.rounds;
     h += only.map(function (r) {
@@ -1447,10 +1445,10 @@
       return '<tr class="' + zone + (isMe(r.id) ? ' me' : '') + '"><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.name) + '</span> ' + badge + '<div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td><td class="num">' +
-        (r.prize ? '<span class="prize">' + money(r.prize) + '</span>' : '') + '</td></tr>';
+        (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
     if (!div.rows.length) return '<div class="callout">No managers assigned to this division.</div>';
-    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Reward</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>' + body + '</tbody></table></div>';
   }
 
   /* ====================================================================== */
@@ -1522,21 +1520,21 @@
       '<div class="stat"><div class="k">' + num(n) + '</div><div class="l">Managers</div></div>' +
       '<div class="stat"><div class="k">' + cfg.totalGameweeks + '</div><div class="l">Gameweeks</div></div>' +
       '<div class="stat"><div class="k">' + comps.length + '</div><div class="l">Competitions</div></div>' +
-      '<div class="stat"><div class="k">' + money(pot.total) + '</div><div class="l">Total rewards</div></div>' +
+      '<div class="stat"><div class="k">' + xp(pot.total) + '</div><div class="l">Total XP</div></div>' +
       '</div>';
 
-    /* how the rewards are shared */
-    h += '<div class="section-title"><h2>How the rewards are shared</h2><div class="rule"></div></div>';
+    /* how the XP is shared */
+    h += '<div class="section-title"><h2>How the XP is shared</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd"><div class="potlist">' + comps.map(function (c) {
       return '<button type="button" class="potrow" data-topic="' + c.k + '">' +
         '<span class="pr-n">' + esc(c.name) + '</span>' +
         '<span class="pr-bar"><i style="width:' + Math.max(3, (c.amt / most) * 100).toFixed(1) + '%"></i></span>' +
-        '<span class="pr-a">' + money(c.amt) + '</span>' +
+        '<span class="pr-a">' + xp(c.amt) + '</span>' +
         '<span class="pr-p">' + esc(c.paid) + '</span>' +
         '</button>';
     }).join("") + '</div>' +
-      '<div class="note" style="margin-top:12px">Totals are added up from the reward tables themselves, ' +
-      'so they always agree with what each competition actually pays. Tap one to read its rules.</div>' +
+      '<div class="note" style="margin-top:12px">Totals are added up from the XP tables themselves, ' +
+      'so they always agree with what each competition actually awards. Tap one to read its rules.</div>' +
       '</div></div>';
 
     /* the rules behind all of them */
@@ -1550,7 +1548,7 @@
     h += comps.map(function (c) {
       return '<button type="button" class="compcard" data-topic="' + c.k + '">' +
         '<span class="cc-h"><span class="cc-n">' + esc(c.name) + '</span>' +
-        '<span class="cc-a">' + money(c.amt) + '</span></span>' +
+        '<span class="cc-a">' + xp(c.amt) + '</span></span>' +
         '<span class="cc-s">' + c.lede + '</span>' +
         '<span class="cc-go">Read the rules \u2192</span></button>';
     }).join("");
@@ -1562,10 +1560,10 @@
         return '<li><b>' + esc(r.title) + '</b><span>' + esc(r.body) + '</span></li>';
       }).join("") + '</ol></div></div>';
 
-    h += '<div class="section-title"><h2>Monthly rewards</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
-    h += '<div class="section-title"><h2>Pyramid rewards</h2><div class="rule"></div><span class="chip">per mini-season</span></div>' +
+    h += '<div class="section-title"><h2>Monthly XP</h2><div class="rule"></div></div>' + monthlyPrizeCard(cfg);
+    h += '<div class="section-title"><h2>Pyramid XP</h2><div class="rule"></div><span class="chip">per mini-season</span></div>' +
       pyramidPrizeCard(cfg) +
-      '<div class="note" style="margin:8px 2px 0">' + money(pot.pyramidPerSeason) +
+      '<div class="note" style="margin:8px 2px 0">' + xpa(pot.pyramidPerSeason) +
       ' a mini-season, awarded ' + (cfg.pyramid.seasons || []).length + ' times across the season.</div>';
 
     // Two different things, and the credit should not run them together: the
@@ -1646,18 +1644,18 @@
         { h: "How you progress", list: [
           "Ranked on your <b>total points across the season</b>, net of hits.",
           "Nobody is eliminated \u2014 the table simply stands at GW\u00a0" + cfg.totalGameweeks + ".",
-          "The <b>top 45 places</b> are rewarded."
+          "The <b>top 45 places</b> earn XP."
         ] },
         { h: "If two managers finish level", chain: [
           { t: "Months won", s: "Whoever has won more monthly competitions finishes ahead." },
-          { t: "Share the place and split the reward",
-            s: "Still level, and they take the same joint position. The rewards for all the tied places are pooled and divided evenly, with any remainder going to the higher places." }
+          { t: "Share the place and split the XP",
+            s: "Still level, and they take the same joint position. The XP for all the tied places is pooled and divided evenly, with any remainder going to the higher places." }
         ] }
       ] };
 
     if (topic === "monthly") return {
       name: "Monthly Winners", back: "monthly",
-      lede: "Ten separate mini-competitions, one per calendar month from August to May. Top three in each are rewarded.",
+      lede: "Ten separate mini-competitions, one per calendar month from August to May. Top three in each earn XP.",
       extra: prizesBlock(monthlyPrizeCard(cfg)),
       blocks: [
         { h: "How you progress", list: [
@@ -1709,7 +1707,7 @@
           "Your score in a mini-season is the sum of your gameweek scores in it, <b>hits included</b>.",
           "Between mini-seasons the <b>top " + cfg.pyramid.promoteCount + " of each division go up</b> and the <b>bottom " +
             cfg.pyramid.relegateCount + " go down</b>.",
-          "The <b>top three in every division</b> are rewarded at the end of every mini-season."
+          "The <b>top three in every division</b> earn XP at the end of every mini-season."
         ] },
         { h: "If two managers finish level in a division", chain: [
           { t: "The last gameweek of the mini-season", s: "Higher score in that gameweek finishes ahead." },
@@ -1749,12 +1747,12 @@
   }
 
   function prizesBlock(card) {
-    return '<div class="section-title"><h2>Rewards</h2><div class="rule"></div></div>' + card;
+    return '<div class="section-title"><h2>XP</h2><div class="rule"></div></div>' + card;
   }
   function pyramidVisualCard() {
     return '<div class="section-title"><h2>The pyramid</h2><div class="rule"></div></div>' +
       '<div class="card"><div class="bd"><div class="pyr">' +
-      '<div class="lvl elite">ELITE<small>promotion top · biggest rewards</small></div>' +
+      '<div class="lvl elite">ELITE<small>promotion top · most XP</small></div>' +
       '<div class="lvl championship">CHAMPIONSHIP</div>' +
       '<div class="lvl challenger">CHALLENGER</div>' +
       '<div class="lvl conference">CONFERENCE<small>climb up · top 5 promoted, bottom 5 relegated</small></div>' +
@@ -1798,15 +1796,15 @@
     }
     var rows = cfg.months.map(function (m) {
       var gws = derived[m.key] || m.gws;
-      return '<tr><td>' + esc(m.name) + '</td><td class="num prize">' + money(m.prizes[1]) + '</td>' +
-        '<td class="num">' + money(m.prizes[2]) + '</td><td class="num">' + money(m.prizes[3]) + '</td>' +
+      return '<tr><td>' + esc(m.name) + '</td><td class="num prize">' + xp(m.prizes[1]) + '</td>' +
+        '<td class="num">' + xp(m.prizes[2]) + '</td><td class="num">' + xp(m.prizes[3]) + '</td>' +
         '<td class="note">' + gwRange(gws) + '</td></tr>';
     }).join("");
     return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">1st</th><th class="num">2nd</th><th class="num">3rd</th><th>Gameweeks</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
   function pyramidPrizeCard(cfg) {
     var rows = cfg.pyramid.divisions.map(function (d) {
-      return '<tr><td>' + esc(d.name) + '</td><td class="num prize">' + money(d.prizes[1]) + '</td><td class="num">' + money(d.prizes[2]) + '</td><td class="num">' + money(d.prizes[3]) + '</td></tr>';
+      return '<tr><td>' + esc(d.name) + '</td><td class="num prize">' + xp(d.prizes[1]) + '</td><td class="num">' + xp(d.prizes[2]) + '</td><td class="num">' + xp(d.prizes[3]) + '</td></tr>';
     }).join("");
     return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Division</th><th class="num">1st</th><th class="num">2nd</th><th class="num">3rd</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
@@ -2048,10 +2046,10 @@
     // One section per competition, and how near the places each one is.
     var W = K.winnings(ds, id);
     var PS = K.prizeStatus(ds, id);
-    h += '<div class="section-title"><h2>Rewards</h2><div class="rule"></div></div>';
+    h += '<div class="section-title"><h2>XP</h2><div class="rule"></div></div>';
     h += '<div class="pcards">';
-    h += pcard("Won", money(W.settled), W.settled ? "banked" : "nothing settled yet");
-    h += pcard("On track for", money(W.onTrack), W.onTrack ? "if it ended today" : "no prize position");
+    h += pcard("Won", xpa(W.settled), W.settled ? "locked in" : "nothing settled yet");
+    h += pcard("On track for", xpa(W.onTrack), W.onTrack ? "if it ended today" : "outside the XP places");
     h += '</div>';
 
     if (PS.length) {
@@ -2069,7 +2067,7 @@
             '<div class="mgr">' + esc(e.where) + '</div></td>' +
           '<td class="num ppos">' + (e.pos ? "#" + e.pos : "\u2014") + '</td>' +
           '<td class="pstate">' + pill + (dist ? '<div class="mgr">' + dist + '</div>' : '') + '</td>' +
-          '<td class="num">' + (e.prize ? '<span class="prize">' + money(e.prize) + '</span>' : '') + '</td></tr>';
+          '<td class="num">' + (e.prize ? '<span class="prize">' + xpa(e.prize) + '</span>' : '') + '</td></tr>';
       }).join("");
       h += '</tbody></table></div>';
       h += '<div class="note" style="padding:10px 14px">Only a finished competition is settled — ' +
@@ -2102,10 +2100,10 @@
 
     if (P.monthly.length) {
       h += '<div class="section-title"><h2>Monthly</h2><div class="rule"></div></div>';
-      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">Reward</th></tr></thead><tbody>';
+      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>';
       h += P.monthly.map(function (m) {
         return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
-          '<td class="num">' + (m.prize ? '<span class="prize">' + money(m.prize) + '</span>' : '') + '</td></tr>';
+          '<td class="num">' + (m.prize ? '<span class="prize">' + xp(m.prize) + '</span>' : '') + '</td></tr>';
       }).join("");
       h += '</tbody></table></div></div>';
     }
@@ -2433,10 +2431,10 @@
     }).filter(function (x) { return x.total > 0; })
       .sort(function (a, b) { return (b.settled - a.settled) || (b.onTrack - a.onTrack); });
     if (purse.length) {
-      h += '<div class="section-title"><h2>Rewards</h2><div class="rule"></div></div>';
+      h += '<div class="section-title"><h2>XP</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="bd">';
       h += hlist("On course to win", purse.slice(0, 8), function (x) {
-        return { id: x.id, name: x.name, tag: x.settled ? money(x.settled) + " settled" : "", val: money(x.total) };
+        return { id: x.id, name: x.name, tag: x.settled ? xpa(x.settled) + " settled" : "", val: xpa(x.total) };
       }, "Nothing is settled until a competition finishes.");
       h += '</div></div>';
     }
@@ -2759,8 +2757,8 @@
     h += '<div class="card"><div class="bd">';
     h += '<div class="note" style="margin-bottom:12px">The app auto-computes everything it can. Use these to lock outcomes that need human judgement or the real draw. Each opens a JSON editor with the current auto value pre-filled.</div>';
     h += '<div class="btnrow">' +
-      '<button class="btn" data-ov="months">Month → GW map & rewards</button>' +
-      '<button class="btn" data-ov="classicPrizes">Classic rewards</button>' +
+      '<button class="btn" data-ov="months">Month → GW map & XP</button>' +
+      '<button class="btn" data-ov="classicPrizes">Classic XP</button>' +
       '<button class="btn" data-ov="lmsElim">LMS manual eliminations</button>' +
       '<button class="btn" data-ov="pyramidRosters">Pyramid rosters</button>' +
       '<button class="btn" data-ov="h2hGroups">H2H groups</button>' +
@@ -2840,7 +2838,7 @@
     var title, path, value, help;
     if (kind === "months") { title = "Month → GW map & prizes"; path = ["_configMonths"]; value = cfg.months;
       help = "Set which gameweeks belong to each month and the prizes. This drives the Monthly tab."; }
-    else if (kind === "classicPrizes") { title = "Classic rewards"; path = ["_configClassicPrizes"]; value = cfg.classicPrizes;
+    else if (kind === "classicPrizes") { title = "Classic XP"; path = ["_configClassicPrizes"]; value = cfg.classicPrizes;
       help = "exact = rank→amount; ranges = inclusive from/to bands."; }
     else if (kind === "lmsElim") { title = "LMS manual eliminations"; path = ["lms", "elim"]; value = (ov.lms && ov.lms.elim) || {};
       help = 'Override who is eliminated in a GW: { "5": [entryId, entryId] }. Leave empty to auto-compute.'; }
