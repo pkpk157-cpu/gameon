@@ -428,6 +428,16 @@ select.in.narrow { width:auto; min-width:120px; max-width:250px; padding-right:3
 .segsub select.in.narrow { min-width:0; max-width:none; flex:0 0 auto; }
 .segsub select.in.narrow.grow { flex:1 1 auto; }
 
+/* The corner chip that swaps the finished group stage in and out once the
+   knockouts have taken the tab over. */
+.archrow { display:flex; justify-content:flex-end; margin:0 2px 10px; }
+.archbtn {
+  appearance:none; border:1px solid var(--line-strong); background:var(--chip);
+  color:var(--ink-soft); font-family:inherit; font-size:12px; font-weight:600;
+  padding:5px 11px; border-radius:999px; cursor:pointer;
+}
+.archbtn:hover { color:var(--accent); border-color:var(--accent); }
+
 /* The two-way slider, as the official app draws it: a soft track holding two
    equal tabs, the active one lifted on its own card. */
 .seg {
