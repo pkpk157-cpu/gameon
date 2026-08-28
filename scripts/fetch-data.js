@@ -81,9 +81,19 @@ async function h2hFixtures(id) {
     const d = await getJSON("/leagues-h2h-matches/league/" + id + "/?page=" + page);
     const res = (d && d.results) || [];
     res.forEach((m) => {
-      // FPL pads odd-sized leagues with a phantom "AVERAGE" entry that has no id
-      if (!m || !m.entry_1_entry || !m.entry_2_entry || !m.event) return;
-      fx.push([m.event, put(m.entry_1_entry), put(m.entry_2_entry)]);
+      if (!m || !m.event) return;
+      // FPL pads an odd-sized league with a phantom "AVERAGE" opponent that has
+      // no entry id. Dropping those fixtures would leave one manager a week
+      // looking as though they had no game at all, so AVERAGE is kept and
+      // stored as -1. Anything else without an id is genuinely unusable.
+      const side = (e, n) => {
+        if (e) return put(e);
+        return /average/i.test(String(n || "")) ? -1 : null;
+      };
+      const a = side(m.entry_1_entry, m.entry_1_name);
+      const b = side(m.entry_2_entry, m.entry_2_name);
+      if (a === null || b === null) return;
+      fx.push([m.event, a, b]);
     });
     // Stop on an empty page as well as on has_next:false. If the field ever
     // moves or disappears we keep paging until a page comes back empty rather
@@ -116,7 +126,9 @@ async function h2hAll(id) {
   const bs = await getJSON("/bootstrap-static/");
   const events = (bs.events || []).map((e) => ({
     id: e.id, name: e.name, finished: e.finished, data_checked: e.data_checked,
-    is_current: e.is_current, is_next: e.is_next, deadline_time: e.deadline_time
+    is_current: e.is_current, is_next: e.is_next, deadline_time: e.deadline_time,
+    // what the phantom "AVERAGE" opponent scores in an odd-sized h2h league
+    average: e.average_entry_score
   }));
 
   console.log("Fetching classic league…");

@@ -1152,6 +1152,9 @@
         }
         var groups = h2h.groups || [];
         if (state.fxGroup == null || state.fxGroup === "") state.fxGroup = "all";
+        // two pickers, so they take a line of their own rather than pushing the
+        // group name down to a third row
+        extra.className = "two";
         extra.innerHTML =
           '<select class="in narrow" id="fxGw">' + gws.map(function (g) {
             return '<option value="' + g + '"' + (+g === +state.fxGw ? ' selected' : '') +
@@ -1178,6 +1181,7 @@
         drawFx();
         return;
       }
+      extra.className = "";
       if (state.h2hStage === "groups") {
         extra.innerHTML = '<select class="in narrow" id="grpSel">' + h2h.groups.map(function (g, i) {
           return '<option value="' + i + '"' + (i === state.group ? ' selected' : '') + '>' + esc(g.name) + '</option>';
@@ -1291,19 +1295,27 @@
       if (!byGroup[f.group]) { byGroup[f.group] = []; order.push(f.group); }
       byGroup[f.group].push(f);
     });
-    var side = function (t, win, played) {
-      return '<div class="fxs' + (win ? " win" : "") + '" data-entry="' + t.id + '">' +
-        '<span class="fxn">' + esc(t.name) + '</span>' +
-        '<span class="fxp">' + (played ? num(t.score) : "\u2013") + '</span></div>';
+    // Manager on top, team beneath, mirrored either side of the score — the
+    // shape the official app uses, which everyone in the league already reads.
+    var side = function (t, which) {
+      return '<div class="fxs ' + which + '"' +
+        (t.id ? ' data-entry="' + t.id + '" role="button" tabindex="0"' : '') + '>' +
+        '<span class="fxm">' + esc(t.average ? "AVERAGE" : (t.player || t.name)) + '</span>' +
+        '<span class="fxt">' + esc(t.average ? "Gameweek average" : t.name) + '</span></div>';
     };
     return '<div class="freeze"><div class="fxwrap">' + order.map(function (gname) {
       var rows = byGroup[gname].map(function (f) {
+        var pill = f.played
+          ? '<div class="fxsc"><span class="fxp' + (f.result === "b" ? " lost" : "") + '">' + num(f.a.score) + '</span>' +
+            '<span class="fxp' + (f.result === "a" ? " lost" : "") + '">' + num(f.b.score) + '</span></div>'
+          : '<div class="fxsc ahead"><span class="fxv">V</span></div>';
         return '<div class="fx' + (f.played ? "" : " ahead") + '">' +
-          side(f.a, f.result === "a", f.played) +
-          '<span class="fxv">' + (f.played ? (f.result === "draw" ? "draw" : "v") : "v") + '</span>' +
-          side(f.b, f.result === "b", f.played) + '</div>';
+          side(f.a, "l") + pill + side(f.b, "r") +
+          '<div class="fxw">Gameweek ' + f.gw + (f.played && f.result === "draw" ? " \u00b7 draw" : "") + '</div>' +
+          '</div>';
       }).join("");
-      return (groupIndex == null ? '<div class="fxg">' + esc(gname) + '</div>' : '') + rows;
+      return (groupIndex == null ? '<div class="fxg">' + esc(gname) + '</div>' : '') +
+        '<div class="fxgrp">' + rows + '</div>';
     }).join("") + '</div></div>';
   }
 
@@ -1984,6 +1996,11 @@
     }).join("");
     return h + '</tbody></table></div>';
   }
+  function h2hStat(label, value) {
+    return '<div class="h2hst"><div class="hv">' + num(value) + '</div>' +
+      '<div class="hl">' + esc(label) + '</div></div>';
+  }
+
   function renderProfile(host, ds, id) {
     if (!id) { host.innerHTML = '<div class="callout">No manager selected.</div>'; return; }
     var P = K.managerProfile(ds, id);
@@ -2054,6 +2071,30 @@
           '<td class="num">' + (m.prize ? '<span class="prize">' + money(m.prize) + '</span>' : '') + '</td></tr>';
       }).join("");
       h += '</tbody></table></div></div>';
+    }
+
+    // Every head-to-head this manager has played and has left, in the same
+    // shape as the fixtures tab.
+    var R = K.h2hRecord(ds, id);
+    if (R) {
+      h += '<div class="section-title"><h2>Head-to-head</h2><div class="rule"></div></div>';
+      h += '<div class="card"><div class="h2hsum">' +
+        h2hStat("Played", R.played) + h2hStat("W", R.w) + h2hStat("D", R.d) +
+        h2hStat("L", R.l) + h2hStat("Points", R.pts) + h2hStat("For", R.pointsFor) +
+        '</div><div class="fxwrap"><div class="fxgrp">' +
+        R.rows.map(function (r) {
+          var pill = r.played
+            ? '<div class="fxsc"><span class="fxp' + (r.result === "L" ? " lost" : "") + '">' + num(r.me.score) + '</span>' +
+              '<span class="fxp' + (r.result === "W" ? " lost" : "") + '">' + num(r.opp.score) + '</span></div>'
+            : '<div class="fxsc ahead"><span class="fxv">V</span></div>';
+          return '<div class="fx' + (r.played ? "" : " ahead") + '">' +
+            '<div class="fxs l"><span class="fxm">' + esc(r.me.player || r.me.name) + '</span>' +
+            '<span class="fxt">' + esc(r.me.name) + '</span></div>' + pill +
+            '<div class="fxs r"' + (r.opp.id ? ' data-entry="' + r.opp.id + '" role="button" tabindex="0"' : '') + '>' +
+            '<span class="fxm">' + esc(r.opp.average ? "AVERAGE" : (r.opp.player || r.opp.name)) + '</span>' +
+            '<span class="fxt">' + esc(r.opp.average ? "Gameweek average" : r.opp.name) + '</span></div>' +
+            '<div class="fxw">Gameweek ' + r.gw + (r.result === "D" ? " \u00b7 draw" : "") + '</div></div>';
+        }).join("") + '</div></div></div>';
     }
 
     h += '<div class="section-title"><h2>Past seasons (FPL)</h2><div class="rule"></div></div>';

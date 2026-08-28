@@ -1581,8 +1581,11 @@
       var gname = ((ds.h2h && ds.h2h[lid] && ds.h2h[lid].league) || {}).name ||
         ("Group " + String.fromCharCode(65 + gi));
       L.fx.forEach(function (f) {
-        var a = L.ents[f[1]], b = L.ents[f[2]];
-        if (!a || !b) return;
+        // -1 is FPL's phantom AVERAGE opponent in an odd-sized league; it is
+        // carried through as entry 0, which is never a real entry id.
+        var a = f[1] === -1 ? 0 : L.ents[f[1]];
+        var b = f[2] === -1 ? 0 : L.ents[f[2]];
+        if (a == null || b == null) return;
         out.push({ gw: f[0], group: gname, groupIndex: gi, a: a, b: b });
       });
     });
@@ -1600,13 +1603,33 @@
     return Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
   };
 
+  // What the AVERAGE opponent scores: the gameweek's FPL-wide average, which
+  // is the figure FPL itself puts on that fixture. It is 0 or absent until the
+  // gameweek is under way, and that reads as "not played yet" rather than 0-0.
+  function gwAverage(ds, gw) {
+    var ev = (ds && ds.bootstrap && ds.bootstrap.events) || [];
+    for (var i = 0; i < ev.length; i++) {
+      if (+ev[i].id === +gw) return ev[i].average > 0 ? ev[i].average : null;
+    }
+    return null;
+  }
+
+  function fxSide(ds, id, gw, mm) {
+    if (!id) {
+      return { id: 0, name: "AVERAGE", player: "AVERAGE",
+               average: true, score: gwAverage(ds, gw) };
+    }
+    return { id: id, name: nm(mm, id), player: pl(mm, id),
+             average: false, score: gwScore(ds, id, gw) };
+  }
+
   function decorate(ds, f, mm) {
-    var sa = gwScore(ds, f.a, f.gw), sb = gwScore(ds, f.b, f.gw);
+    var A = fxSide(ds, f.a, f.gw, mm), B = fxSide(ds, f.b, f.gw, mm);
+    var sa = A.score, sb = B.score;
     var played = sa != null && sb != null;
     return {
       gw: f.gw, group: f.group, groupIndex: f.groupIndex,
-      a: { id: f.a, name: nm(mm, f.a), player: pl(mm, f.a), score: sa },
-      b: { id: f.b, name: nm(mm, f.b), player: pl(mm, f.b), score: sb },
+      a: A, b: B,
       played: played,
       result: !played ? null : (sa > sb ? "a" : (sb > sa ? "b" : "draw"))
     };
@@ -1643,9 +1666,24 @@
       return { gw: f.gw, group: f.group, me: mine, opp: opp, played: m.played, result: res };
     }).sort(function (x, y) { return x.gw - y.gw; });
     var h = cfg().h2h;
-    return { rows: out, w: w, d: d, l: l, played: w + d + l,
-             pts: w * h.pointsWin + d * h.pointsDraw + l * h.pointsLoss,
-             pointsFor: pf, pointsAgainst: pa,
+    // FPL keeps its own record for every manager, and that is what the group
+    // table shows. Prefer it, so the strip on a profile can never drift from
+    // the standings; the fixture-derived counts stand in only if the manager
+    // is not in a group table at all.
+    var off = null;
+    ((C.h2h(ds) || {}).groups || []).forEach(function (g) {
+      (g.table || []).forEach(function (t) {
+        if (+t.id !== entryId) return;
+        off = { w: t.w || 0, d: t.d || 0, l: t.l || 0, pts: t.pts || 0,
+                pointsFor: t.gwPts || 0 };
+        off.played = off.w + off.d + off.l;
+      });
+    });
+    return { rows: out, official: !!off,
+             w: off ? off.w : w, d: off ? off.d : d, l: off ? off.l : l,
+             played: off ? off.played : w + d + l,
+             pts: off ? off.pts : w * h.pointsWin + d * h.pointsDraw + l * h.pointsLoss,
+             pointsFor: off ? off.pointsFor : pf, pointsAgainst: pa,
              group: out.length ? out[0].group : null };
   };
 

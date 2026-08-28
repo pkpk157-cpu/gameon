@@ -12,7 +12,7 @@
   --ink:#191922; --ink-soft:#54545f; --ink-faint:#5f5f6d;
   --line:rgba(20,20,45,.10); --line-strong:rgba(20,20,45,.16);
   /* Premier League palette */
-  --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052;
+  --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052; --pill-bg:#37003c;
   --pl-pink-lt:#ff2882; --pl-green:#00ff87; --pl-cyan:#04f5ff;
   /* accent + semantics */
   --accent:#d0004f; --accent-2:#6b1f7a; --on-accent:#ffffff; --accent-wash:rgba(208,0,79,.13);
@@ -55,7 +55,7 @@
     color-scheme: dark;
     --ink:#f3f2f8; --ink-soft:#c1c0cc; --ink-faint:#8a8996;
     --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.18);
-    --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052;
+    --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052; --pill-bg:#5b1668;
     --pl-pink-lt:#ff2882; --pl-green:#00ff87; --pl-cyan:#04f5ff;
     --accent:#ff2882; --accent-2:#c98bff; --on-accent:#2a0014; --accent-wash:rgba(255,40,130,.15);
     --accent-lift:#ff4291; --accent-tint:rgba(255,40,130,.12); --gold-wash:rgba(246,196,69,.16);
@@ -84,7 +84,7 @@
   color-scheme: dark;
   --ink:#f3f2f8; --ink-soft:#c1c0cc; --ink-faint:#8a8996;
   --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.18);
-  --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052;
+  --pl-purple:#37003c; --pl-purple-2:#4a0050; --pl-pink:#e90052; --pill-bg:#5b1668;
   --pl-pink-lt:#ff2882; --pl-green:#00ff87; --pl-cyan:#04f5ff;
   --accent:#ff2882; --accent-2:#c98bff; --on-accent:#2a0014; --accent-wash:rgba(255,40,130,.15);
   --accent-lift:#ff4291; --accent-tint:rgba(255,40,130,.12); --gold-wash:rgba(246,196,69,.16);
@@ -420,6 +420,13 @@ select.in.narrow { width:auto; min-width:120px; max-width:250px; padding-right:3
 
 /* month/season picker row: narrow dropdown + GW status chips beside it */
 .pickrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+/* One extra picker sits inline beside the stage; two get a line to themselves
+   so a long group name is not squeezed onto a third row. */
+.pickrow #stageExtra { display:contents; }
+.pickrow #stageExtra.two { display:flex; gap:8px; flex:1 0 100%; min-width:0; }
+.pickrow #stageExtra.two select.in.narrow { min-width:0; max-width:none; }
+.pickrow #stageExtra.two #fxGw { flex:0 0 auto; }
+.pickrow #stageExtra.two #fxGroup { flex:1 1 auto; }
 .pickmeta { min-width:0; font-size:13px; font-weight:600; color:var(--ink-soft); }
 .gwchips { display:flex; flex-wrap:wrap; gap:4px; }
 .gwchip { font-size:10.5px; font-weight:700; min-width:22px; text-align:center; padding:2px 5px; border-radius:6px;
@@ -530,6 +537,7 @@ main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }
 /* A little room at the foot of the scroller so the last row can always clear
    the tab bar, even before the measured heights land on first paint. */
 main.wrap.fill .freeze table.t tbody tr:last-child td { padding-bottom:14px; }
+main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 
 
 
@@ -1033,25 +1041,71 @@ ol.verbatim span { display: block; font-size: 13px; line-height: 1.6; color: var
   font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
   color: var(--ink-faint); padding: 9px 14px 7px; border-bottom: 1px solid var(--line);
 }
+.fxgrp { padding: 2px 0; }
+/* Manager over team on each side, score in the middle, gameweek underneath. */
 .fx {
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
-  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  position: relative;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; column-gap: 10px; row-gap: 6px;
+  padding: 14px 12px 12px;
 }
-.fx:last-child { border-bottom: 0; }
-.fxs { display: flex; align-items: baseline; gap: 8px; min-width: 0; cursor: pointer; }
-.fx .fxs:last-of-type { flex-direction: row-reverse; }
-.fxn {
-  font-size: 13.5px; font-weight: 600; min-width: 0;
+/* An inset hairline between matches, not a full-width rule. */
+.fxgrp .fx + .fx::before {
+  content: ""; position: absolute; left: 22px; right: 22px; top: 0;
+  height: 1px; background: var(--line);
+}
+.fxs { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fxs[data-entry] { cursor: pointer; }
+.fxs.l { text-align: right; }
+.fxs.r { text-align: left; }
+.fxm {
+  font-size: 13.5px; font-weight: 700; color: var(--ink); line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.fxt {
+  font-size: 11.5px; font-weight: 500; color: var(--ink-faint); line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fxsc {
+  flex: none; display: flex; align-items: stretch; align-self: center;
+  background: var(--pill-bg); color: #fff;
+  border-radius: 9px; overflow: hidden; min-width: 74px;
+}
 .fxp {
-  flex: none; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--ink-faint); min-width: 26px; text-align: center;
+  flex: 1; padding: 7px 9px; text-align: center;
+  font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
-.fxs.win .fxn { color: var(--accent); }
-.fxs.win .fxp { color: var(--accent); }
+.fxp + .fxp { border-left: 1px solid rgba(255,255,255,.28); }
+.fxp.lost { color: rgba(255,255,255,.55); font-weight: 600; }
+.fxsc.ahead { background: var(--chip); color: var(--ink-faint); }
 .fxv {
-  flex: none; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--ink-faint);
+  flex: 1; padding: 7px 9px; text-align: center;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; line-height: 1.5;
 }
-.fx.ahead .fxn { font-weight: 500; color: var(--ink-soft); }
+.fxw {
+  grid-column: 1 / -1; text-align: center;
+  font-size: 11px; font-weight: 500; color: var(--ink-faint);
+}
+.fx.ahead .fxm { color: var(--ink-soft); }
+@media (max-width: 360px) {
+  .fx { column-gap: 6px; padding: 12px 8px 10px; }
+  .fxm { font-size: 12.5px; }
+  .fxt { font-size: 10.5px; }
+  .fxsc { min-width: 64px; }
+  .fxp { padding: 6px 6px; font-size: 14px; }
+}
+
+/* The head-to-head record strip on a manager's profile. */
+.h2hsum {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+.h2hst { padding: 11px 4px 9px; text-align: center; min-width: 0; }
+.h2hst + .h2hst { border-left: 1px solid var(--line); }
+.h2hst .hv { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.h2hst .hl {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-top: 2px;
+}
+@media (max-width: 340px) { .h2hst .hv { font-size: 14px; } .h2hst .hl { font-size: 9px; } }
