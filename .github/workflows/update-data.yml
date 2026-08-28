@@ -7,12 +7,13 @@
 name: Update FPL data
 on:
   schedule:
-    # Baseline, so the tables are never far out of date.
-    - cron: "0 */2 * * *"                # every 2 hours (UTC)
-    # Match windows: points move here, so refresh far more often. Times are
-    # UTC, chosen to cover UK kick-offs across the year.
-    - cron: "*/30 11-23 * * 6,0"         # Sat + Sun, every 30 min
-    - cron: "*/30 18-23 * * 1,2,3,4,5"   # weekday evening fixtures
+    # One always-on cadence, deliberately dumb. GitHub delays and drops
+    # scheduled runs badly at the popular minutes (:00 and :30 especially) —
+    # the old three-window schedule missed whole hours on a match night, and
+    # its windows also left the Friday 17:30 UTC deadline uncovered. Off-peak
+    # minutes, every half hour, all week: the repo is public so the minutes
+    # cost nothing, and one line cannot leave a gap around a deadline again.
+    - cron: "11,41 * * * *"
   workflow_dispatch: {}
 permissions:
   contents: write
