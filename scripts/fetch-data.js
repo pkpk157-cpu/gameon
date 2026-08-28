@@ -521,6 +521,52 @@ async function h2hAll(id) {
     }
   }
 
+  // ---- played counts and tie-break stats must survive the squad reuse -----
+  // pl/plt (players played, from live minutes) and liveStats (goals, clean
+  // sheets, assists — the LMS tie-breakers) are derived only when a gameweek
+  // is fetched fresh. A settled gameweek is reused from the previous publish,
+  // and history itself is rebuilt from FPL on every run — so without this,
+  // any settled gameweek fetched before those fields existed (GW1 was) shows
+  // a dash forever. Carry them forward from the previous publish; where even
+  // that lacks them, pull the gameweek's live feed once and rebuild from the
+  // frozen squads. Self-healing: it costs one request per damaged gameweek,
+  // once.
+  const prevHist = prev.history || {};
+  for (const gwStr of Object.keys(picks)) {
+    const gw = +gwStr;
+    const ev2 = events.find((e) => e.id === gw);
+    if (!(ev2 && ev2.finished && ev2.data_checked)) continue;
+    const missing = [];
+    for (const id of Object.keys(picks[gw])) {
+      const row = history[id] && history[id][gw];
+      if (!row || row.pl != null) continue;
+      const old = prevHist[id] && prevHist[id][gw];
+      if (old && old.pl != null) { row.pl = old.pl; row.plt = old.plt || 12; }
+      else missing.push(id);
+    }
+    const statsGone = !liveStats[gw];
+    if (missing.length || statsGone) {
+      try {
+        const fresh = await liveFor(gw, true);
+        let fixed = 0;
+        missing.forEach((id) => {
+          const squad = picks[gw][id], row = history[id] && history[id][gw];
+          if (!squad || !squad.p || !row) return;
+          let played = 0, total = 0;
+          squad.p.forEach((pk) => {
+            if (pk[1] > 0) { total += pk[1]; if ((fresh.mins[pk[0]] || 0) > 0) played += pk[1]; }
+          });
+          row.pl = played; row.plt = total || 12; fixed++;
+        });
+        // stored outright — even a gameweek with genuinely no goals must not
+        // look damaged again on the next run
+        if (statsGone) liveStats[gw] = { g: fresh.goals || {}, c: fresh.cs || {}, a: fresh.assists || {} };
+        console.log("GW " + gw + " — backfilled " + fixed + " played counts" +
+          (statsGone ? " and the tie-break stats" : ""));
+      } catch (e) { console.log("  GW " + gw + " backfill failed (non-fatal): " + e.message); }
+    }
+  }
+
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
