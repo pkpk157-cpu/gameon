@@ -129,6 +129,24 @@
   // published or one this device stored earlier. Reading the stored copy first
   // and stopping there would freeze a device on it forever — it would never
   // see another gameweek. The stored copy still covers being offline.
+  // Fold a fetched bundle into config/overrides and pick the newer dataset.
+  function absorb(bundle, stored) {
+    var published = bundle ? (bundle.dataset || bundle) : null;
+    if (!looksLikeDataset(published)) published = null;
+    if (published && bundle) {
+      if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
+      if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
+    }
+    var pick = published;
+    if (stored && published) {
+      // an admin's own fresher pull should not be undone by an older publish
+      pick = (Date.parse(stored.updatedAt || 0) > Date.parse(published.updatedAt || 0)) ? stored : published;
+    } else if (stored) {
+      pick = stored; // offline, or data.json unreachable
+    }
+    return pick || null;
+  }
+
   STORE.load = function () {
     var stored = null;
     return idbGet(DATASET_KEY)
@@ -136,31 +154,42 @@
       .then(function (ds) {
         stored = ds || null;
         // no-cache, not no-store: still revalidates on every load, but an
-          // unchanged file comes back as a 304 instead of re-downloading the
-          // whole dataset — which matters when 245 people open this all day.
-          return fetch("./data.json", { cache: "no-cache" })
+        // unchanged file comes back as a 304 instead of re-downloading the
+        // whole dataset — which matters when 245 people open this all day.
+        var net = fetch("./data.json", { cache: "no-cache" })
           .then(function (r) { return r.ok ? r.json() : null; })
           .catch(function () { return null; });
+        if (!stored) return net; // nothing to show yet, so wait for the network
+        // A device that already holds a dataset must not sit on a blank screen
+        // behind a request that hangs — stadium wifi will produce one sooner or
+        // later. After six seconds the stored copy paints; the fetch carries on
+        // and whatever it brings is absorbed quietly for the next redraw.
+        var slow = new Promise(function (res) { setTimeout(function () { res(SLOW); }, 6000); });
+        return Promise.race([net, slow]).then(function (w) {
+          if (w !== SLOW) return w;
+          net.then(function (bundle) {
+            var late = absorb(bundle, stored);
+            if (late) { _dataset = late; keep(late, stored); }
+          }).catch(function () {});
+          return null; // fall through to the stored copy below
+        });
       })
       .then(function (bundle) {
-        var published = bundle ? (bundle.dataset || bundle) : null;
-        if (!looksLikeDataset(published)) published = null;
-        if (published && bundle) {
-          if (bundle.config) { _configOverride = merge(_configOverride, bundle.config); lsSet(LS_CONFIG, _configOverride); _configCache = null; }
-          if (bundle.overrides) { _overrides = merge(_overrides, bundle.overrides); lsSet(LS_OVERRIDES, _overrides); }
-        }
-        var pick = published;
-        if (stored && published) {
-          // an admin's own fresher pull should not be undone by an older publish
-          pick = (Date.parse(stored.updatedAt || 0) > Date.parse(published.updatedAt || 0)) ? stored : published;
-        } else if (stored) {
-          pick = stored; // offline, or data.json unreachable
-        }
-        _dataset = pick || null;
+        _dataset = absorb(bundle, stored);
+        // Persist what was adopted, so the very first open leaves an offline
+        // copy behind — without this, a device that never syncs by hand has
+        // nothing to fall back on when the network goes away.
+        keep(_dataset, stored);
         return _dataset;
       })
       .catch(function () { _dataset = stored; return _dataset; });
   };
+  var SLOW = { slow: true };
+  function keep(ds, stored) {
+    if (ds && (!stored || stored.updatedAt !== ds.updatedAt)) {
+      idbSet(DATASET_KEY, ds).catch(function () {});
+    }
+  }
 
   // An explicit pull of whatever the updater last published, ignoring the
   // stored copy. Used by the refresh button.

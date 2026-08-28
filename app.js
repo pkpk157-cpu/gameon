@@ -235,7 +235,6 @@
       (ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString() +
              " · " + num(ds.managers.length) + " managers")
           : "Standings not loaded yet") +
-      '<br>Created by <b>PK</b>' +
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
       '</div>';
 
