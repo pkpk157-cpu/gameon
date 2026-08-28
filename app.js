@@ -1334,7 +1334,7 @@
     // shape the official app uses, which everyone in the league already reads.
     var side = function (t, which) {
       return '<div class="fxs ' + which + '"' +
-        (t.id ? ' data-entry="' + t.id + '" role="button" tabindex="0"' : '') + '>' +
+        (t.known ? ' data-entry="' + t.id + '" role="button" tabindex="0"' : '') + '>' +
         '<span class="fxm">' + esc(t.average ? "AVERAGE" : (t.player || t.name)) + '</span>' +
         '<span class="fxt">' + esc(t.average ? "Gameweek average" : t.name) + '</span></div>';
     };
@@ -2125,7 +2125,7 @@
           return '<div class="fx' + (r.played ? "" : " ahead") + '">' +
             '<div class="fxs l"><span class="fxm">' + esc(r.me.player || r.me.name) + '</span>' +
             '<span class="fxt">' + esc(r.me.name) + '</span></div>' + pill +
-            '<div class="fxs r"' + (r.opp.id ? ' data-entry="' + r.opp.id + '" role="button" tabindex="0"' : '') + '>' +
+            '<div class="fxs r"' + (r.opp.known ? ' data-entry="' + r.opp.id + '" role="button" tabindex="0"' : '') + '>' +
             '<span class="fxm">' + esc(r.opp.average ? "AVERAGE" : (r.opp.player || r.opp.name)) + '</span>' +
             '<span class="fxt">' + esc(r.opp.average ? "Gameweek average" : r.opp.name) + '</span></div>' +
             '<div class="fxw">Gameweek ' + r.gw + (r.result === "D" ? " \u00b7 draw" : "") + '</div></div>';

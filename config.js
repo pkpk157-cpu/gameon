@@ -79,20 +79,20 @@
     },
 
     /* ---- Monthly prizes + which gameweeks belong to each month -----------
-       IMPORTANT: gw ranges below are a PLACEHOLDER calendar. Set them in
-       Admin to match the real fixture list for your season, otherwise the
-       monthly winners will be off. Months run Aug -> May. */
+       The gw ranges below are the league's own calendar (from the sheet).
+       When autoMonths is on the app derives the live mapping from real
+       deadline dates anyway; these are the fallback. Months run Aug -> May. */
     months: [
-      { key: "aug", name: "August",    gws: [1, 2, 3],              prizes: { 1: 1000, 2: 400,  3: 200 } },
-      { key: "sep", name: "September", gws: [4, 5, 6],              prizes: { 1: 1500, 2: 600,  3: 300 } },
-      { key: "oct", name: "October",   gws: [7, 8, 9],              prizes: { 1: 2000, 2: 800,  3: 400 } },
-      { key: "nov", name: "November",  gws: [10, 11, 12, 13],       prizes: { 1: 1500, 2: 600,  3: 300 } },
-      { key: "dec", name: "December",  gws: [14, 15, 16, 17, 18, 19], prizes: { 1: 3000, 2: 1200, 3: 600 } },
-      { key: "jan", name: "January",   gws: [20, 21, 22, 23, 24],   prizes: { 1: 2500, 2: 1000, 3: 500 } },
-      { key: "feb", name: "February",  gws: [25, 26, 27],           prizes: { 1: 2000, 2: 800,  3: 400 } },
-      { key: "mar", name: "March",     gws: [28, 29, 30, 31],       prizes: { 1: 1500, 2: 600,  3: 300 } },
-      { key: "apr", name: "April",     gws: [32, 33, 34, 35],       prizes: { 1: 1500, 2: 600,  3: 300 } },
-      { key: "may", name: "May",       gws: [36, 37, 38],           prizes: { 1: 2500, 2: 1000, 3: 500 } }
+      { key: "aug", name: "August",    gws: [1, 2],              prizes: { 1: 1000, 2: 400,  3: 200 } },
+      { key: "sep", name: "September", gws: [3, 4, 5],              prizes: { 1: 1500, 2: 600,  3: 300 } },
+      { key: "oct", name: "October",   gws: [6, 7, 8, 9],              prizes: { 1: 2000, 2: 800,  3: 400 } },
+      { key: "nov", name: "November",  gws: [10, 11, 12],       prizes: { 1: 1500, 2: 600,  3: 300 } },
+      { key: "dec", name: "December",  gws: [13, 14, 15, 16, 17, 18], prizes: { 1: 3000, 2: 1200, 3: 600 } },
+      { key: "jan", name: "January",   gws: [19, 20, 21, 22, 23],   prizes: { 1: 2500, 2: 1000, 3: 500 } },
+      { key: "feb", name: "February",  gws: [24, 25, 26, 27],           prizes: { 1: 2000, 2: 800,  3: 400 } },
+      { key: "mar", name: "March",     gws: [28, 29, 30],       prizes: { 1: 1500, 2: 600,  3: 300 } },
+      { key: "apr", name: "April",     gws: [31, 32, 33],       prizes: { 1: 1500, 2: 600,  3: 300 } },
+      { key: "may", name: "May",       gws: [34, 35, 36, 37, 38],           prizes: { 1: 2500, 2: 1000, 3: 500 } }
     ],
 
     /* ---- Last Manager Standing ------------------------------------------
@@ -132,7 +132,9 @@
       relegateCount: 5,  // bottom 5 of each division go down next mini-season
       // Fix any roster name that doesn't match a manager's FPL name:
       //   { "Aman Arora": 1234567 }  (roster name -> FPL entry id)
-      rosterAliases: {},
+      // Aman Arora renamed himself "Aman Kiza" on FPL after the rosters were
+      // written; the league's own sheet confirms the entry id.
+      rosterAliases: { "Aman Arora": 4059423 },
       // Season-1 division rosters (from the league one-pager). Manager names
       // are resolved to FPL entry ids against the classic-league roster.
     seasonOneRosterNames: {

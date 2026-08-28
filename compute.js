@@ -1614,13 +1614,33 @@
     return null;
   }
 
+  // A side can be a manager who is only in an h2h league — a second team that
+  // never joined the classic league. Their name lives in the fetched group
+  // standings rather than the roster, and they have no profile to open.
+  function h2hOnlyNames(ds) {
+    if (ds && ds._h2hNames) return ds._h2hNames;
+    var out = {};
+    var src = (ds && ds.h2h) || {};
+    Object.keys(src).forEach(function (lid) {
+      ((src[lid] || {}).results || []).forEach(function (r) {
+        if (r.entry) out[r.entry] = { name: r.entry_name, player: r.player_name };
+      });
+    });
+    if (ds) { try { Object.defineProperty(ds, "_h2hNames", { value: out, enumerable: false }); } catch (e) {} }
+    return out;
+  }
+
   function fxSide(ds, id, gw, mm) {
     if (!id) {
       return { id: 0, name: "AVERAGE", player: "AVERAGE",
-               average: true, score: gwAverage(ds, gw) };
+               average: true, known: false, score: gwAverage(ds, gw) };
     }
-    return { id: id, name: nm(mm, id), player: pl(mm, id),
-             average: false, score: gwScore(ds, id, gw) };
+    var known = !!mm[id];
+    var alt = known ? null : h2hOnlyNames(ds)[id];
+    return { id: id,
+             name: known ? nm(mm, id) : ((alt && alt.name) || ("#" + id)),
+             player: known ? pl(mm, id) : ((alt && alt.player) || ""),
+             average: false, known: known, score: gwScore(ds, id, gw) };
   }
 
   function decorate(ds, f, mm) {

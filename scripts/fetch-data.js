@@ -166,6 +166,30 @@ async function h2hAll(id) {
   const h2h = {};
   await pool(H2H, async (id) => { h2h[id] = await h2hAll(id); }, 4);
 
+  // A manager can enter a group league with a second FPL team that is not in
+  // the classic league (there is one this season: entry 25106 in Group B).
+  // Their h2h matches are scored by FPL from THAT team, so its gameweek
+  // history is fetched too — otherwise every fixture of theirs would show a
+  // blank where FPL shows a score. Names come from the league standings.
+  const extra = [];
+  Object.keys(h2h).forEach((lid) => {
+    ((h2h[lid] || {}).results || []).forEach((r) => {
+      if (r.entry && !history[r.entry] && extra.indexOf(r.entry) === -1) extra.push(r.entry);
+    });
+  });
+  if (extra.length) {
+    console.log("  " + extra.length + " h2h-only entr" + (extra.length === 1 ? "y" : "ies") + ": " + extra.join(", "));
+    await pool(extra, async (id) => {
+      const h = await getJSON("/entry/" + id + "/history/");
+      const gw = {};
+      (h.current || []).forEach((c) => {
+        gw[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points,
+                        v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
+      });
+      history[id] = gw;
+    }, 4);
+  }
+
   // The schedule is static, so keep whatever we already have and only ask for
   // the leagues we are missing. A first run pays for all sixteen; every run
   // after that pays for none.
