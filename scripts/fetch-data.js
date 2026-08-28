@@ -253,7 +253,13 @@ async function h2hAll(id) {
         const fixtures = await getJSON("/fixtures/?event=" + gw);
         let inPlay = 0;
         (fixtures || []).forEach((f) => {
-          if (!f.started || f.finished_provisional) return;
+          // Provisional bonus holds from kick-off until FPL marks the fixture
+          // finished — which is when the real bonus lands inside total_points.
+          // Cutting off at finished_provisional (full time) left a window of
+          // up to an hour where every bonus earner's score dipped and then
+          // jumped back. The official app's live views and Football Fix both
+          // hold the provisional value across that window.
+          if (!f.started || f.finished) return;
           inPlay++;
           const b = provisionalBonus(bpsByFixture[f.id] || {});
           // a double gameweek can earn bonus in more than one fixture

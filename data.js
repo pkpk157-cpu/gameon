@@ -227,7 +227,9 @@
       // fixture's bonus is already inside total_points
       var bonus = {};
       (fixtures || []).forEach(function (f) {
-        if (!f.started || f.finished_provisional) return;
+        // held until FPL folds the real bonus in at fixture.finished — see
+        // the same rule in scripts/fetch-data.js
+        if (!f.started || f.finished) return;
         var b = B.provisionalBonus(bpsByFixture[f.id] || {});
         Object.keys(b).forEach(function (el) { bonus[el] = (bonus[el] || 0) + b[el]; });
       });
