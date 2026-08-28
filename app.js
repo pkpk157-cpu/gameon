@@ -609,6 +609,27 @@
     autoTimer = setTimeout(function () { autoCheck().then(scheduleAuto, scheduleAuto); }, autoEvery());
   }
 
+  // The live overlay: while a gameweek is being played, refresh the moving
+  // numbers through the league's proxy every couple of minutes, between the
+  // updater's half-hourly publishes. Failures change nothing and the loop
+  // simply idles when no gameweek is live.
+  var LIVE_MS = window.__LIVE_MS || 120000;
+  var liveTimer = null, liveBusy = false;
+  function scheduleLive() {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(tickLive, LIVE_MS);
+  }
+  function tickLive() {
+    var ds = S.dataset();
+    if (liveBusy || document.hidden || busyReading() || !ds || !K.liveGwId(ds)) { scheduleLive(); return; }
+    liveBusy = true;
+    S.liveOverlay().then(function (changed) {
+      liveBusy = false;
+      if (changed && !busyReading()) keepPlace(render);
+      scheduleLive();
+    }, function () { liveBusy = false; scheduleLive(); });
+  }
+
   // Coming back to the app is when the numbers are most likely stale: phones
   // suspend timers the moment it goes into the background.
   function onForeground() {
@@ -704,6 +725,7 @@
       syncFromHash();
       updateDataState();
       scheduleAuto();
+      scheduleLive();
     });
   }
 

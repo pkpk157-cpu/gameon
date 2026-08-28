@@ -26,7 +26,7 @@
       // Active template. {url} = URL-encoded FPL url, {urlraw} = raw. For the
       // most reliable option for a whole league, deploy the included Cloudflare
       // Worker (see worker.js) and paste its URL in Settings → Data source.
-      template: "https://api.codetabs.com/v1/proxy/?quest={url}",
+      template: "https://billowing-paper-56bb.pranav-krishna-pk.workers.dev/?url={url}",
       alternatives: [
         "https://api.codetabs.com/v1/proxy/?quest={url}",
         "https://api.allorigins.win/raw?url={url}",

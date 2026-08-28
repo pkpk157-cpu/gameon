@@ -191,6 +191,74 @@
     }
   }
 
+  // A light live refresh between the updater's publishes: just the moving
+  // parts — per-player points, minutes, provisional bonus and the tie-break
+  // stats for the gameweek being played — fetched through the league's own
+  // proxy and folded over the dataset in memory. Everything slow (squads,
+  // standings, history) stays on the published half-hourly cycle. Any failure
+  // resolves false and changes nothing.
+  STORE.liveOverlay = function () {
+    var ds = _dataset;
+    var API = window.GO_API, B = window.GO_BONUS;
+    if (!ds || !API || !B) return Promise.resolve(false);
+    var gw = null;
+    ((ds.bootstrap && ds.bootstrap.events) || []).forEach(function (e) {
+      if (e.is_current && !(e.finished && e.data_checked)) gw = e.id;
+    });
+    if (!gw) return Promise.resolve(false);
+    return Promise.all([API.live(gw), API.fixtures(gw)]).then(function (r) {
+      var live = r[0] || {}, fixtures = r[1] || [];
+      if (!live.elements || !live.elements.length) return false;
+      var pts = {}, bpsByFixture = {}, goals = {}, cs = {}, assists = {};
+      live.elements.forEach(function (el) {
+        var st = el.stats || {};
+        pts[el.id] = st.total_points || 0;
+        if (st.goals_scored) goals[el.id] = st.goals_scored;
+        if (st.clean_sheets) cs[el.id] = st.clean_sheets;
+        if (st.assists) assists[el.id] = st.assists;
+        (el.explain || []).forEach(function (ex) {
+          var b = (ex.stats || []).filter(function (x) { return x.identifier === "bps"; })[0];
+          if (!b) return;
+          (bpsByFixture[ex.fixture] || (bpsByFixture[ex.fixture] = {}))[el.id] = b.value || 0;
+        });
+      });
+      // provisional bonus only for fixtures still in play — a finalised
+      // fixture's bonus is already inside total_points
+      var bonus = {};
+      (fixtures || []).forEach(function (f) {
+        if (!f.started || f.finished_provisional) return;
+        var b = B.provisionalBonus(bpsByFixture[f.id] || {});
+        Object.keys(b).forEach(function (el) { bonus[el] = (bonus[el] || 0) + b[el]; });
+      });
+      // nothing new to say: identical points and bonus leave the app alone
+      var oldP = (ds.livePoints || {})[gw] || {}, oldB = (ds.liveBonus || {})[gw] || {};
+      var same = Object.keys(pts).length === Object.keys(oldP).length &&
+        Object.keys(pts).every(function (k) { return oldP[k] === pts[k]; }) &&
+        Object.keys(bonus).length === Object.keys(oldB).length &&
+        Object.keys(bonus).every(function (k) { return oldB[k] === bonus[k]; });
+      if (same) return false;
+      // A fresh dataset object: shallow copies drop the memoised caches so
+      // every view recomputes, and the manager rows are copied because the
+      // live adjustment writes into them.
+      var nd = {};
+      Object.keys(ds).forEach(function (k) { nd[k] = ds[k]; });
+      nd.managers = (ds.managers || []).map(function (m) {
+        var c = {}; Object.keys(m).forEach(function (k) { c[k] = m[k]; }); return c;
+      });
+      nd.livePoints = merge1(ds.livePoints, gw, pts);
+      nd.liveBonus = merge1(ds.liveBonus, gw, bonus);
+      nd.liveStats = merge1(ds.liveStats, gw, { g: goals, c: cs, a: assists });
+      _dataset = nd;
+      return true;
+    }).catch(function () { return false; });
+  };
+  function merge1(obj, gw, val) {
+    var out = {};
+    Object.keys(obj || {}).forEach(function (k) { out[k] = obj[k]; });
+    out[gw] = val;
+    return out;
+  }
+
   // An explicit pull of whatever the updater last published, ignoring the
   // stored copy. Used by the refresh button.
   STORE.reload = function () {

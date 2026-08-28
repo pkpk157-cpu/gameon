@@ -53,4 +53,6 @@ function provisionalBonus(bpsByPlayer) {
   return out;
 }
 
-module.exports = { provisionalBonus };
+// Used by the updater (node) and by the live overlay in the browser.
+if (typeof module !== "undefined" && module.exports) module.exports = { provisionalBonus };
+if (typeof window !== "undefined") window.GO_BONUS = { provisionalBonus: provisionalBonus };
