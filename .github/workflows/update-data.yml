@@ -35,6 +35,10 @@ jobs:
           node-version: "20"
       - name: Fetch FPL data
         run: node scripts/fetch-data.js
+      - name: Verify against FPL's own numbers
+        # Never blocks publishing — fresh data beats stale data — but any
+        # disagreement with FPL's standings shows up as a warning on the run.
+        run: node scripts/verify-data.js
       - name: Commit data.json if changed
         run: |
           git config user.name "github-actions[bot]"
