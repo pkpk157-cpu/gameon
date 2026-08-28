@@ -101,7 +101,9 @@ async function h2hFixtures(id) {
     if (!res.length) break;
     if (d && d.has_next === false) break;
   }
-  return { ents: ents, fx: fx };
+  // v2: AVERAGE fixtures are kept (stored as -1). A schedule stored without
+  // the version marker predates that and is refetched once.
+  return { v: 2, ents: ents, fx: fx };
 }
 
 async function h2hAll(id) {
@@ -195,7 +197,7 @@ async function h2hAll(id) {
   // after that pays for none.
   const prevFx = (prev.h2hFixtures || {});
   const h2hFx = {};
-  const needFx = H2H.filter((id) => !(prevFx[id] && (prevFx[id].fx || []).length));
+  const needFx = H2H.filter((id) => !(prevFx[id] && prevFx[id].v === 2 && (prevFx[id].fx || []).length));
   H2H.forEach((id) => { if (prevFx[id]) h2hFx[id] = prevFx[id]; });
   if (needFx.length) {
     console.log("fetching h2h fixtures for " + needFx.length + " league(s)");
