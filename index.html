@@ -89,5 +89,22 @@
       });
     }
   </script>
+  <!-- GoatCounter, hands-off: no automatic counting (the app is hash-routed,
+       so app.js reports each tab change itself), async so it can never hold
+       the app up, and count.js failing to load simply means nothing counts.
+       Not loaded at all on localhost, so development and tests stay silent;
+       ?gcdev=1 forces it there for testing the wiring itself. -->
+  <script>
+    (function () {
+      var local = /^(localhost|127\.|\[?::1)/.test(location.hostname);
+      if (local && location.search.indexOf("gcdev") === -1) return;
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "https://gc.zgo.at/count.js";
+      s.setAttribute("data-goatcounter", "https://gameon.goatcounter.com/count");
+      s.setAttribute("data-goatcounter-settings", '{"no_onload": true}');
+      document.body.appendChild(s);
+    })();
+  </script>
 </body>
 </html>

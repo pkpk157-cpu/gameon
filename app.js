@@ -516,7 +516,11 @@
       });
     };
     $("#prPos", host).addEventListener("change", function () { state.pricePos = this.value; draw(); });
-    $("#prSearch", host).addEventListener("input", function () { draw(); });
+    var prSearched = false;
+    $("#prSearch", host).addEventListener("input", function () {
+      if (!prSearched && this.value.trim()) { prSearched = true; track("price-search", true); }
+      draw();
+    });
     draw();
   }
 
@@ -641,6 +645,7 @@
     $("#btnSync").addEventListener("click", function () {
       var btn = this;
       if (btn.classList.contains("spin")) return;
+      track("sync-tap", true);
       btn.classList.add("spin");
       var before = (S.dataset() || {}).updatedAt;
       // The fetch can finish in tens of milliseconds, which would flash the
@@ -734,6 +739,7 @@
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
     if (view === "profile") state.profileId = parts[1] || null;
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
+    track(view === "rules" && parts[1] ? "/rules/" + parts[1] : "/" + view);
     render();
   }
 
@@ -1224,6 +1230,7 @@
           btn.addEventListener("click", function () {
             if (state.h2hMode === btn.getAttribute("data-mode")) return;
             state.h2hMode = btn.getAttribute("data-mode");
+            if (state.h2hMode === "matches") track("h2h-matches", true);
             draw();
           });
         });
@@ -2945,6 +2952,23 @@
     var a = document.createElement("a"); a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /* ---- usage counting (GoatCounter) ----------------------------------- */
+  // Fire-and-forget. count.js may be blocked, offline or missing — every call
+  // is wrapped so the app cannot tell the difference. Paths are aggregated
+  // (every profile is "/profile") so the dashboard reads as tabs, not as 245
+  // manager names.
+  var lastTracked = null;
+  function track(path, isEvent) {
+    try {
+      if (!window.goatcounter || typeof window.goatcounter.count !== "function") return;
+      if (!isEvent) {
+        if (path === lastTracked) return;
+        lastTracked = path;
+      }
+      window.goatcounter.count({ path: path, event: !!isEvent });
+    } catch (e) {}
   }
 
   function isMe(id) { return state.me && +id === +state.me; }
