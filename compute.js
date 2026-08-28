@@ -458,11 +458,13 @@
     var pLive = C.liveGwId(ds); // include the live GW in mini-season totals
     var over = (ov().pyramid && ov().pyramid.rosters) || {}; // { s1: { elite:[ids] } }
 
-    // Base S1 rosters: admin override (ids) > named roster from config
-    // (resolved to entry ids) > auto split by rank.
+    // Base S1 rosters: admin override (ids) > id roster from config > named
+    // roster from config (resolved to entry ids) > auto split by rank. The id
+    // roster is the league's own sheet and survives FPL display-name changes,
+    // which the name resolution does not.
     var rosters = {};
     var s1key = p.seasons[0].key;
-    var named = resolveNamedRosters(ds, p);
+    var named = idRosters(ds, p) || resolveNamedRosters(ds, p);
     rosters[s1key] = over[s1key] || named || autoInitialRosters(ds, divisions);
 
     var seasonResults = [];
@@ -508,6 +510,21 @@
     return { seasons: seasonResults, rosters: rosters, divisions: p.divisions,
              autoInitial: !over[p.seasons[0].key] };
   };
+
+  // config.pyramid.seasonOneRosterIds, checked against the fetched roster so a
+  // stale id degrades to absence rather than a phantom row. Returns null when
+  // the config carries no ids, letting the name path below take over.
+  function idRosters(ds, p) {
+    var byDiv = p.seasonOneRosterIds;
+    if (!byDiv) return null;
+    var have = {}; ds.managers.forEach(function (m) { have[m.id] = true; });
+    var out = {}, matched = 0;
+    Object.keys(byDiv).forEach(function (div) {
+      out[div] = (byDiv[div] || []).filter(function (id) { return have[id]; });
+      matched += out[div].length;
+    });
+    return matched > 0 ? out : null;
+  }
 
   // Resolve config.pyramid.seasonOneRosterNames (manager names) to entry ids
   // using the league roster's player names. Handles case/diacritics and
