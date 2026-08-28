@@ -825,8 +825,15 @@
         if (dl) sub += '<span>GW' + dl.gw + ' ' + esc(untilText(dl.msLeft)) + '</span>';
       }
       if (ds2 && ds2.updatedAt) {
-        sub += '<span class="syncago">' + (sub ? ' \u00b7 ' : '') + 'synced ' +
-          esc(agoText(Date.now() - Date.parse(ds2.updatedAt))) + '</span>';
+        // During live play the overlay refreshes the moving numbers between
+        // publishes — the age shown is whichever source answered last, so a
+        // working live feed never reads as a stale app.
+        var syncTs = Date.parse(ds2.updatedAt);
+        var la = (liveNow && S.liveAt) ? S.liveAt() : null;
+        var word = (la && la > syncTs) ? 'live ' : 'synced ';
+        var ts = (la && la > syncTs) ? la : syncTs;
+        sub += '<span class="syncago">' + (sub ? ' \u00b7 ' : '') + word +
+          esc(agoText(Date.now() - ts)) + '</span>';
       }
     }
     $("#barTitle").textContent = title;

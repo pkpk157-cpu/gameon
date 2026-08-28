@@ -209,6 +209,7 @@
     return Promise.all([API.live(gw), API.fixtures(gw)]).then(function (r) {
       var live = r[0] || {}, fixtures = r[1] || [];
       if (!live.elements || !live.elements.length) return false;
+      _liveAt = Date.now(); // the feed answered — the numbers are this fresh
       var pts = {}, bpsByFixture = {}, goals = {}, cs = {}, assists = {};
       live.elements.forEach(function (el) {
         var st = el.stats || {};
@@ -252,6 +253,8 @@
       return true;
     }).catch(function () { return false; });
   };
+  var _liveAt = null;
+  STORE.liveAt = function () { return _liveAt; };
   function merge1(obj, gw, val) {
     var out = {};
     Object.keys(obj || {}).forEach(function (k) { out[k] = obj[k]; });
