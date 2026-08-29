@@ -2821,8 +2821,6 @@
     if (!list.length) {
       h += '<div class="callout">Nobody played ' + esc(label) + ' in Gameweek ' + esc(String(gw || "?")) + '.</div>';
     } else {
-      h += '<div class="rulelede">' + num(list.length) + ' manager' + (list.length === 1 ? '' : 's') +
-        ' played it, best gameweek first. Tap one to open their squad.</div>';
       h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr>' +
         '<th class="num">#</th><th>Team</th><th class="num">GW pts</th></tr></thead><tbody>';
       h += list.map(function (r, i) {

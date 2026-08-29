@@ -246,9 +246,9 @@
       var fxTuple = function (f) {
         return [ds.teams[f.team_h] || "?", ds.teams[f.team_a] || "?",
                 f.started ? 1 : 0, f.finished ? 1 : 0,
-                f.team_h_score == null ? null : f.team_h_score,
-                f.team_a_score == null ? null : f.team_a_score,
-                f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0];
+                f.team_h_score == null ? null : +f.team_h_score,
+                f.team_a_score == null ? null : +f.team_a_score,
+                +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0];
       };
       var oldFx = JSON.stringify((ds.gwFixtures || {})[gw] || null);
       var newFx = ds.teams ? JSON.stringify((fixtures || []).map(fxTuple)) : oldFx;

@@ -606,9 +606,9 @@ async function h2hAll(id) {
       if (!f.event) return;
       (gwFixtures[f.event] = gwFixtures[f.event] || []).push(
         [teamShort[f.team_h] || "?", teamShort[f.team_a] || "?", f.started ? 1 : 0, f.finished ? 1 : 0,
-         f.team_h_score == null ? null : f.team_h_score,
-         f.team_a_score == null ? null : f.team_a_score,
-         f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0]);
+         f.team_h_score == null ? null : +f.team_h_score,
+         f.team_a_score == null ? null : +f.team_a_score,
+         +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0]);
     });
     const gws = Object.keys(gwFixtures);
     console.log(gws.reduce((n, k) => n + gwFixtures[k].length, 0) +
