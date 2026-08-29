@@ -597,20 +597,23 @@
   }
 
   /* ---- the Premier League scoreboard ------------------------------------ */
-  // Every match of the current gameweek: the kick-off time until it starts,
-  // then the live score with the minute, then the final score. The rows ride
-  // the same published fixtures the pitch cards use, so the live poll keeps
-  // them ticking between full syncs.
+  // Every match of a gameweek, with arrows to page through the season: the
+  // kick-off time until a game starts, then the live score with the minute,
+  // then the final score. The rows ride the same published fixtures the pitch
+  // cards use, so the live poll keeps them ticking between full syncs.
   function renderPl(host, ds) {
     var all = (ds && ds.gwFixtures) || {};
     var gws = Object.keys(all).map(Number).sort(function (a, b) { return a - b; });
-    var gw = gws.length ? gws[gws.length - 1] : null;
-    var rows = ((gw && all[gw]) || []).slice();
-    if (!rows.length) {
+    if (!gws.length) {
       host.innerHTML = '<div class="section-title"><h2>Premier League</h2><div class="rule"></div></div>' +
         '<div class="callout">The gameweek’s fixtures arrive with the next data sync — check back in a few minutes.</div>';
       return;
     }
+    // The address picks the gameweek; without one, open on the current one.
+    var gw = state.plGw && all[state.plGw] ? +state.plGw
+           : (ds.pitchGw && all[ds.pitchGw] ? +ds.pitchGw : gws[gws.length - 1]);
+    var at = gws.indexOf(gw);
+    var rows = (all[gw] || []).slice();
     var names = ds.teamNames || {};
     var full = function (s) { return names[s] || s; };
     rows.sort(function (a, b) {
@@ -648,13 +651,22 @@
         '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + '</span></div>' +
         (cap ? '<div class="fxw">' + cap + '</div>' : "") + '</div>';
     };
-    var h = '<div class="section-title"><h2>Gameweek ' + gw + ' fixtures</h2><div class="rule"></div></div>' +
-      '<p class="rulelede">All ' + rows.length + ' matches of the gameweek. Scores update live while games are on, with the minute under the score; finished games show the final score.</p>';
+    var h = '<div class="plnav">' +
+      '<button type="button" class="gwarr" id="plPrev" aria-label="Earlier gameweek"' + (at > 0 ? '' : ' disabled') + '>‹</button>' +
+      '<h2>Gameweek ' + gw + '</h2>' +
+      '<button type="button" class="gwarr" id="plNext" aria-label="Later gameweek"' + (at < gws.length - 1 ? '' : ' disabled') + '>›</button>' +
+      '</div>';
     groups.forEach(function (g) {
       h += '<div class="card"><div class="plday">' + esc(g.label) + '</div>' +
         '<div class="fxwrap"><div class="fxgrp">' + g.fx.map(row).join("") + '</div></div></div>';
     });
     host.innerHTML = h;
+    var flip = function (step) { return function () {
+      var to = gws[at + step];
+      if (to != null) location.hash = "pl/" + to;
+    }; };
+    $("#plPrev", host).addEventListener("click", flip(-1));
+    $("#plNext", host).addEventListener("click", flip(1));
   }
 
   /* ---- the section menu -------------------------------------------------- */
@@ -915,6 +927,7 @@
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
     if (view === "profile") state.profileId = parts[1] || null;
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
+    if (view === "pl") state.plGw = +parts[1] || null;
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
     track(view === "rules" && parts[1] ? "/rules/" + parts[1] : "/" + view);
     render();

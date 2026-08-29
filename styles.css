@@ -1150,6 +1150,14 @@ ol.verbatim span { display: block; font-size: 13px; line-height: 1.6; color: var
   color: var(--ink-faint); text-transform: uppercase; letter-spacing: .07em;
 }
 .fxw .golive { color: var(--good); font-weight: 700; }
+.plnav { display:flex; align-items:center; justify-content:center; gap:10px; margin:2px 0 14px; }
+.plnav h2 { margin:0; min-width:170px; text-align:center; }
+.gwarr {
+  width:36px; height:36px; border-radius:50%; flex:none; cursor:pointer;
+  border:1px solid var(--line); background:var(--chip); color:var(--ink);
+  font-size:20px; line-height:1; padding-bottom:3px;
+}
+.gwarr:disabled { opacity:.35; cursor:default; }
 @media (max-width: 360px) {
   .fx { column-gap: 6px; padding: 12px 8px 10px; }
   .fxm { font-size: 12.5px; }

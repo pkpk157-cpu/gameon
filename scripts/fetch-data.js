@@ -590,25 +590,30 @@ async function h2hAll(id) {
     }
   }
 
-  // The current gameweek's real-world fixtures, by club short name, so a
+  // The season's real-world fixtures by gameweek and club short name, so a
   // player's card can say who he faces before he has played, and the Premier
-  // League page can show the scoreboard: [home, away, started, finished,
-  // homeScore, awayScore, minutes, kickoffISO, finishedProvisional] per match.
-  // Consumers written for the old four-slot shape keep working — the new
-  // fields only append. One request; refreshed every run so the flags,
-  // scores and minutes track the afternoon.
+  // League page can page through every gameweek's scoreboard: [home, away,
+  // started, finished, homeScore, awayScore, minutes, kickoffISO,
+  // finishedProvisional] per match. Consumers written for the old four-slot
+  // shape keep working — the new fields only append. One request, rebuilt
+  // every run, so the flags, scores and minutes track the afternoon. A
+  // postponed fixture with no gameweek yet is left out until FPL reschedules
+  // it — it would have nothing to say and no page to sit on.
   let gwFixtures = {};
-  if (curEv) {
-    try {
-      const fx = await getJSON("/fixtures/?event=" + curEv.id);
-      gwFixtures[curEv.id] = (fx || []).map((f) =>
+  try {
+    const fx = await getJSON("/fixtures/");
+    (fx || []).forEach((f) => {
+      if (!f.event) return;
+      (gwFixtures[f.event] = gwFixtures[f.event] || []).push(
         [teamShort[f.team_h] || "?", teamShort[f.team_a] || "?", f.started ? 1 : 0, f.finished ? 1 : 0,
          f.team_h_score == null ? null : f.team_h_score,
          f.team_a_score == null ? null : f.team_a_score,
          f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0]);
-      console.log("GW " + curEv.id + " — " + gwFixtures[curEv.id].length + " real fixtures published");
-    } catch (e) { console.log("  gw fixtures failed (non-fatal): " + e.message); }
-  }
+    });
+    const gws = Object.keys(gwFixtures);
+    console.log(gws.reduce((n, k) => n + gwFixtures[k].length, 0) +
+      " real fixtures published across " + gws.length + " gameweeks");
+  } catch (e) { console.log("  gw fixtures failed (non-fatal): " + e.message); }
 
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
