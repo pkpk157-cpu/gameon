@@ -2187,11 +2187,9 @@
     var R = K.h2hRecord(ds, id);
     if (R) {
       h += '<div class="section-title"><h2>Head-to-head</h2><div class="rule"></div></div>';
-      h += '<div class="card"><div class="h2hsum">' +
-        h2hStat("Played", R.played) + h2hStat("W", R.w) + h2hStat("D", R.d) +
-        h2hStat("L", R.l) + h2hStat("Points", R.pts) + h2hStat("For", R.pointsFor) +
-        '</div><div class="fxwrap"><div class="fxgrp">' +
-        R.rows.map(function (r) {
+      var h2hDone = {};
+      K.finishedGws(ds).forEach(function (g) { h2hDone[g] = 1; });
+      var h2hRow = function (r) {
           var pill = r.played
             ? '<div class="fxsc"><span class="fxp' + (r.result === "L" ? " lost" : "") + '">' + num(r.me.score) + '</span>' +
               '<span class="fxp' + (r.result === "W" ? " lost" : "") + '">' + num(r.opp.score) + '</span></div>'
@@ -2204,7 +2202,18 @@
             '<span class="fxt">' + esc(r.opp.average ? "Gameweek average" : r.opp.name) + '</span></div>' +
             '<div class="fxw">Gameweek ' + r.gw +
               (r.live ? " \u00b7 live" : (r.result === "D" ? " \u00b7 draw" : "")) + '</div></div>';
-        }).join("") + '</div></div></div>';
+      };
+      // A whole season of fixtures is a long scroll past everything beneath
+      // it. Open on this gameweek's match alone; the rest unfold on demand.
+      var h2hCur = R.rows.filter(function (r) { return !h2hDone[r.gw]; })[0] || R.rows[R.rows.length - 1];
+      var h2hRest = R.rows.filter(function (r) { return r !== h2hCur; });
+      h += '<div class="card"><div class="h2hsum">' +
+        h2hStat("Played", R.played) + h2hStat("W", R.w) + h2hStat("D", R.d) +
+        h2hStat("L", R.l) + h2hStat("Points", R.pts) + h2hStat("For", R.pointsFor) +
+        '</div><div class="fxwrap"><div class="fxgrp">' + h2hRow(h2hCur) + '</div>' +
+        (h2hRest.length ? '<div class="fxgrp" id="h2hRest" hidden>' + h2hRest.map(h2hRow).join("") + '</div>' +
+          '<button type="button" class="fxtoggle" id="h2hAll">Show all ' + R.rows.length + ' fixtures</button>' : '') +
+        '</div></div>';
     }
 
     h += '<div class="section-title"><h2>Past seasons (FPL)</h2><div class="rule"></div></div>';
@@ -2219,6 +2228,13 @@
     }
 
     host.innerHTML = h;
+    var h2hBtn = $("#h2hAll", host);
+    if (h2hBtn) h2hBtn.addEventListener("click", function () {
+      var rest = $("#h2hRest", host);
+      rest.hidden = !rest.hidden;
+      this.textContent = rest.hidden ? ("Show all " + (R ? R.rows.length : "") + " fixtures")
+                                     : "Show this gameweek only";
+    });
     var box = $("#pitchBox", host);
     if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode, state.pitchMetric);
   }

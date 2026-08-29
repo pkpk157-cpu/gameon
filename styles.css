@@ -1162,3 +1162,11 @@ ol.verbatim span { display: block; font-size: 13px; line-height: 1.6; color: var
   color: var(--ink-faint); margin-top: 2px;
 }
 @media (max-width: 340px) { .h2hst .hv { font-size: 14px; } .h2hst .hl { font-size: 9px; } }
+
+/* the profile's season of head-to-heads, folded to this gameweek */
+.fxgrp[hidden] { display:none; }
+.fxtoggle {
+  display:block; width:100%; appearance:none; border:0; border-top:1px solid var(--line);
+  background:transparent; color:var(--accent); font-family:inherit; font-size:12.5px;
+  font-weight:700; padding:11px 8px; cursor:pointer;
+}
