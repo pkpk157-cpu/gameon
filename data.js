@@ -206,10 +206,19 @@
       if (e.is_current && !(e.finished && e.data_checked)) gw = e.id;
     });
     if (!gw) return Promise.resolve(false);
-    return Promise.all([API.live(gw), API.fixtures(gw)]).then(function (r) {
+    // A poll must finish inside its own two-minute slot. The default budget —
+    // two attempts against each of six proxy templates at twenty seconds each
+    // — can spend four minutes failing, and liveBusy blocks every tick behind
+    // it, so one unreachable proxy could stall the live feed indefinitely.
+    // One attempt per template at seven seconds walks the whole chain in well
+    // under a minute and simply tries again on the next tick.
+    var budget = { attempts: 1, timeout: 7000 };
+    _liveTry = Date.now();
+    return Promise.all([API.live(gw, budget), API.fixtures(gw, budget)]).then(function (r) {
       var live = r[0] || {}, fixtures = r[1] || [];
-      if (!live.elements || !live.elements.length) return false;
+      if (!live.elements || !live.elements.length) { _liveErr = "the feed answered with no players"; return false; }
       _liveAt = Date.now(); // the feed answered — the numbers are this fresh
+      _liveErr = null;
       var pts = {}, bpsByFixture = {}, goals = {}, cs = {}, assists = {}, expl = {};
       live.elements.forEach(function (el) {
         var st = el.stats || {};
@@ -277,10 +286,18 @@
       }
       _dataset = nd;
       return true;
-    }).catch(function () { return false; });
+    }).catch(function (e) {
+      _liveErr = (e && e.message) ? e.message : "the live feed could not be reached";
+      return false;
+    });
   };
-  var _liveAt = null;
+  var _liveAt = null, _liveTry = null, _liveErr = null;
   STORE.liveAt = function () { return _liveAt; };
+  // What the live feed is doing, so a silent proxy failure can be seen rather
+  // than looking exactly like a quiet afternoon with nothing to report.
+  STORE.liveState = function () {
+    return { at: _liveAt, tried: _liveTry, err: _liveErr };
+  };
   function merge1(obj, gw, val) {
     var out = {};
     Object.keys(obj || {}).forEach(function (k) { out[k] = obj[k]; });

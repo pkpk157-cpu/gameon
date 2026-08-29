@@ -298,9 +298,20 @@
       '</div></div>';
 
     // 6 — where the numbers came from
+    // During a live gameweek, say plainly whether the two-minute feed is
+    // answering. Without this a dead proxy looks exactly like a quiet
+    // afternoon — both simply show the last publish, growing older.
+    var liveLine = "";
+    if (ds && K.liveGwId(ds) && S.liveState) {
+      var lst = S.liveState();
+      if (lst.at) liveLine = '<br>Live feed: answering \u00b7 ' + esc(agoText(Date.now() - lst.at));
+      else if (lst.tried) liveLine = '<br><span class="warn">Live feed: not answering (' +
+        esc(lst.err || "no reply") + '). Scores follow the 10-minute publish.</span>';
+      else liveLine = '<br>Live feed: starting up';
+    }
     h += '<div class="pffoot">' +
       (ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString() +
-             " · " + num(ds.managers.length) + " managers")
+             " · " + num(ds.managers.length) + " managers" + liveLine)
           : "Standings not loaded yet") +
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
       '</div>';
@@ -764,7 +775,9 @@
   // updater's half-hourly publishes. Failures change nothing and the loop
   // simply idles when no gameweek is live.
   var LIVE_MS = window.__LIVE_MS || 120000;
-  var liveTimer = null, liveBusy = false;
+  var liveTimer = null, liveBusy = false, liveLast = 0;
+  // How soon after one poll a return to the app may ask for another.
+  var LIVE_GAP = window.__LIVE_GAP || 20000;
   function scheduleLive() {
     clearTimeout(liveTimer);
     liveTimer = setTimeout(tickLive, LIVE_MS);
@@ -772,7 +785,7 @@
   function tickLive() {
     var ds = S.dataset();
     if (liveBusy || document.hidden || busyReading() || !ds || !K.liveGwId(ds)) { scheduleLive(); return; }
-    liveBusy = true;
+    liveBusy = true; liveLast = Date.now();
     S.liveOverlay().then(function (changed) {
       liveBusy = false;
       if (changed && !busyReading()) keepPlace(render);
@@ -783,8 +796,14 @@
   // Coming back to the app is when the numbers are most likely stale: phones
   // suspend timers the moment it goes into the background.
   function onForeground() {
-    if (document.hidden) { clearTimeout(autoTimer); return; }
+    if (document.hidden) { clearTimeout(autoTimer); clearTimeout(liveTimer); return; }
     updateBanner();
+    // A phone suspends timers the moment the app goes behind the lock screen,
+    // so the live loop can come back arbitrarily far behind — or never fire at
+    // all. Waking it here is the difference between opening the app mid-match
+    // and seeing the score, or watching the last publish grow old for two
+    // minutes. The gap keeps a flurry of app switches down to one poll.
+    if (Date.now() - liveLast >= LIVE_GAP) tickLive(); else scheduleLive();
     if (Date.now() - autoLast < AUTO_MIN_GAP) { scheduleAuto(); return; }
     autoCheck().then(scheduleAuto, scheduleAuto);
   }
@@ -891,7 +910,9 @@
       syncFromHash();
       updateDataState();
       scheduleAuto();
-      scheduleLive();
+      // Ask the live feed straight away rather than after a first full
+      // interval — during a match those two minutes are the whole point.
+      tickLive();
     });
   }
 

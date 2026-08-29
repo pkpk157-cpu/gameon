@@ -109,13 +109,13 @@
   };
 
   // All fixtures, or one gameweek's fixtures.
-  API.fixtures = function (gw) {
-    return API.getJSON("/fixtures/" + (gw ? ("?event=" + gw) : ""));
+  API.fixtures = function (gw, opts) {
+    return API.getJSON("/fixtures/" + (gw ? ("?event=" + gw) : ""), opts);
   };
 
   // Live per-player stats for a gameweek: { elements:[{ id, stats:{ minutes,... } }] }.
-  API.live = function (gw) {
-    return API.getJSON("/event/" + gw + "/live/");
+  API.live = function (gw, opts) {
+    return API.getJSON("/event/" + gw + "/live/", opts);
   };
 
   // A single player's detailed history.
