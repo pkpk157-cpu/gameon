@@ -143,9 +143,37 @@
     var t = $("#toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); }, 2600);
   }
+  // An open overlay owns one history entry, so the phone's Back button (or
+  // gesture) closes it instead of leaving the page — the way native apps do.
+  var swallowPop = false;
+  function pushOverlay() { try { history.pushState({ goOverlay: 1 }, ""); } catch (e) {} }
+  function popOverlay() {
+    if (history.state && history.state.goOverlay) {
+      swallowPop = true;
+      try { history.back(); } catch (e) { swallowPop = false; }
+    }
+  }
+  // Closing an overlay in order to navigate must not go through popOverlay:
+  // history.back() lands asynchronously, after the new hash is set, and would
+  // undo the very navigation it precedes. Instead the overlay's spare history
+  // entry is rewritten into the destination, so Back from there still returns
+  // to the page the overlay was opened over. replaceState fires no hashchange,
+  // hence the manual syncFromHash.
+  function navFromOverlay(hash) {
+    if (history.state && history.state.goOverlay) {
+      try {
+        history.replaceState(null, "", "#" + hash);
+        syncFromHash();
+        return;
+      } catch (e) {}
+    }
+    location.hash = hash;
+  }
   function modal(title, bodyHtml) {
+    var was = $("#modalBack").classList.contains("show");
     $("#modalTitle").textContent = title; $("#modalBody").innerHTML = bodyHtml;
     $("#modalBack").classList.add("show");
+    if (!was) pushOverlay();
     return $("#modalBody");
   }
   function showBreakdown(el, gw, mult) {
@@ -176,7 +204,11 @@
     modal(meta[0] + ' \u00b7 ' + club + ' \u00b7 GW' + gw, body);
   }
 
-  function closeModal() { $("#modalBack").classList.remove("show"); }
+  function closeModal(fromPop) {
+    var was = $("#modalBack").classList.contains("show");
+    $("#modalBack").classList.remove("show");
+    if (was && fromPop !== true) popOverlay();
+  }
 
   /* ---- profile sheet --------------------------------------------------- */
   function isAdmin() {
@@ -269,16 +301,17 @@
     $("#menuBody").innerHTML = sectionList() + h;
     $all(".menuitem", $("#menuBody")).forEach(function (b) {
       b.addEventListener("click", function () {
-        closeProfile();
-        location.hash = b.getAttribute("data-go");
+        closeProfile(true);
+        navFromOverlay(b.getAttribute("data-go"));
       });
     });
+    if (!$("#menuBack").classList.contains("show")) pushOverlay();
     $("#menuBack").classList.add("show");
 
     $all("#pfTheme button").forEach(function (b) {
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile({ edit: editing }); });
     });
-    function go(hash) { closeProfile(); location.hash = hash; }
+    function go(hash) { closeProfile(true); navFromOverlay(hash); }
     $("#pfStats").addEventListener("click", function () { go("stats"); });
     $("#pfCompare").addEventListener("click", function () { go("compare"); });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
@@ -313,7 +346,11 @@
       $("#pfImport").addEventListener("click", function () { importFile(function () { closeProfile(); }); });
     }
   }
-  function closeProfile() { $("#menuBack").classList.remove("show"); }
+  function closeProfile(fromPop) {
+    var was = $("#menuBack").classList.contains("show");
+    $("#menuBack").classList.remove("show");
+    if (was && fromPop !== true) popOverlay();
+  }
   function segBtn(val, icon, label, cur) {
     return '<button data-th="' + val + '" class="' + (cur === val ? "on" : "") + '">' + svg(icon, 16) + label + '</button>';
   }
@@ -729,13 +766,20 @@
       showBreakdown(+card.getAttribute("data-el"), +host.getAttribute("data-bgw"),
                     +card.getAttribute("data-mult"));
     });
-    $("#modalClose").addEventListener("click", closeModal);
+    $("#modalClose").addEventListener("click", function () { closeModal(); });
+    window.addEventListener("popstate", function () {
+      if (swallowPop) { swallowPop = false; return; }
+      if ($("#modalBack").classList.contains("show")) { closeModal(true); return; }
+      if ($("#menuBack").classList.contains("show")) { closeProfile(true); }
+    });
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
     $("#menuBack").addEventListener("click", function (e) { if (e.target === $("#menuBack")) closeProfile(); });
     document.addEventListener("click", function (e) {
       if (!e.target.closest) return;
       var b = e.target.closest("[data-rules]");
       if (b) { location.hash = "rules/" + b.getAttribute("data-rules"); return; }
+      var cg = e.target.closest("[data-chipgo]");
+      if (cg) { location.hash = "chips/" + cg.getAttribute("data-chipgw") + "/" + cg.getAttribute("data-chipgo"); return; }
       var n = e.target.closest("[data-entry]");
       if (!n) {
         // Only the name cell carries the link, but a row is what people aim
@@ -781,7 +825,7 @@
     var parts = h.split("/");
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
-      .concat(["rules", "settings", "profile", "compare", "stats", "prices"]);
+      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -797,6 +841,7 @@
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
     if (view === "profile") state.profileId = parts[1] || null;
+    if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
     track(view === "rules" && parts[1] ? "/rules/" + parts[1] : "/" + view);
     render();
@@ -825,6 +870,7 @@
   var VIEW_META = {
     classic: { t: "Classic League", topic: "classic" },
     monthly: { t: "Manager of the Month", topic: "monthly" },
+    chips: { t: "Chip played" },
     lms:     { t: "Last Manager Standing", topic: "lms" },
     pyramid: { t: "Pyramid", topic: "pyramid" },
     h2h:     { t: "Game On UCL", topic: "h2h" },
@@ -837,7 +883,7 @@
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
-  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices"];
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -906,6 +952,7 @@
     if (state.view === "settings") return renderSettings(host);
     if (state.view === "rules") return renderRules(host);
     if (state.view === "compare") return renderCompare(host, S.dataset());
+    if (state.view === "chips") return renderChips(host, S.dataset());
     if (state.view === "stats") return renderStats(host, S.dataset());
     if (state.view === "prices") return renderPrices(host, S.dataset());
 
@@ -2424,7 +2471,8 @@
     if (chipKeys.length) {
       h += '<div class="card"><div class="bd"><div class="lab-sm">Chips played</div><div class="chiprow">' +
         chipKeys.map(function (c) {
-          return '<span class="pill gold">' + esc(CHIP_NAME[c] || c) + ' · ' + sq.chips[c] + '</span>';
+          return '<button type="button" class="pill gold chipgo" data-chipgo="' + esc(c) +
+            '" data-chipgw="' + H.gw + '">' + esc(CHIP_NAME[c] || c) + ' \u00b7 ' + sq.chips[c] + '</button>';
         }).join("") + '</div></div></div>';
     }
 
@@ -2673,6 +2721,31 @@
       return [a.total > b.total, b.total > a.total];
     }
     return [false, false];
+  }
+
+  function renderChips(host, ds) {
+    if (!ds) { host.innerHTML = '<div class="callout">Standings not loaded yet.</div>'; return; }
+    var gw = state.chipsGw, chip = state.chipsKey;
+    var list = (gw && chip) ? K.chipPlayers(ds, gw, chip) : [];
+    var label = CHIP_NAME[chip] || chip || "Chip";
+    var h = '<div class="section-title"><h2>' + esc(label) + '</h2><div class="rule"></div>' +
+      '<span class="chip">GW' + esc(String(gw || "?")) + '</span></div>';
+    if (!list.length) {
+      h += '<div class="callout">Nobody played ' + esc(label) + ' in Gameweek ' + esc(String(gw || "?")) + '.</div>';
+    } else {
+      h += '<div class="rulelede">' + num(list.length) + ' manager' + (list.length === 1 ? '' : 's') +
+        ' played it, best gameweek first. Tap one to open their squad.</div>';
+      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr>' +
+        '<th class="num">#</th><th>Team</th><th class="num">GW pts</th></tr></thead><tbody>';
+      h += list.map(function (r, i) {
+        return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '><td class="num">' + (i + 1) + '</td>' +
+          '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.name) + '</span>' +
+          '<div class="mgr">' + esc(r.player) + '</div></td>' +
+          '<td class="num"><b>' + (r.score === null ? "\u2014" : num(r.score)) + '</b></td></tr>';
+      }).join("");
+      h += '</tbody></table></div></div>';
+    }
+    host.innerHTML = h;
   }
 
   function renderCompare(host, ds) {

@@ -1176,3 +1176,6 @@ ol.verbatim span { display: block; font-size: 13px; line-height: 1.6; color: var
 .bdtbl { width:100%; }
 .bdtbl td, .bdtbl th { padding:10px 8px; }
 .bdtbl .bdtotal td { border-top:2px solid var(--line-strong); font-weight:700; }
+
+/* chip pills that open the who-played-it page */
+button.chipgo { cursor:pointer; font:inherit; font-size:12px; border:1px solid var(--gold); }

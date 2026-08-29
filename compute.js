@@ -905,6 +905,20 @@
     return { rows: rows, total: total, provisional: prov > 0 };
   };
 
+  // Everyone who played one chip in one gameweek, best gameweek score first.
+  C.chipPlayers = function (ds, gw, chip) {
+    var pk = (ds && ds.picks || {})[gw] || {};
+    var mm = managerMap(ds);
+    var out = [];
+    Object.keys(pk).forEach(function (id) {
+      if ((pk[id].c || "") !== chip) return;
+      out.push({ id: +id, name: nm(mm, +id), player: pl(mm, +id),
+                 score: gwScore(ds, +id, gw) });
+    });
+    out.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    return out;
+  };
+
   C.managerPitch = function (ds, id, gw) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;
