@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- maximum-scale stops iOS Safari's automatic zoom when a small input takes
+     focus (which left pages sitting zoomed-in afterwards); user pinch zoom is
+     unaffected — Safari ignores the cap for real gestures. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>FPL Game On V12 — League Tracker</title>
 <meta name="description" content="Live tracker for the Game On V12 private FPL league — Classic, Monthly, Last Manager Standing, UCL (H2H) and the Pyramid Battle." />
 <link rel="manifest" href="manifest.json" />
