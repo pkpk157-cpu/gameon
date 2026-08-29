@@ -80,6 +80,13 @@
     }
     return s;
   })();
+  // Drawer-only glyphs: a classic football for the Premier League scoreboard
+  // and a rising line for the price tracker.
+  var G_FOOT = '<circle cx="15" cy="15" r="7.4" fill="#fff"/>' +
+    '<path d="M15 12.3l2.6 1.9-1 3h-3.2l-1-3Z" fill="rgba(0,0,0,.3)"/>' +
+    '<path d="M15 12.3V7.7M17.6 14.2l4.3-1.5M16.6 17.2l2.7 3.7M13.4 17.2l-2.7 3.7M12.4 14.2 8.1 12.7" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.2"/>';
+  var G_CHART = '<path d="M8.3 20.6l4.3-4.5 3 2.4 5.8-6.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M17.7 11.9h3.7v3.7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
   var TILE = {
     classic: tile("cl", "#ffd76a", "#e6a417", G_TROPHY),
     monthly: tile("mo", "#5db4ff", "#2f7bf0", G_CAL),
@@ -589,6 +596,67 @@
     draw();
   }
 
+  /* ---- the Premier League scoreboard ------------------------------------ */
+  // Every match of the current gameweek: the kick-off time until it starts,
+  // then the live score with the minute, then the final score. The rows ride
+  // the same published fixtures the pitch cards use, so the live poll keeps
+  // them ticking between full syncs.
+  function renderPl(host, ds) {
+    var all = (ds && ds.gwFixtures) || {};
+    var gws = Object.keys(all).map(Number).sort(function (a, b) { return a - b; });
+    var gw = gws.length ? gws[gws.length - 1] : null;
+    var rows = ((gw && all[gw]) || []).slice();
+    if (!rows.length) {
+      host.innerHTML = '<div class="section-title"><h2>Premier League</h2><div class="rule"></div></div>' +
+        '<div class="callout">The gameweek’s fixtures arrive with the next data sync — check back in a few minutes.</div>';
+      return;
+    }
+    var names = ds.teamNames || {};
+    var full = function (s) { return names[s] || s; };
+    rows.sort(function (a, b) {
+      var x = a[7] || "9999", y = b[7] || "9999";
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+    // grouped by day, the way every fixtures page reads
+    var groups = [], cur = null;
+    rows.forEach(function (f) {
+      var d = f[7] ? new Date(f[7]) : null;
+      var label = d ? d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
+                    : "Date to be confirmed";
+      if (!cur || cur.label !== label) { cur = { label: label, fx: [] }; groups.push(cur); }
+      cur.fx.push(f);
+    });
+    var row = function (f) {
+      // finished_provisional is full time on the pitch — the final whistle has
+      // gone even while FPL still folds the bonus in — so it reads Full time.
+      var started = !!f[2], done = !!f[3] || !!f[8];
+      var hs = f[4], as = f[5], mins = f[6] || 0, ko = f[7] ? new Date(f[7]) : null;
+      var pill, cap = "";
+      if (!started) {
+        var t = ko ? ko.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "TBC";
+        pill = '<div class="fxsc ahead"><span class="fxv">' + esc(t) + '</span></div>';
+      } else if (hs == null || as == null) {
+        // a dataset cached before scores were published: the next sync fills them
+        pill = '<div class="fxsc ahead"><span class="fxv">–</span></div>';
+        cap = done ? "Full time" : "In play";
+      } else {
+        pill = '<div class="fxsc"><span class="fxp">' + hs + '</span><span class="fxp">' + as + '</span></div>';
+        cap = done ? "Full time" : '<span class="golive">' + (mins ? mins + "′ · " : "") + 'live</span>';
+      }
+      return '<div class="fx' + (started ? "" : " ahead") + '">' +
+        '<div class="fxs l"><span class="fxm">' + esc(full(f[0])) + '</span></div>' + pill +
+        '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + '</span></div>' +
+        (cap ? '<div class="fxw">' + cap + '</div>' : "") + '</div>';
+    };
+    var h = '<div class="section-title"><h2>Gameweek ' + gw + ' fixtures</h2><div class="rule"></div></div>' +
+      '<p class="rulelede">All ' + rows.length + ' matches of the gameweek. Scores update live while games are on, with the minute under the score; finished games show the final score.</p>';
+    groups.forEach(function (g) {
+      h += '<div class="card"><div class="plday">' + esc(g.label) + '</div>' +
+        '<div class="fxwrap"><div class="fxgrp">' + g.fx.map(row).join("") + '</div></div></div>';
+    });
+    host.innerHTML = h;
+  }
+
   /* ---- the section menu -------------------------------------------------- */
   // Sections, shown above everything the gear used to hold — one menu, not two.
   function sectionList() {
@@ -597,14 +665,19 @@
     var backTo = TABS.map(function (t) { return t.id; }).indexOf(state.backView) === -1
       ? "classic" : state.backView;
     var items = [
-      { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL" },
-      { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving" }
+      { k: "pl", go: "pl", t: "Premier League", s: "Live scores and results, match by match",
+        i: tile("mpl", "#9d5bd2", "#43146e", G_FOOT) },
+      { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
+        i: tile("mgo", "#ffd76a", "#e6a417", G_TROPHY) },
+      { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving",
+        i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
     ];
-    var inLeague = here !== "prices";
+    var inLeague = here !== "prices" && here !== "pl";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
         var on = (it.k === "league") ? inLeague : (here === it.k);
         return '<button type="button" class="menuitem' + (on ? " on" : "") + '" data-go="' + it.go + '">' +
+          '<span class="mi-i">' + it.i + '</span>' +
           '<span class="mi-t">' + esc(it.t) + '</span>' +
           '<span class="mi-s">' + esc(it.s) + '</span></button>';
       }).join("") + '</div></div>';
@@ -825,7 +898,7 @@
     var parts = h.split("/");
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
-      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips"]);
+      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -879,11 +952,12 @@
     profile: { t: "Profile" },
     compare: { t: "Head to head" },
     stats:   { t: "Stats & highlights" },
-    prices:  { t: "Player prices" }
+    prices:  { t: "Player prices" },
+    pl:      { t: "Premier League" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
-  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips"];
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -955,6 +1029,7 @@
     if (state.view === "chips") return renderChips(host, S.dataset());
     if (state.view === "stats") return renderStats(host, S.dataset());
     if (state.view === "prices") return renderPrices(host, S.dataset());
+    if (state.view === "pl") return renderPl(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();

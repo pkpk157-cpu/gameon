@@ -371,9 +371,11 @@ tr.me:nth-child(even) td { background:var(--accent-wash); }
    than the single-line rows below them, so every property .menu button sets
    has to be answered here — it carries more specificity than a lone class. */
 .menulist { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
-.menulist .menuitem { display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+.menulist .menuitem { display:grid; grid-template-columns:auto 1fr; column-gap:12px; row-gap:2px;
+  align-items:center; justify-items:start;
   width:100%; text-align:left; cursor:pointer; padding:12px 14px; border-radius:14px;
   border:1px solid var(--line); background:var(--chip); color:var(--ink); }
+.menulist .menuitem .mi-i { grid-row:1 / span 2; display:flex; }
 .menulist .menuitem:hover { background:var(--chip); border-color:var(--accent); }
 .menulist .menuitem.on { border-color:var(--accent); background:var(--accent-tint); }
 .menulist .menuitem .mi-t { font-size:15px; font-weight:700; line-height:1.25; }
@@ -1141,6 +1143,13 @@ ol.verbatim span { display: block; font-size: 13px; line-height: 1.6; color: var
 /* on my banner the type stays white even for a fixture still to come
    (this sits after the .ahead rule on purpose — source order decides) */
 .fx.mine.ahead .fxm { color:#fff; }
+/* the Premier League scoreboard: a day header inside each card, and the
+   running minute in the caption picked out in the gain color */
+.plday {
+  padding: 12px 14px 4px; font-size: 11.5px; font-weight: 700;
+  color: var(--ink-faint); text-transform: uppercase; letter-spacing: .07em;
+}
+.fxw .golive { color: var(--good); font-weight: 700; }
 @media (max-width: 360px) {
   .fx { column-gap: 6px; padding: 12px 8px 10px; }
   .fxm { font-size: 12.5px; }

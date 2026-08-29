@@ -322,7 +322,8 @@ async function h2hAll(id) {
 
   // Compact element lookup: id -> [web_name, element_type(1-4), team_short].
   const teamShort = {};
-  (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; });
+  const teamNames = {};
+  (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; teamNames[t.short_name] = t.name; });
   elements = {};
   (bs.elements || []).forEach((el) => {
     // The table shows the short name FPL uses, but people search for the name
@@ -590,15 +591,21 @@ async function h2hAll(id) {
   }
 
   // The current gameweek's real-world fixtures, by club short name, so a
-  // player's card can say who he faces before he has played: [home, away,
-  // started, finished] per match. One request; refreshed every run so the
-  // started flags track the afternoon.
+  // player's card can say who he faces before he has played, and the Premier
+  // League page can show the scoreboard: [home, away, started, finished,
+  // homeScore, awayScore, minutes, kickoffISO, finishedProvisional] per match.
+  // Consumers written for the old four-slot shape keep working — the new
+  // fields only append. One request; refreshed every run so the flags,
+  // scores and minutes track the afternoon.
   let gwFixtures = {};
   if (curEv) {
     try {
       const fx = await getJSON("/fixtures/?event=" + curEv.id);
       gwFixtures[curEv.id] = (fx || []).map((f) =>
-        [teamShort[f.team_h] || "?", teamShort[f.team_a] || "?", f.started ? 1 : 0, f.finished ? 1 : 0]);
+        [teamShort[f.team_h] || "?", teamShort[f.team_a] || "?", f.started ? 1 : 0, f.finished ? 1 : 0,
+         f.team_h_score == null ? null : f.team_h_score,
+         f.team_a_score == null ? null : f.team_a_score,
+         f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0]);
       console.log("GW " + curEv.id + " — " + gwFixtures[curEv.id].length + " real fixtures published");
     } catch (e) { console.log("  gw fixtures failed (non-fatal): " + e.message); }
   }
@@ -607,7 +614,7 @@ async function h2hAll(id) {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
-    elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort,
+    elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown
   };
   // Refuse to publish something clearly worse than what is already live: a
