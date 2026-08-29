@@ -210,7 +210,7 @@
       var live = r[0] || {}, fixtures = r[1] || [];
       if (!live.elements || !live.elements.length) return false;
       _liveAt = Date.now(); // the feed answered — the numbers are this fresh
-      var pts = {}, bpsByFixture = {}, goals = {}, cs = {}, assists = {};
+      var pts = {}, bpsByFixture = {}, goals = {}, cs = {}, assists = {}, expl = {};
       live.elements.forEach(function (el) {
         var st = el.stats || {};
         pts[el.id] = st.total_points || 0;
@@ -218,9 +218,15 @@
         if (st.clean_sheets) cs[el.id] = st.clean_sheets;
         if (st.assists) assists[el.id] = st.assists;
         (el.explain || []).forEach(function (ex) {
-          var b = (ex.stats || []).filter(function (x) { return x.identifier === "bps"; })[0];
-          if (!b) return;
-          (bpsByFixture[ex.fixture] || (bpsByFixture[ex.fixture] = {}))[el.id] = b.value || 0;
+          (ex.stats || []).forEach(function (x) {
+            if (x.identifier === "bps") {
+              (bpsByFixture[ex.fixture] || (bpsByFixture[ex.fixture] = {}))[el.id] = x.value || 0;
+              return;
+            }
+            if (!x.points && x.identifier !== "minutes") return;
+            if (x.identifier === "minutes" && !x.value) return;
+            (expl[el.id] = expl[el.id] || []).push([x.identifier, x.value || 0, x.points || 0]);
+          });
         });
       });
       // provisional bonus only for fixtures still in play — a finalised
@@ -257,6 +263,7 @@
       nd.livePoints = merge1(ds.livePoints, gw, pts);
       nd.liveBonus = merge1(ds.liveBonus, gw, bonus);
       nd.liveStats = merge1(ds.liveStats, gw, { g: goals, c: cs, a: assists });
+      nd.breakdown = merge1(ds.breakdown, gw, expl);
       // the started/finished flags on the real fixtures move with the
       // afternoon, and the pitch cards flip from opponent to points on them
       if (ds.teams) {

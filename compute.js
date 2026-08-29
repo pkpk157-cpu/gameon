@@ -875,6 +875,36 @@
 
   // A manager's squad for a gameweek, laid out by position with points per
   // player. Defaults to the latest gameweek. Null when we have no squad.
+  // One player's scoring lines for one gameweek, worded the way FPL words
+  // them. Provisional bonus is appended while the gameweek is live and FPL
+  // has not yet awarded the real thing.
+  var BREAK_LABEL = {
+    minutes: "Minutes Played", goals_scored: "Goals", assists: "Assists",
+    clean_sheets: "Clean Sheets", goals_conceded: "Goals Conceded",
+    own_goals: "Own Goals", penalties_saved: "Penalties Saved",
+    penalties_missed: "Penalties Missed", yellow_cards: "Yellow Cards",
+    red_cards: "Red Cards", saves: "Saves", bonus: "Bonus",
+    defensive_contribution: "Defensive Contribution"
+  };
+  C.playerBreakdown = function (ds, el, gw) {
+    var raw = ((ds && ds.breakdown || {})[gw] || {})[el];
+    if (!raw || !raw.length) return null;
+    var total = 0, hasBonus = false;
+    var rows = raw.map(function (r) {
+      total += r[2] || 0;
+      if (r[0] === "bonus") hasBonus = true;
+      var lbl = BREAK_LABEL[r[0]] ||
+        (r[0].charAt(0).toUpperCase() + r[0].slice(1)).replace(/_/g, " ");
+      return { label: lbl, value: r[1], points: r[2] || 0 };
+    });
+    var prov = 0;
+    if (!hasBonus && C.liveGwId(ds) === +gw) {
+      prov = (bonusAt(ds, gw) || {})[el] || 0;
+      if (prov) { rows.push({ label: "Bonus (provisional)", value: "", points: prov }); total += prov; }
+    }
+    return { rows: rows, total: total, provisional: prov > 0 };
+  };
+
   C.managerPitch = function (ds, id, gw) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;

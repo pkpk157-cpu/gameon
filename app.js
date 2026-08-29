@@ -148,6 +148,34 @@
     $("#modalBack").classList.add("show");
     return $("#modalBody");
   }
+  function showBreakdown(el, gw, mult) {
+    var ds = S.dataset();
+    if (!ds || !ds.elements || !ds.elements[el]) return;
+    var meta = ds.elements[el];
+    var name = meta[5] || meta[0], club = meta[2];
+    var B = K.playerBreakdown(ds, el, gw);
+    var body;
+    if (!B) {
+      body = '<div class="callout">No points breakdown is stored for ' + esc(meta[0]) +
+        ' in Gameweek ' + gw + '.</div>';
+    } else {
+      body = '<table class="t bdtbl"><thead><tr><th>Type</th>' +
+        '<th class="num">Value</th><th class="num">Points</th></tr></thead><tbody>' +
+        B.rows.map(function (r) {
+          return '<tr><td>' + esc(r.label) + '</td><td class="num">' + esc(String(r.value)) + '</td>' +
+            '<td class="num"><b>' + r.points + ' pt' + (Math.abs(r.points) === 1 ? '' : 's') + '</b></td></tr>';
+        }).join("") +
+        '<tr class="bdtotal"><td>Total Points</td><td></td><td class="num"><b>' + B.total +
+        ' pts</b></td></tr>' +
+        (mult > 1 ? '<tr class="bdtotal"><td>' + (mult === 3 ? 'Triple Captain (×3)' : 'Captain (×2)') +
+          '</td><td></td><td class="num"><b>' + (B.total * mult) + ' pts</b></td></tr>' : '') +
+        '</tbody></table>' +
+        (B.provisional ? '<div class="note" style="margin-top:10px">Bonus is provisional until FPL finalises the fixture.</div>' : '');
+    }
+    // the title is set with textContent, so it takes the raw name
+    modal(meta[0] + ' \u00b7 ' + club + ' \u00b7 GW' + gw, body);
+  }
+
   function closeModal() { $("#modalBack").classList.remove("show"); }
 
   /* ---- profile sheet --------------------------------------------------- */
@@ -692,6 +720,15 @@
     $("#barInfo").innerHTML = svg("info", 18);
     $("#barMenu").innerHTML = svg("menu", 19);
     $("#barMenu").addEventListener("click", function () { openProfile(); });
+    // Tap a player anywhere a pitch is drawn: the FPL-style points breakdown.
+    document.addEventListener("click", function (e) {
+      var card = e.target.closest && e.target.closest(".pcard[data-el]");
+      if (!card) return;
+      var host = card.closest("[data-bgw]");
+      if (!host) return;
+      showBreakdown(+card.getAttribute("data-el"), +host.getAttribute("data-bgw"),
+                    +card.getAttribute("data-mult"));
+    });
     $("#modalClose").addEventListener("click", closeModal);
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
     $("#menuBack").addEventListener("click", function (e) { if (e.target === $("#menuBack")) closeProfile(); });
@@ -1963,7 +2000,7 @@
     }
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
-      '<div class="pcard">' + badge +
+      '<div class="pcard" data-el="' + p.el + '" data-mult="' + (p.mult || 0) + '" role="button" tabindex="0">' + badge +
         '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
         '<div class="pname">' + esc(p.name) + '</div>' +
         footer +
@@ -2063,6 +2100,7 @@
     }).join("") + '</div>';
     h += '</div>';
 
+    box.setAttribute("data-bgw", gw);
     h += mode === "list" ? listHtml(pit, metric) : pitchHtml(pit, metric);
     box.innerHTML = h;
 

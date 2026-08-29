@@ -234,6 +234,10 @@ async function h2hAll(id) {
     // response and are stored sparsely — in a given gameweek most players score
     // none of them, so the cost is a few hundred entries rather than 600 x 3.
     const goals = {}, cs = {}, assists = {};
+    // The full scoring lines behind each player's total — minutes, goals,
+    // cards, saves, bonus — exactly as FPL explains them, kept for the tap-a-
+    // player breakdown. Only rows that score (plus minutes) are stored.
+    const expl = {};
     (live.elements || []).forEach((el) => {
       const st = el.stats || {};
       mins[el.id] = st.minutes || 0;
@@ -242,9 +246,15 @@ async function h2hAll(id) {
       if (st.clean_sheets) cs[el.id] = st.clean_sheets;
       if (st.assists) assists[el.id] = st.assists;
       (el.explain || []).forEach((ex) => {
-        const b = (ex.stats || []).filter((x) => x.identifier === "bps")[0];
-        if (!b) return;
-        (bpsByFixture[ex.fixture] || (bpsByFixture[ex.fixture] = {}))[el.id] = b.value || 0;
+        (ex.stats || []).forEach((x) => {
+          if (x.identifier === "bps") {
+            (bpsByFixture[ex.fixture] || (bpsByFixture[ex.fixture] = {}))[el.id] = x.value || 0;
+            return;
+          }
+          if (!x.points && x.identifier !== "minutes") return;
+          if (x.identifier === "minutes" && !x.value) return;
+          (expl[el.id] = expl[el.id] || []).push([x.identifier, x.value || 0, x.points || 0]);
+        });
       });
     });
     const bonus = {};
@@ -269,7 +279,7 @@ async function h2hAll(id) {
                                 Object.keys(bonus).length + " player(s)");
       } catch (e) { console.log("  GW " + gw + " fixtures failed, no provisional bonus: " + e.message); }
     }
-    return { mins, pts, bonus, goals, cs, assists };
+    return { mins, pts, bonus, goals, cs, assists, expl };
   }
 
   // Every run checks the formula the live view uses against FPL's own score for
@@ -301,7 +311,7 @@ async function h2hAll(id) {
   }
 
   let elements = null, pitchGw = null;
-  const livePoints = {}, picks = {}, liveBonus = {}, picksFinal = {}, liveStats = {};
+  const livePoints = {}, picks = {}, liveBonus = {}, picksFinal = {}, liveStats = {}, breakdown = {};
   // goals, clean sheets and assists for one gameweek, kept only where a player
   // actually recorded one — these are the Last Manager Standing tie-breakers
   const keepStats = (gw, src) => {
@@ -431,6 +441,7 @@ async function h2hAll(id) {
   const prevBonus = canReuse ? (prev.liveBonus || {}) : {};
   const prevFinal = canReuse ? (prev.picksFinal || {}) : {};
   const prevStats = canReuse ? (prev.liveStats || {}) : {};
+  const prevBreak = canReuse ? (prev.breakdown || {}) : {};
 
   const curEv = events.find((e) => e.is_current) || events.find((e) => e.is_next);
   if (curEv) {
@@ -450,6 +461,7 @@ async function h2hAll(id) {
         livePoints[gw] = prevLive[gw];
         if (prevBonus[gw]) liveBonus[gw] = prevBonus[gw];
         if (prevStats[gw]) liveStats[gw] = prevStats[gw];
+        if (prevBreak[gw]) breakdown[gw] = prevBreak[gw];
         picksFinal[gw] = 1;
         console.log("GW " + gw + " — reused " + Object.keys(picks[gw]).length + " settled squads");
         continue;
@@ -467,6 +479,7 @@ async function h2hAll(id) {
           livePoints[gw] = fresh.pts;
           if (Object.keys(fresh.bonus).length) liveBonus[gw] = fresh.bonus;
           keepStats(gw, fresh);
+          breakdown[gw] = fresh.expl;
           // players played is derived from the frozen squads and fresh minutes
           for (const id of Object.keys(picks[gw])) {
             let played = 0, total = 0;
@@ -518,6 +531,7 @@ async function h2hAll(id) {
           livePoints[gw] = pts;
           if (Object.keys(bonus).length) liveBonus[gw] = bonus;
           keepStats(gw, stats);
+          breakdown[gw] = stats.expl;
           if (settled) picksFinal[gw] = 1;
         }
         console.log("  GW " + gw + " — " + Object.keys(got).length + " squads" +
@@ -551,7 +565,8 @@ async function h2hAll(id) {
       else missing.push(id);
     }
     const statsGone = !liveStats[gw];
-    if (missing.length || statsGone) {
+    const breakGone = !breakdown[gw];
+    if (missing.length || statsGone || breakGone) {
       try {
         const fresh = await liveFor(gw, true);
         let fixed = 0;
@@ -567,6 +582,7 @@ async function h2hAll(id) {
         // stored outright — even a gameweek with genuinely no goals must not
         // look damaged again on the next run
         if (statsGone) liveStats[gw] = { g: fresh.goals || {}, c: fresh.cs || {}, a: fresh.assists || {} };
+        if (breakGone) breakdown[gw] = fresh.expl || {};
         console.log("GW " + gw + " — backfilled " + fixed + " played counts" +
           (statsGone ? " and the tie-break stats" : ""));
       } catch (e) { console.log("  GW " + gw + " backfill failed (non-fatal): " + e.message); }
@@ -592,7 +608,7 @@ async function h2hAll(id) {
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort,
-    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.
