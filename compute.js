@@ -1016,6 +1016,30 @@
       if (topPrice === null || p.price > topPrice) topPrice = p.price;
     });
 
+    // Selling values. The squad's is FPL's own figure — the history row's
+    // value field carries selling value plus bank, so it is exact by
+    // construction. The per-player ones come from the purchase prices (sell =
+    // purchase plus half the rise, rounded down per tenth; a fall is borne in
+    // full) and are shown only when the fifteen add up to FPL's figure
+    // exactly — a Free Hit leaves entries in the transfer log that would
+    // otherwise fake a purchase price.
+    var bank = hrow && hrow.bk != null ? hrow.bk : null;
+    var sellValue = (hrow && typeof hrow.v === "number" && hrow.v > 0 && bank != null)
+      ? hrow.v - bank : null;
+    var buyMap = (ds.buys && +ds.buysGw === +gw) ? ds.buys[id] : null;
+    if (buyMap) {
+      var sellSum = 0, complete = everyone.length > 0;
+      everyone.forEach(function (p) {
+        var buy = buyMap[p.el];
+        if (buy == null) { complete = false; return; }
+        p.sell = p.price > buy ? buy + Math.floor((p.price - buy) / 2) : p.price;
+        sellSum += p.sell;
+      });
+      if (!complete || sellValue === null || sellSum !== sellValue) {
+        everyone.forEach(function (p) { delete p.sell; });
+      }
+    }
+
     var provTotal = 0;
     scoring.forEach(function (p) { provTotal += (p.prov || 0) * p.mult; });
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live, provisional: provTotal,
@@ -1024,6 +1048,7 @@
              average: n ? Math.round(sum / n) : null, highest: top,
              avgEo: scoring.length ? Math.round((eoSum / scoring.length) * 10) / 10 : 0,
              topEo: topEo || 0, squadValue: valSum, topPrice: topPrice || 0,
+             bank: bank, sellValue: sellValue,
              leagueAvgEo: eot ? eot.leagueAvgEo : 0,
              leagueAvgValue: eot ? eot.leagueAvgValue : 0 };
   };

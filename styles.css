@@ -771,6 +771,11 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
 /* the value bar switches colour away from the points purple */
 .ppts.alt { background:#0d5c63; }
 .pbench .ppts.alt { background:#0d5c63; }
+/* the selling price, tucked under the market price where the two differ */
+.pcard .psub { background:#0d5c63; color:#b9dfe2; font-size:8.5px; font-weight:700;
+  line-height:1.2; text-align:center; padding:0 2px 3px; margin-top:-1px; }
+.pstat .sub { font-size:10px; font-weight:600; color:var(--ink-faint); line-height:1.3; }
+table.t .subval { font-size:10px; font-weight:600; color:var(--ink-faint); line-height:1.3; }
 /* list mode: the chosen metric is the emphasised column */
 table.t.plist td.num { color:var(--ink-faint); font-weight:600; }
 table.t.plist td.num.lead { color:var(--ink); font-weight:800; }

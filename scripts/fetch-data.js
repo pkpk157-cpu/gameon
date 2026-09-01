@@ -332,9 +332,11 @@ async function h2hAll(id) {
     const full = ((el.first_name || "") + " " + (el.second_name || "")).trim();
     const extra = full && full.toLowerCase() !== String(el.web_name || "").toLowerCase()
       ? full : "";
-    // [name, position, club, price(tenths), owned% across all FPL, full name]
+    // [name, position, club, price(tenths), owned% across all FPL, full name,
+    //  season-start price(tenths) — the purchase price of an original pick]
     elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
-                       el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra];
+                       el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra,
+                       (el.now_cost || 0) - (el.cost_change_start || 0)];
   });
 
   /* ---- prices, and the transfer flow that moves them -------------------- */
@@ -542,6 +544,51 @@ async function h2hAll(id) {
     }
   }
 
+  /* ---- purchase prices, for selling values ------------------------------ */
+  // FPL sells a risen player for his purchase price plus half the rise
+  // (rounded down per tenth); a fallen one goes for his current price. The
+  // purchase price of each owned player comes from the manager's transfer log
+  // — the newest transfer-in of that player, or his season-start price for an
+  // original pick. The squad is frozen at the deadline, so the logs are read
+  // once per gameweek and reused for the rest of it.
+  //
+  // Only transfers up to this gameweek count. A manager who plans ahead
+  // during a live gameweek adds entries for the NEXT one, and those name a
+  // price he has not paid for the squad on screen; taking the newest entry
+  // blindly would price a player by a transfer that has not happened yet.
+  let buys = (canReuse && prev.buysGw === pitchGw && prev.buys &&
+              Object.keys(prev.buys).length >= Math.floor(managers.length * 0.9))
+    ? prev.buys : null;
+  if (pitchGw && picks[pitchGw] && !buys) {
+    buys = {};
+    const startOf = {};
+    (bs.elements || []).forEach((el) => {
+      startOf[el.id] = (el.now_cost || 0) - (el.cost_change_start || 0);
+    });
+    await pool(managers, async (m) => {
+      const squad = picks[pitchGw][m.id];
+      if (!squad) return;
+      try {
+        const tr = await getJSON("/entry/" + m.id + "/transfers/");
+        const latest = {}; // element -> [time, cost] of the newest transfer in
+        (tr || []).forEach((t) => {
+          if (t.event > pitchGw) return;
+          const at = Date.parse(t.time) || 0;
+          if (!latest[t.element_in] || at > latest[t.element_in][0]) {
+            latest[t.element_in] = [at, t.element_in_cost];
+          }
+        });
+        const map = {};
+        (squad.p || []).forEach((pk) => {
+          map[pk[0]] = latest[pk[0]] ? latest[pk[0]][1] : (startOf[pk[0]] || 0);
+        });
+        buys[m.id] = map;
+      } catch (e) { /* skip — that squad simply shows no selling detail */ }
+    }, 6);
+    console.log("purchase prices read for " + Object.keys(buys).length +
+                " squads (GW " + pitchGw + ")");
+  }
+
   // ---- played counts and tie-break stats must survive the squad reuse -----
   // pl/plt (players played, from live minutes) and liveStats (goals, clean
   // sheets, assists — the LMS tie-breakers) are derived only when a gameweek
@@ -620,6 +667,7 @@ async function h2hAll(id) {
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
+    buys: buys || {}, buysGw: pitchGw,
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown
   };
   // Refuse to publish something clearly worse than what is already live: a

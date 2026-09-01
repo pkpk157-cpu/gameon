@@ -2160,6 +2160,9 @@
         '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
         '<div class="pname">' + esc(p.name) + '</div>' +
         footer +
+        // his selling price, when FPL would give back less than he now costs
+        (metric === "val" && p.sell != null && p.sell !== p.price
+          ? '<div class="psub">sells ' + mval(p.sell) + '</div>' : '') +
       '</div></div>';
   }
 
@@ -2185,7 +2188,7 @@
   // squad itself. Re-rendered in place whenever the gameweek or mode changes.
   // The three stats above a squad change with the metric being shown.
   function pitchStats(pit, metric) {
-    var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null;
+    var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null, midSub = "";
     if (metric === "eo") {
       leftLabel = "League avg"; left = pit.leagueAvgEo + "%";
       midLabel = "Average EO"; mid = pit.avgEo + "%";
@@ -2193,7 +2196,11 @@
     } else if (metric === "val") {
       leftLabel = "League avg"; left = mval(pit.leagueAvgValue);
       midLabel = "Squad value"; mid = mval(pit.squadValue);
-      rightLabel = "Priciest"; right = mval(pit.topPrice);
+      // what the squad would fetch today — FPL keeps half of every rise
+      if (pit.sellValue != null && pit.sellValue !== pit.squadValue) {
+        midSub = "Sells for " + mval(pit.sellValue);
+      }
+      rightLabel = "In the bank"; right = pit.bank == null ? "—" : mval(pit.bank);
     } else {
       leftLabel = "Average"; left = pit.average === null ? "—" : num(pit.average);
       midLabel = "Total Pts" + (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '');
@@ -2207,7 +2214,9 @@
       : '<div class="pstat">';
     return '<div class="pstats">' +
       '<div class="pstat"><div class="v">' + esc(left) + '</div><div class="l">' + leftLabel + '</div></div>' +
-      '<div class="pstat main"><div class="v">' + esc(mid) + '</div><div class="l">' + midLabel + '</div></div>' +
+      '<div class="pstat main"><div class="v">' + esc(mid) + '</div>' +
+        (midSub ? '<div class="sub">' + esc(midSub) + '</div>' : '') +
+        '<div class="l">' + midLabel + '</div></div>' +
       rightOpen + '<div class="v">' + esc(right) + '</div><div class="l">' + rightLabel + '</div></div>' +
       '</div>' +
       // FPL-wide "selected by" lives on the prices tab; the pitch counts the
@@ -2294,7 +2303,10 @@
         '<td>' + esc(p.team) + '</td>' +
         cell("pts", num(p.pts)) +
         cell("eo", p.eo + "%") +
-        cell("val", "£" + (Math.round(p.price) / 10).toFixed(1) + "m") +
+        '<td class="num' + (metric === "val" ? ' lead' : '') + '">' + mval(p.price) +
+          (p.sell != null && p.sell !== p.price
+            ? '<div class="subval">sells ' + mval(p.sell) + '</div>' : '') +
+        '</td>' +
         '</tr>';
     }).join("");
     return h + '</tbody></table></div>';

@@ -90,6 +90,32 @@ played.forEach((g) => {
   if (!ev || !(ev.average > 0)) flag("no average_entry_score for finished GW" + g);
 });
 
+// Selling values: for every squad with purchase prices, the fifteen selling
+// prices must reproduce FPL's own figure (history value minus bank) exactly.
+// The odd mismatch is expected — a Free Hit muddies the transfer log, and the
+// app hides the per-player detail for exactly those squads — but if most
+// squads disagree, the purchase prices themselves are wrong.
+if (ds.buys && ds.buysGw && (ds.picks || {})[ds.buysGw]) {
+  let sellOk = 0, sellOff = 0;
+  const pk = ds.picks[ds.buysGw];
+  Object.keys(ds.buys).forEach((id) => {
+    const squad = pk[id], h = (ds.history[id] || {})[ds.buysGw];
+    if (!squad || !h || !(h.v > 0) || h.bk == null) return;
+    let sum = 0, all = true;
+    (squad.p || []).forEach((p) => {
+      const buy = ds.buys[id][p[0]], now = (ds.elements[p[0]] || [])[3];
+      if (buy == null || now == null) { all = false; return; }
+      sum += now > buy ? buy + Math.floor((now - buy) / 2) : now;
+    });
+    if (!all) return;
+    if (sum === h.v - h.bk) sellOk++; else sellOff++;
+  });
+  if (sellOff > sellOk) flag("selling values: only " + sellOk + " of " +
+    (sellOk + sellOff) + " squads reconcile with FPL's value minus bank");
+  console.log("selling values reconcile for " + sellOk + " squad(s), " +
+    sellOff + " hidden (Free Hit or unmatched log)");
+}
+
 console.log("verified: " + mgrChecked + " h2h records across " +
   (cfg.h2hGroupLeagueIds || []).length + " groups from " + fxTotal + " fixtures, " +
   cChecked + " classic totals, " + played.length + " finished gameweek(s)");
