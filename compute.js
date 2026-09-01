@@ -1640,6 +1640,38 @@
   };
 
   // Recent gameweek scores, oldest first — the shape of someone's season.
+  // Where every manager stood in the classic league at the end of each
+  // gameweek. FPL's own history carries an overall rank — that is the world's
+  // table, not this one — so the league's positions are rebuilt from the
+  // running totals it does carry, ordered the way the Classic tab orders them
+  // and sharing a position on a tie. Built once per dataset.
+  function classicRankByGw(ds) {
+    if (ds && ds._crank) return ds._crank;
+    var by = {};
+    var gws = C.finishedGws(ds);
+    var cur = C.currentGw(ds);
+    if (cur && gws.indexOf(cur) === -1) gws = gws.concat([cur]);
+    gws.forEach(function (g) {
+      var rows = [];
+      (ds.managers || []).forEach(function (m) {
+        var r = (ds.history[m.id] || {})[g];
+        if (r && typeof r.t === "number") rows.push({ id: m.id, t: r.t });
+      });
+      rows.sort(function (a, b) { return b.t - a.t; });
+      var map = {};
+      for (var i = 0; i < rows.length; ) {
+        var j = i;
+        while (j + 1 < rows.length && rows[j + 1].t === rows[i].t) j++;
+        for (var k = i; k <= j; k++) map[rows[k].id] = i + 1;
+        i = j + 1;
+      }
+      by[g] = { rank: map, of: rows.length };
+    });
+    if (ds) { try { Object.defineProperty(ds, "_crank", { value: by, enumerable: false }); } catch (e) {} }
+    return by;
+  }
+  C.classicRankByGw = classicRankByGw;
+
   C.form = function (ds, id, count) {
     if (!ds || !id) return [];
     id = +id;
@@ -1647,10 +1679,15 @@
     var cur = C.currentGw(ds);
     if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
     var h = ds.history[id] || {};
+    var cr = classicRankByGw(ds);
     var out = [];
     played.forEach(function (g) {
       var r = h[g];
-      if (r && typeof r.p === "number") out.push({ gw: g, p: r.p });
+      if (!r || typeof r.p !== "number") return;
+      var band = cr[g];
+      out.push({ gw: g, p: r.p,
+                 r: (band && band.rank[id]) || null,
+                 of: (band && band.of) || 0 });
     });
     return count ? out.slice(-count) : out;
   };

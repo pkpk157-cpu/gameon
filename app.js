@@ -3384,45 +3384,143 @@
 
   // A season's shape: one line, no axes, the latest point labelled. Fewer than
   // two gameweeks is not a chart, so it renders as a plain figure instead.
+  // Form: what they scored each gameweek, and where that left them in the
+  // league. Two measures on two scales — points on the left, classic position
+  // on the right, inverted so that higher on the chart is better in both.
+  //
+  // Two y-scales are normally a bad idea: the alignment between them is
+  // arbitrary, so crossings can imply a relationship that is not in the data.
+  // It is defensible here because the two ARE the same story — position is a
+  // function of points against the field — and because the pair is separated
+  // by more than colour: its own axis, its own mark (hollow diamond against
+  // filled circle), and its own labels. Read each line against its own side.
   function sparkline(points, opts) {
     opts = opts || {};
     if (!points || !points.length) return "";
+    var one = points[0];
     if (points.length < 2) {
-      return '<div class="sparkone"><span class="v">' + num(points[0].p) + '</span>' +
-        '<span class="l">GW' + points[0].gw + ' \u2014 a line needs more than one gameweek</span></div>';
+      return '<div class="sparkone"><span class="v">' + num(one.p) + '</span>' +
+        '<span class="l">GW' + one.gw + (one.r ? ' \u00b7 ' + ord(one.r) + ' of ' + num(one.of) : '') +
+        ' \u2014 a line needs more than one gameweek</span></div>';
     }
-    var W = 300, H = 62, padY = 10, padX = 4;
-    var vals = points.map(function (p) { return p.p; });
-    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    var span = (hi - lo) || 1;
-    var avg = vals.reduce(function (t, v) { return t + v; }, 0) / vals.length;
-    function x(i) { return padX + (i * (W - padX * 2)) / (points.length - 1); }
-    function y(v) { return H - padY - ((v - lo) / span) * (H - padY * 2); }
 
-    var line = points.map(function (p, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.p).toFixed(1); }).join(" ");
-    var area = line + " L" + x(points.length - 1).toFixed(1) + " " + (H - padY) + " L" + x(0).toFixed(1) + " " + (H - padY) + " Z";
-    var last = points[points.length - 1];
+    var W = 320, H = 172;
+    // the bottom gutter carries two rows — a position label under its marker,
+    // then the gameweek axis — so it is deeper than the top
+    var L = 30, R = 34, T = 20, B = 42;
+    // the plot is inset from its gutters so the end labels do not sit on top
+    // of the axis ticks, which is where they would otherwise land
+    var x0 = L + 12, x1 = W - R - 12, y0 = T, y1 = H - B;
 
-    var dots = points.map(function (p, i) {
-      // a generous invisible target so the native tooltip is reachable
-      return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.p).toFixed(1) + '" r="9" fill="transparent">' +
-        '<title>GW' + p.gw + ': ' + num(p.p) + ' pts</title></circle>';
+    var pv = points.map(function (p) { return p.p; });
+    var pLo = Math.min.apply(null, pv), pHi = Math.max.apply(null, pv);
+    if (pHi === pLo) { pHi = pLo + 1; }
+    var avg = pv.reduce(function (t, v) { return t + v; }, 0) / pv.length;
+
+    var ranked = points.filter(function (p) { return p.r; });
+    var rv = ranked.map(function (p) { return p.r; });
+    var rBest = rv.length ? Math.min.apply(null, rv) : null;
+    var rWorst = rv.length ? Math.max.apply(null, rv) : null;
+    if (rBest !== null && rWorst === rBest) rWorst = rBest + 1;
+
+    function x(i) { return x0 + (i * (x1 - x0)) / (points.length - 1); }
+    function yP(v) { return y1 - ((v - pLo) / (pHi - pLo)) * (y1 - y0); }
+    // rank 1 is the top of the chart, so the better position sits higher
+    function yR(v) { return y0 + ((v - rBest) / (rWorst - rBest)) * (y1 - y0); }
+
+    var line = points.map(function (p, i) {
+      return (i ? "L" : "M") + x(i).toFixed(1) + " " + yP(p.p).toFixed(1);
+    }).join(" ");
+    var area = line + " L" + x(points.length - 1).toFixed(1) + " " + y1 +
+               " L" + x(0).toFixed(1) + " " + y1 + " Z";
+    var rline = "";
+    if (ranked.length > 1) {
+      var seg = [];
+      points.forEach(function (p, i) {
+        if (!p.r) return;
+        seg.push((seg.length ? "L" : "M") + x(i).toFixed(1) + " " + yR(p.r).toFixed(1));
+      });
+      rline = seg.join(" ");
+    }
+
+    // A number on every point stops being readable past a dozen gameweeks, so
+    // beyond that only the ends and the extremes are called out.
+    var labelAll = points.length <= 12;
+    var iBest = 0, iWorst = 0;
+    points.forEach(function (p, i) {
+      if (p.p > points[iBest].p) iBest = i;
+      if (p.p < points[iWorst].p) iWorst = i;
+    });
+    function labelled(i) {
+      return labelAll || i === 0 || i === points.length - 1 || i === iBest || i === iWorst;
+    }
+
+    var marks = "", labels = "", hits = "";
+    points.forEach(function (p, i) {
+      var px = x(i), py = yP(p.p);
+      marks += '<circle class="mkP" cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="3.2"/>';
+      if (p.r) {
+        var ry = yR(p.r);
+        // a diamond, so the two series differ by shape as well as colour
+        marks += '<path class="mkR" d="M' + px.toFixed(1) + ' ' + (ry - 3.6).toFixed(1) +
+          'l3.6 3.6-3.6 3.6-3.6-3.6Z"/>';
+        if (labelled(i)) {
+          labels += '<text class="dlR" x="' + px.toFixed(1) + '" y="' + (ry + 15).toFixed(1) +
+            '">' + esc(ord(p.r)) + '</text>';
+        }
+      }
+      if (labelled(i)) {
+        labels += '<text class="dlP" x="' + px.toFixed(1) + '" y="' + (py - 8).toFixed(1) +
+          '">' + num(p.p) + '</text>';
+      }
+      hits += '<circle cx="' + px.toFixed(1) + '" cy="' + ((y0 + y1) / 2).toFixed(1) +
+        '" r="' + ((x1 - x0) / (points.length - 1) / 2 + 4).toFixed(1) + '" fill="transparent">' +
+        '<title>GW' + p.gw + ': ' + num(p.p) + ' pts' +
+        (p.r ? ' \u00b7 ' + ord(p.r) + ' of ' + num(p.of) : '') + '</title></circle>';
+    });
+
+    // Axis ticks: the two ends of each scale, in ink rather than series colour
+    var ticks =
+      '<text class="axP" x="' + (L - 4) + '" y="' + (y0 + 4) + '">' + num(pHi) + '</text>' +
+      '<text class="axP" x="' + (L - 4) + '" y="' + (y1 + 4) + '">' + num(pLo) + '</text>';
+    if (rBest !== null) {
+      ticks += '<text class="axR" x="' + (W - R + 4) + '" y="' + (y0 + 4) + '">' + esc(ord(rBest)) + '</text>' +
+        '<text class="axR" x="' + (W - R + 4) + '" y="' + (y1 + 4) + '">' + esc(ord(rWorst)) + '</text>';
+    }
+
+    var gwEvery = Math.max(1, Math.ceil(points.length / 6));
+    var foot = points.map(function (p, i) {
+      if (i !== 0 && i !== points.length - 1 && i % gwEvery) return "";
+      return '<text class="axG" x="' + x(i).toFixed(1) + '" y="' + (H - 9) + '">' + p.gw + '</text>';
     }).join("");
 
-    return '<div class="spark">' +
-      // scales uniformly: stretching would turn the marker into an ellipse
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" ' +
-        'aria-label="Gameweek scores from GW' + points[0].gw + ' to GW' + last.gw + '">' +
-        '<line class="avg" x1="' + padX + '" x2="' + (W - padX) + '" y1="' + y(avg).toFixed(1) + '" y2="' + y(avg).toFixed(1) + '"/>' +
+    return '<div class="spark2">' +
+      '<div class="lgd">' +
+        '<span class="lg a"><i></i>Points <b>left</b></span>' +
+        (rBest !== null ? '<span class="lg b"><i></i>League position <b>right</b></span>' : '') +
+      '</div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Gameweek points and league position from GW' +
+        points[0].gw + ' to GW' + points[points.length - 1].gw + '">' +
+        '<line class="avg" x1="' + x0 + '" x2="' + x1 + '" y1="' + yP(avg).toFixed(1) +
+          '" y2="' + yP(avg).toFixed(1) + '"/>' +
         '<path class="fill" d="' + area + '"/>' +
-        '<path class="ln" d="' + line + '"/>' +
-        '<circle class="head" cx="' + x(points.length - 1).toFixed(1) + '" cy="' + y(last.p).toFixed(1) + '" r="4"/>' +
-        dots +
+        '<path class="lnP" d="' + line + '"/>' +
+        (rline ? '<path class="lnR" d="' + rline + '"/>' : '') +
+        marks + labels + ticks + foot + hits +
       '</svg>' +
       '<div class="sparkfoot"><span>GW' + points[0].gw + '</span>' +
-        '<span class="mid">avg ' + num(Math.round(avg)) + '</span>' +
-        '<span><b>' + num(last.p) + '</b> GW' + last.gw + '</span></div>' +
+        '<span class="mid">avg ' + num(Math.round(avg)) + ' pts</span>' +
+        '<span><b>' + num(points[points.length - 1].p) + '</b> GW' + points[points.length - 1].gw + '</span></div>' +
       '</div>';
+  }
+
+  // 1st, 2nd, 3rd — a league position reads as a position, not a count.
+  function ord(n) {
+    if (n == null) return "";
+    var t = n % 100;
+    var suf = (t >= 11 && t <= 13) ? "th"
+            : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th");
+    return num(n) + suf;
   }
 
   document.addEventListener("DOMContentLoaded", boot);
