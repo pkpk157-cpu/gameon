@@ -2226,7 +2226,7 @@
         'Game On\u2019s 245 managers. FPL-wide ownership is in Player prices.</div>' : '');
   }
 
-  function mountPitch(box, ds, id, gw, mode, metric) {
+  function mountPitch(box, ds, id, gw, metric) {
     var gws = K.squadGws(ds);
     if (!gws.length) return;
     gw = gw || gws[gws.length - 1];
@@ -2236,9 +2236,8 @@
       box.innerHTML = '<div class="callout">No squad recorded for this gameweek.</div>';
       return;
     }
-    mode = mode === "list" ? "list" : "pitch";
     if (!METRICS[metric]) metric = "pts";
-    state.pitchGw = +gw; state.pitchMode = mode; state.pitchMetric = metric;
+    state.pitchGw = +gw; state.pitchMetric = metric;
 
     var h = '<div class="pgwline">';
     h += '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
@@ -2258,59 +2257,24 @@
     }
 
     h += '<div class="psegrow">';
-    h += '<div class="pseg"><button type="button"' + (mode === "pitch" ? ' class="on"' : '') + ' data-mode="pitch">Pitch</button>' +
-      '<button type="button"' + (mode === "list" ? ' class="on"' : '') + ' data-mode="list">List</button></div>';
     h += '<div class="pseg sm">' + Object.keys(METRICS).map(function (k) {
       return '<button type="button"' + (metric === k ? ' class="on"' : '') + ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
     }).join("") + '</div>';
     h += '</div>';
 
     box.setAttribute("data-bgw", gw);
-    h += mode === "list" ? listHtml(pit, metric) : pitchHtml(pit, metric);
+    h += pitchHtml(pit, metric);
     box.innerHTML = h;
 
     $("#pitchGwSel", box).addEventListener("change", function () {
-      mountPitch(box, ds, id, +this.value, mode, metric);
+      mountPitch(box, ds, id, +this.value, metric);
     });
     $(".psegrow", box).addEventListener("click", function (e) {
-      var b = e.target.closest("button[data-mode], button[data-metric]");
-      if (!b) return;
-      if (b.hasAttribute("data-mode")) mountPitch(box, ds, id, gw, b.getAttribute("data-mode"), metric);
-      else mountPitch(box, ds, id, gw, mode, b.getAttribute("data-metric"));
+      var b = e.target.closest("button[data-metric]");
+      if (b) mountPitch(box, ds, id, gw, b.getAttribute("data-metric"));
     });
   }
 
-  function listHtml(pit, metric) {
-    var rows = [];
-    pit.lines.forEach(function (ln) {
-      ln.players.forEach(function (p) { rows.push([p, false]); });
-    });
-    pit.bench.forEach(function (p) { rows.push([p, true]); });
-    // The list always carries all three numbers; the toggle just picks which
-    // one is emphasised.
-    var h = '<div class="tablewrap"><table class="t plist"><thead><tr><th></th><th>Player</th>' +
-            '<th>Team</th><th class="num">Pts</th><th class="num">EO</th><th class="num">Price</th>' +
-            '</tr></thead><tbody>';
-    h += rows.map(function (r) {
-      var p = r[0], onBench = r[1];
-      var mark = p.cap ? ' <span class="pill gold">C</span>' : (p.vice ? ' <span class="pill">V</span>' : "");
-      function cell(kind, val) {
-        return '<td class="num' + (metric === kind || (!metric && kind === "pts") ? ' lead' : '') + '">' + esc(val) + '</td>';
-      }
-      return '<tr' + (onBench ? ' class="benchrow2"' : '') + '>' +
-        '<td class="pcol">' + esc(p.pos) + '</td>' +
-        '<td>' + esc(p.name) + mark + (onBench ? ' <span class="note">bench</span>' : '') + '</td>' +
-        '<td>' + esc(p.team) + '</td>' +
-        cell("pts", num(p.pts)) +
-        cell("eo", p.eo + "%") +
-        '<td class="num' + (metric === "val" ? ' lead' : '') + '">' + mval(p.price) +
-          (p.sell != null && p.sell !== p.price
-            ? '<div class="subval">sells ' + mval(p.sell) + '</div>' : '') +
-        '</td>' +
-        '</tr>';
-    }).join("");
-    return h + '</tbody></table></div>';
-  }
   function h2hStat(label, value) {
     return '<div class="h2hst"><div class="hv">' + num(value) + '</div>' +
       '<div class="hl">' + esc(label) + '</div></div>';
@@ -2321,7 +2285,9 @@
     var P = K.managerProfile(ds, id);
     // The manager's team and name live in the top bar, so they are not
     // repeated here. One compact card per competition.
-    var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : '';
+    var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>'
+      : '<div class="youline"><button type="button" class="cmpme" id="cmpMe">' +
+        'Compare with my team</button></div>';
 
     // One section per competition, and how near the places each one is.
     var W = K.winnings(ds, id);
@@ -2434,6 +2400,14 @@
     }
 
     host.innerHTML = h;
+    var cmpBtn = $("#cmpMe", host);
+    if (cmpBtn) cmpBtn.addEventListener("click", function () {
+      // Nobody can be compared against until the reader has said who they
+      // are, so send them to do that rather than opening a half-empty page.
+      if (!state.me) { toast("Pick your team first"); openProfile({ edit: true }); return; }
+      state.cmpA = state.me; state.cmpB = +id;
+      location.hash = "compare";
+    });
     var h2hBtn = $("#h2hAll", host);
     if (h2hBtn) h2hBtn.addEventListener("click", function () {
       var rest = $("#h2hRest", host);
@@ -2442,7 +2416,7 @@
                                      : "Show this gameweek only";
     });
     var box = $("#pitchBox", host);
-    if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMode, state.pitchMetric);
+    if (box) mountPitch(box, ds, id, state.pitchGw, state.pitchMetric);
   }
 
   /* ====================================================================== */

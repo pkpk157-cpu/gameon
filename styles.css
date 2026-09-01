@@ -601,8 +601,6 @@ main.wrap.fill .freeze { flex:1; min-height:0; max-height:none; }
 main.wrap.fill .freeze table.t tbody tr:last-child td { padding-bottom:14px; }
 main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 
-
-
 /* ---- profile: squad on a pitch (FPL-style) ---------------------------- */
 .pitchcard .bd { padding:14px 12px 12px; }
 .pgwline { text-align:center; font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:12px; }
@@ -618,6 +616,11 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
   box-shadow:0 8px 20px -10px rgba(233,0,82,.7); }
 .pstat.main .v { font-size:30px; color:#fff; }
 .pstat.main .l { color:rgba(255,255,255,.9); }
+/* The realisable value, under the squad value it qualifies. It sits on the
+   magenta gradient, so it takes its colour from that tile — the faint grey
+   used elsewhere on the card is all but invisible here. */
+.pstat .sub { font-size:11px; font-weight:700; color:var(--ink-soft); line-height:1.25; margin-top:1px; }
+.pstat.main .sub { color:rgba(255,255,255,.92); }
 .pstat .hit { color:#ffd7d1; font-weight:800; }
 .pstat.hi { cursor:pointer; }
 .pstat.hi .arw { font-weight:800; }
@@ -683,10 +686,6 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pbench .pcard { background:#2a8a55; }
 /* the bench strip is always light, so its labels stay dark in both themes */
 .pbench .pposlbl { color:#4a6b58; }
-
-/* list mode */
-table.t.plist td.pcol { font-size:10.5px; font-weight:800; color:var(--ink-faint); width:44px; }
-table.t.plist tr.benchrow2 td { opacity:.62; }
 
 /* ---- gameweek picker inside the pitch header -------------------------- */
 .pgwline select.gwsel { width:auto; display:inline-block; font-weight:700; font-size:13px;
@@ -774,12 +773,6 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
 /* the selling price, tucked under the market price where the two differ */
 .pcard .psub { background:#0d5c63; color:#b9dfe2; font-size:8.5px; font-weight:700;
   line-height:1.2; text-align:center; padding:0 2px 3px; margin-top:-1px; }
-.pstat .sub { font-size:10px; font-weight:600; color:var(--ink-faint); line-height:1.3; }
-table.t .subval { font-size:10px; font-weight:600; color:var(--ink-faint); line-height:1.3; }
-/* list mode: the chosen metric is the emphasised column */
-table.t.plist td.num { color:var(--ink-faint); font-weight:600; }
-table.t.plist td.num.lead { color:var(--ink); font-weight:800; }
-table.t.plist th.num { font-size:10.5px; }
 
 /* ---- head to head: chip tag above each squad --------------------------- */
 .cmppitch .colchip { min-height:22px; text-align:center; margin-bottom:4px; }
@@ -819,6 +812,12 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 
 /* ---- profile: compact competition cards ------------------------------- */
 .youline { margin-bottom:2px; }
+/* On someone else's profile, the way into a head-to-head with them. */
+.cmpme { width:100%; cursor:pointer; font:inherit; font-size:13.5px; font-weight:700;
+  padding:10px 14px; border-radius:var(--radius-s); margin-bottom:8px;
+  border:1px solid var(--accent); background:var(--accent-tint); color:var(--accent); }
+.cmpme:hover { background:var(--accent-wash); }
+.cmpme:active { transform:translateY(1px); }
 .pcards { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:6px; margin-bottom:4px; }
 .pc { padding:9px 10px; border-radius:var(--radius-xs);
   background:var(--glass); border:1px solid var(--glass-border);
