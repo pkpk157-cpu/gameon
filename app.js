@@ -29,6 +29,40 @@
     person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
     sync: '<path d="M20 11a8 8 0 0 0-14.3-4.4M4 13a8 8 0 0 0 14.3 4.4"/><path d="M5 3v4h4M19 21v-4h-4"/>'
   };
+  /* Icons for the stat cards. Same 24x24 stroke language as the bar's, drawn
+     to be read at 14px: one idea per glyph, no interior detail that closes up
+     at that size. */
+  var SICONS = {
+    star: '<path d="M12 3.6l2.6 5.3 5.8.9-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.2-4.1 5.8-.9Z"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0Z"/><path d="M8 5.6H5.4A3.4 3.4 0 0 0 8 9M16 5.6h2.6A3.4 3.4 0 0 1 16 9"/><path d="M12 13v4M8.5 20h7"/>',
+    chart: '<path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/>',
+    up: '<path d="M12 19V6m0 0-5 5m5-5 5 5"/>',
+    down: '<path d="M12 5v13m0 0 5-5m-5 5-5-5"/>',
+    check: '<path d="M20 6.5 9.5 17 4 11.5"/>',
+    bench: '<path d="M3.5 10.5h17M3.5 14h17"/><path d="M6 14v5.5M18 14v5.5"/>',
+    warn: '<path d="M12 4 2.6 20h18.8Z"/><path d="M12 10.5v4M12 17.4h.01"/>',
+    swap: '<path d="M4 8.5h12m0 0-3.5-3.5M16 8.5l-3.5 3.5"/><path d="M20 15.5H8m0 0 3.5-3.5M8 15.5l3.5 3.5"/>',
+    globe: '<circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2"/><path d="M12 3.4a13 13 0 0 1 0 17.2 13 13 0 0 1 0-17.2Z"/>',
+    target: '<circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>',
+    sparkle: '<path d="M11 3.5l1.7 4.8 4.8 1.7-4.8 1.7L11 16.5 9.3 11.7 4.5 10l4.8-1.7Z"/><path d="M18 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>',
+    captain: '<circle cx="12" cy="12" r="8.4"/><path d="M14.6 9.6a4 4 0 1 0 0 4.8"/>',
+    circleDown: '<circle cx="12" cy="12" r="8.4"/><path d="M12 7.8v8.4m0 0 3.2-3.2M12 16.2 8.8 13"/>',
+    gem: '<path d="M5 4.5h14l2.6 5L12 20 2.4 9.5Z"/><path d="M2.4 9.5h19.2"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M2.6 20a6.4 6.4 0 0 1 12.8 0"/><path d="M16.2 5.6a3.2 3.2 0 0 1 0 4.8M17.6 14.6A6.4 6.4 0 0 1 21.4 20"/>',
+    tag: '<path d="M11.2 3.4H4v7.2l10.4 10.4a1.5 1.5 0 0 0 2.1 0l4.9-4.9a1.5 1.5 0 0 0 0-2.1Z"/><circle cx="7.7" cy="7.1" r="1.3"/>',
+    bank: '<path d="M3 9.6 12 4.2l9 5.4"/><path d="M5.5 11v7.5M10 11v7.5M14 11v7.5M18.5 11v7.5"/><path d="M3 20.4h18"/>',
+    steady: '<path d="M4 12h16"/><path d="M7.5 9.4v5.2M12 8.6v6.8M16.5 9.4v5.2"/>',
+    shield: '<path d="M12 3.4 5.2 6.2v5.6c0 4 2.7 7.2 6.8 8.6 4.1-1.4 6.8-4.6 6.8-8.6V6.2Z"/>',
+    medal: '<circle cx="12" cy="14.6" r="5.4"/><path d="M8.6 9.4 6.2 3.6h11.6l-2.4 5.8"/>',
+    flame: '<path d="M12 3.4c3.4 3 5.2 5.8 5.2 8.8a5.2 5.2 0 0 1-10.4 0c0-1.8.8-3.3 1.9-4.5.2 1.6 1 2.6 1.8 2.6 1.1 0 1.5-1.3 1.1-3.2-.2-1.3-.9-2.6-1.6-3.7Z"/>'
+  };
+  function sicon(name) {
+    if (!SICONS[name]) return "";
+    return '<svg class="hi-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ' +
+      'aria-hidden="true">' + SICONS[name] + '</svg>';
+  }
+
   function svg(name, size) {
     return '<svg viewBox="0 0 24 24" width="' + (size || 24) + '" height="' + (size || 24) +
       '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
@@ -2455,9 +2489,9 @@
   function mval(tenths) { return "£" + (Math.round(tenths) / 10).toFixed(1) + "m"; }
 
   // A headline card: big number, caption, and who it belongs to.
-  function hcard(label, big, who, id, sub) {
+  function hcard(label, big, who, id, sub, icon) {
     return '<div class="hcard"' + (id ? ' data-entry="' + id + '" role="button" tabindex="0"' : '') + '>' +
-      '<div class="hl">' + esc(label) + '</div>' +
+      '<div class="hl">' + sicon(icon) + '<span>' + esc(label) + '</span></div>' +
       '<div class="hv">' + esc(big) + '</div>' +
       (who ? '<div class="hw">' + esc(who) + '</div>' : '') +
       (sub ? '<div class="hs">' + esc(sub) + '</div>' : '') + '</div>';
@@ -2542,44 +2576,44 @@
     if (H.potw) {
       h += hcard("Player of the week", num(H.potw.pts), H.potw.name, null,
         H.potw.team + (H.potw.ownedPct !== null && H.potw.ownedPct !== undefined
-          ? " · " + H.potw.ownedPct + "% of the league" : ""));
+          ? " · " + H.potw.ownedPct + "% of the league" : ""), "star");
     }
-    h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player);
+    h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy");
     h += hcard("League average", num(g.average), g.count + " managers", null,
-      g.median !== null ? ("median " + num(g.median)) : "");
-    h += hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player);
+      g.median !== null ? ("median " + num(g.median)) : "", "chart");
+    h += hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player, "down");
     h += hcard("Beat the average", num(g.aboveAvg), "of " + g.count + " managers", null,
-      num(g.range) + " between best and worst");
+      num(g.range) + " between best and worst", "check");
     if (g.mostBench && g.mostBench.bench > 0) {
-      h += hcard("Most left on bench", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id, "points benched");
+      h += hcard("Most benched", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id, "points benched", "bench");
     }
     if (g.mostHits && g.mostHits.hits > 0) {
       h += hcard("Biggest hit", "−" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
-        num(g.mostHits.transfers) + " transfers");
+        num(g.mostHits.transfers) + " transfers", "warn");
     }
     h += hcard("Transfers made", num(g.transfersTotal), "across the league", null,
-      num(g.noTransfer) + " made none · −" + num(g.hitTotal) + " pts in hits");
+      num(g.noTransfer) + " made none · −" + num(g.hitTotal) + " pts in hits", "swap");
     if (g.biggestClimb) {
       h += hcard("Biggest climb", "+" + num(g.biggestClimb.move), g.biggestClimb.name, g.biggestClimb.id,
-        num(g.climbers) + " managers moved up");
+        num(g.climbers) + " managers moved up", "up");
     }
     if (g.biggestFall) {
       h += hcard("Biggest fall", "−" + num(g.biggestFall.move), g.biggestFall.name, g.biggestFall.id,
-        num(g.fallers) + " managers moved down");
+        num(g.fallers) + " managers moved down", "down");
     }
     if (g.fplAverage !== null) {
       h += hcard("Beat FPL's average", num(g.beatFpl), "of " + g.count + " managers", null,
-        "the world scored " + num(g.fplAverage));
+        "the world scored " + num(g.fplAverage), "globe");
     }
     h += hcard("A good week was", num(g.topQuarter) + "+", "the top quarter", null,
-      "bottom quarter: " + num(g.bottomQuarter) + " or less");
+      "bottom quarter: " + num(g.bottomQuarter) + " or less", "target");
     h += hcard("Left on the bench", num(g.benchTotal), "across the league", null,
-      num(g.benchAvg) + " each on average");
+      num(g.benchAvg) + " each on average", "bench");
     if (g.chipsPlayed) {
       var kinds = Object.keys(g.chipKinds).map(function (c) {
         return num(g.chipKinds[c]) + " " + (CHIP_NAME[c] || c);
       }).join(" · ");
-      h += hcard("Chips played", num(g.chipsPlayed), "this gameweek", null, kinds);
+      h += hcard("Chips played", num(g.chipsPlayed), "this gameweek", null, kinds, "sparkle");
     }
     h += '</div>';
     h += bucketTable(g);
@@ -2622,17 +2656,17 @@
     h += '<div class="hgrid">';
     if (sq.bestCaptain) {
       h += hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
-        sq.bestCaptain.caps + " of " + sq.managers + " captained");
+        sq.bestCaptain.caps + " of " + sq.managers + " captained", "captain");
     }
     if (sq.worstCaptain) {
       h += hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
-        sq.worstCaptain.caps + " captained");
+        sq.worstCaptain.caps + " captained", "circleDown");
     }
     if (sq.differentials.length) {
       var d0 = sq.differentials[0];
-      h += hcard("Best differential", num(d0.pts), d0.name, null, d0.ownedPct + "% of the league");
+      h += hcard("Best differential", num(d0.pts), d0.name, null, d0.ownedPct + "% of the league", "gem");
     }
-    h += hcard("Different captains", num(sq.distinctCaptains), "picked across the league");
+    h += hcard("Different captains", num(sq.distinctCaptains), "picked across the league", null, "", "users");
     h += '</div>';
 
     var chipKeys = Object.keys(sq.chips || {});
@@ -2697,18 +2731,18 @@
       // naming a "richest" and "leanest" here would just look broken.
       h += '<div class="hgrid">' +
         hcard("Squad value", mval(v.average), "identical across " + v.count + " squads", null,
-          "no squad has changed value yet") + '</div>';
+          "no squad has changed value yet", "tag") + '</div>';
     } else if (v) {
       h += '<div class="hgrid">';
       h += hcard("Richest squad", mval(v.richest.value), v.richest.name, v.richest.id,
-        mval(v.richest.bank) + " in the bank");
+        mval(v.richest.bank) + " in the bank", "up");
       h += hcard("League average", mval(v.average), v.count + " squads", null,
-        mval(v.averageBank) + " in the bank");
+        mval(v.averageBank) + " in the bank", "chart");
       h += hcard("Leanest squad", mval(v.poorest.value), v.poorest.name, v.poorest.id,
-        mval(v.poorest.bank) + " in the bank");
+        mval(v.poorest.bank) + " in the bank", "down");
       if (v.mostBanked && v.mostBanked.bank > 0) {
         h += hcard("Most in the bank", mval(v.mostBanked.bank), v.mostBanked.name, v.mostBanked.id,
-          mval(v.mostBanked.value) + " on the pitch");
+          mval(v.mostBanked.value) + " on the pitch", "bank");
       }
       h += '</div>';
     } else {
@@ -2740,33 +2774,33 @@
     var h = '<div class="statlead">' + num(se.gws) + ' gameweek' + (se.gws === 1 ? '' : 's') + ' played</div>';
     h += '<div class="hgrid">';
     if (se.bestGw) {
-      h += hcard("Best gameweek", num(se.bestGw.p), se.bestGw.name, se.bestGw.id, "in GW" + se.bestGw.gw);
+      h += hcard("Best gameweek", num(se.bestGw.p), se.bestGw.name, se.bestGw.id, "in GW" + se.bestGw.gw, "trophy");
     }
     if (se.bestAvg) {
       h += hcard("Best average", num(se.bestAvg.avg), se.bestAvg.name, se.bestAvg.id,
-        "over " + se.gws + " gameweek" + (se.gws === 1 ? "" : "s"));
+        "over " + se.gws + " gameweek" + (se.gws === 1 ? "" : "s"), "chart");
     }
     if (se.steadiest) {
       h += hcard("Most consistent", num(se.steadiest.spread), se.steadiest.name, se.steadiest.id,
-        "between their best and worst");
+        "between their best and worst", "steady");
     }
     if (se.biggestClimb && se.biggestClimb.climb > 0) {
       h += hcard("Biggest riser", num(se.biggestClimb.climb), se.biggestClimb.name, se.biggestClimb.id,
-        "places gained overall");
+        "places gained overall", "up");
     }
     if (se.worstGw) {
-      h += hcard("Lowest gameweek", num(se.worstGw.p), se.worstGw.name, se.worstGw.id, "in GW" + se.worstGw.gw);
+      h += hcard("Lowest gameweek", num(se.worstGw.p), se.worstGw.name, se.worstGw.id, "in GW" + se.worstGw.gw, "down");
     }
     if (se.mostHits && se.mostHits.hits > 0) {
-      h += hcard("Most hits taken", "−" + num(se.mostHits.hits), se.mostHits.name, se.mostHits.id, "all season");
+      h += hcard("Most hits taken", "−" + num(se.mostHits.hits), se.mostHits.name, se.mostHits.id, "all season", "warn");
     }
     if (se.mostBench && se.mostBench.bench > 0) {
-      h += hcard("Most benched", num(se.mostBench.bench), se.mostBench.name, se.mostBench.id, "points on the bench");
+      h += hcard("Most benched", num(se.mostBench.bench), se.mostBench.name, se.mostBench.id, "points on the bench", "bench");
     }
     if (se.mostTransfers && se.mostTransfers.transfers > 0) {
-      h += hcard("Most transfers", num(se.mostTransfers.transfers), se.mostTransfers.name, se.mostTransfers.id, "so far");
+      h += hcard("Most transfers", num(se.mostTransfers.transfers), se.mostTransfers.name, se.mostTransfers.id, "so far", "swap");
     }
-    h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet");
+    h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet", "shield");
     h += '</div>';
 
     // Who is winning money, settled first.
@@ -2786,9 +2820,9 @@
 
     h += '<div class="section-title"><h2>Across the league</h2><div class="rule"></div></div>';
     h += '<div class="hgrid">';
-    h += hcard("Transfers", num(se.transfersTotal), "made in total", null, "−" + num(se.hitsTotal) + " pts in hits");
-    h += hcard("Points benched", num(se.benchTotal), "left on benches");
-    h += hcard("Chips played", num(se.chipsPlayed), "so far this season");
+    h += hcard("Transfers", num(se.transfersTotal), "made in total", null, "−" + num(se.hitsTotal) + " pts in hits", "swap");
+    h += hcard("Points benched", num(se.benchTotal), "left on benches", null, "", "bench");
+    h += hcard("Chips played", num(se.chipsPlayed), "so far this season", null, "", "sparkle");
     h += '</div>';
     return h;
   }
@@ -2799,11 +2833,11 @@
     var h = '<div class="statlead">' + num(pa.players) + ' managers have played FPL before</div>';
     if (pa.topTen) {
       h += '<div class="hgrid">' +
-        hcard("Top 10k finishes", num(pa.topTen), "managers have one", null, "in any past season") +
+        hcard("Top 10k finishes", num(pa.topTen), "managers have one", null, "in any past season", "medal") +
         (pa.topRanks[0] ? hcard("Best ever finish", num(pa.topRanks[0].bestRank.rank),
-          pa.topRanks[0].name, pa.topRanks[0].id, pa.topRanks[0].bestRank.season) : "") +
-        (pa.topCareer[0] ? hcard("Most career points", num(pa.topCareer[0].career),
-          pa.topCareer[0].name, pa.topCareer[0].id, pa.topCareer[0].seasons + " seasons") : "") +
+          pa.topRanks[0].name, pa.topRanks[0].id, pa.topRanks[0].bestRank.season, "trophy") : "") +
+        (pa.topCareer[0] ? hcard("Career points", num(pa.topCareer[0].career),
+          pa.topCareer[0].name, pa.topCareer[0].id, pa.topCareer[0].seasons + " seasons", "flame") : "") +
         '</div>';
     }
     h += '<div class="card"><div class="bd hcols">';
