@@ -90,30 +90,38 @@ played.forEach((g) => {
   if (!ev || !(ev.average > 0)) flag("no average_entry_score for finished GW" + g);
 });
 
-// Selling values: for every squad with purchase prices, the fifteen selling
-// prices must reproduce FPL's own figure (history value minus bank) exactly.
-// The odd mismatch is expected — a Free Hit muddies the transfer log, and the
-// app hides the per-player detail for exactly those squads — but if most
-// squads disagree, the purchase prices themselves are wrong.
+// Purchase prices, which the realisable squad value is built from. There is
+// no FPL figure to check them against — the history row's "value" is the
+// market value plus bank, not a selling value — so the test is the budget
+// itself: a manager who has never transferred still holds the fifteen he
+// bought out of £100.0m, so his purchase prices plus his bank must come to
+// exactly that. It catches a wrong season-start price immediately, which is
+// the only part of the purchase price we derive rather than read.
 if (ds.buys && ds.buysGw && (ds.picks || {})[ds.buysGw]) {
-  let sellOk = 0, sellOff = 0;
+  let budgetOk = 0, budgetOff = 0, priced = 0, missing = 0;
   const pk = ds.picks[ds.buysGw];
   Object.keys(ds.buys).forEach((id) => {
     const squad = pk[id], h = (ds.history[id] || {})[ds.buysGw];
-    if (!squad || !h || !(h.v > 0) || h.bk == null) return;
+    if (!squad || !h) return;
     let sum = 0, all = true;
     (squad.p || []).forEach((p) => {
-      const buy = ds.buys[id][p[0]], now = (ds.elements[p[0]] || [])[3];
-      if (buy == null || now == null) { all = false; return; }
-      sum += now > buy ? buy + Math.floor((now - buy) / 2) : now;
+      const buy = ds.buys[id][p[0]];
+      if (buy == null) { all = false; return; }
+      sum += buy;
     });
-    if (!all) return;
-    if (sum === h.v - h.bk) sellOk++; else sellOff++;
+    if (!all) { missing++; return; }
+    priced++;
+    const everTransferred = Object.keys(ds.history[id] || {})
+      .some((g) => ((ds.history[id][g] || {}).tr || 0) > 0);
+    if (everTransferred || h.bk == null) return;
+    if (sum + h.bk === 1000) budgetOk++; else budgetOff++;
   });
-  if (sellOff > sellOk) flag("selling values: only " + sellOk + " of " +
-    (sellOk + sellOff) + " squads reconcile with FPL's value minus bank");
-  console.log("selling values reconcile for " + sellOk + " squad(s), " +
-    sellOff + " hidden (Free Hit or unmatched log)");
+  if (budgetOff) flag("purchase prices: " + budgetOff + " never-transferred squad(s) " +
+    "do not add up to the £100.0m budget");
+  if (missing > priced) flag("purchase prices missing for " + missing + " squad(s)");
+  console.log("purchase prices: " + priced + " squads priced, " + budgetOk +
+    " untouched squads reconcile with the opening budget" +
+    (missing ? ", " + missing + " incomplete" : ""));
 }
 
 console.log("verified: " + mgrChecked + " h2h records across " +

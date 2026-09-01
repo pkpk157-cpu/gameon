@@ -1016,17 +1016,22 @@
       if (topPrice === null || p.price > topPrice) topPrice = p.price;
     });
 
-    // Selling values. The squad's is FPL's own figure — the history row's
-    // value field carries selling value plus bank, so it is exact by
-    // construction. The per-player ones come from the purchase prices (sell =
-    // purchase plus half the rise, rounded down per tenth; a fall is borne in
-    // full) and are shown only when the fifteen add up to FPL's figure
-    // exactly — a Free Hit leaves entries in the transfer log that would
-    // otherwise fake a purchase price.
+    // What the squad is worth, and what it would actually fetch. These are two
+    // different numbers: FPL hands back only half of a player's rise, rounded
+    // down per tenth, while a fall is borne in full.
+    //
+    // The history row's "value" field is NOT the second number, which is easy
+    // to assume and wrong: it is the market value plus the bank. Proof from
+    // the live data — 127 squads holding risen players match the sum of
+    // current prices exactly, which could not happen if it were a selling
+    // value. So the realisable figure is built here, from what each player
+    // actually cost, and the fifteen are only trusted when every one of them
+    // has a known purchase price. A Free Hit squad is skipped outright: it is
+    // borrowed for the week, so nothing in it was bought at all.
     var bank = hrow && hrow.bk != null ? hrow.bk : null;
-    var sellValue = (hrow && typeof hrow.v === "number" && hrow.v > 0 && bank != null)
-      ? hrow.v - bank : null;
-    var buyMap = (ds.buys && +ds.buysGw === +gw) ? ds.buys[id] : null;
+    var sellValue = null;
+    var buyMap = (ds.buys && +ds.buysGw === +gw && (sq.c || "") !== "freehit")
+      ? ds.buys[id] : null;
     if (buyMap) {
       var sellSum = 0, complete = everyone.length > 0;
       everyone.forEach(function (p) {
@@ -1035,9 +1040,8 @@
         p.sell = p.price > buy ? buy + Math.floor((p.price - buy) / 2) : p.price;
         sellSum += p.sell;
       });
-      if (!complete || sellValue === null || sellSum !== sellValue) {
-        everyone.forEach(function (p) { delete p.sell; });
-      }
+      if (complete) sellValue = sellSum;
+      else everyone.forEach(function (p) { delete p.sell; });
     }
 
     var provTotal = 0;
