@@ -556,11 +556,21 @@ async function h2hAll(id) {
   // during a live gameweek adds entries for the NEXT one, and those name a
   // price he has not paid for the squad on screen; taking the newest entry
   // blindly would price a player by a transfer that has not happened yet.
-  let buys = (canReuse && prev.buysGw === pitchGw && prev.buys &&
-              Object.keys(prev.buys).length >= Math.floor(managers.length * 0.9))
-    ? prev.buys : null;
+  // The same log also says who each manager swapped for whom, gameweek by
+  // gameweek — read here rather than in a second pass, since it is the one
+  // request that carries it.
+  // Reuse last publish's read only if it carried BOTH halves. The first run
+  // after transfers were added would otherwise skip the log entirely — the
+  // purchase prices were already there, so nothing looked stale — and publish
+  // no transfers at all until the gameweek rolled over.
+  const prevHadBoth = prev.buys && prev.moves &&
+    Object.keys(prev.buys).length >= Math.floor(managers.length * 0.9) &&
+    Object.keys(prev.moves).length > 0;
+  let buys = (canReuse && prev.buysGw === pitchGw && prevHadBoth) ? prev.buys : null;
+  let moves = buys ? prev.moves : null;
   if (pitchGw && picks[pitchGw] && !buys) {
     buys = {};
+    moves = {};
     const startOf = {};
     (bs.elements || []).forEach((el) => {
       startOf[el.id] = (el.now_cost || 0) - (el.cost_change_start || 0);
@@ -583,10 +593,20 @@ async function h2hAll(id) {
           map[pk[0]] = latest[pk[0]] ? latest[pk[0]][1] : (startOf[pk[0]] || 0);
         });
         buys[m.id] = map;
+        // [in, out] per gameweek, so a squad can show what each new player
+        // replaced. Free Hit swaps are logged like any other and are left in:
+        // they were real moves for that week.
+        (tr || []).forEach((t) => {
+          if (!t.event || t.event > pitchGw) return;
+          const gwKey = String(t.event);
+          if (!moves[gwKey]) moves[gwKey] = {};
+          (moves[gwKey][m.id] = moves[gwKey][m.id] || []).push([t.element_in, t.element_out]);
+        });
       } catch (e) { /* skip — that squad simply shows no selling detail */ }
     }, 6);
     console.log("purchase prices read for " + Object.keys(buys).length +
-                " squads (GW " + pitchGw + ")");
+                " squads (GW " + pitchGw + "), transfers across " +
+                Object.keys(moves).length + " gameweek(s)");
   }
 
   // ---- played counts and tie-break stats must survive the squad reuse -----
@@ -667,7 +687,7 @@ async function h2hAll(id) {
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
-    buys: buys || {}, buysGw: pitchGw,
+    buys: buys || {}, buysGw: pitchGw, moves: moves || {},
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown
   };
   // Refuse to publish something clearly worse than what is already live: a

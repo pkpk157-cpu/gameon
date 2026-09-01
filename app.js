@@ -2142,7 +2142,21 @@
   }
 
   // One player: shirt card with a white name bar and a value bar underneath.
-  function pp(p, showPos, metric) {
+  function pp(p, showPos, metric, swapped) {
+    // Turned over: the player this one replaced, and what he scored after
+    // leaving. The card keeps its shape so the eleven still reads as a team.
+    if (swapped && p.inFor) {
+      var out = p.inFor;
+      return '<div class="pcell">' +
+        (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
+        '<div class="pcard gone" data-el="' + out.el + '" data-mult="1" role="button" tabindex="0">' +
+          '<i class="pb out">OUT</i>' +
+          '<div class="pshirt">' + jersey(out.team, out.type) + '</div>' +
+          '<div class="pname">' + esc(out.name) + '</div>' +
+          '<div class="ppts">' + num(out.pts) + '</div>' +
+          '<div class="psub">for ' + esc(p.name) + '</div>' +
+        '</div></div>';
+    }
     var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
     if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star">★</i>';
     // Before his match kicks off a player's card names the opponent — MUN (A)
@@ -2156,7 +2170,7 @@
     }
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
-      '<div class="pcard" data-el="' + p.el + '" data-mult="' + (p.mult || 0) + '" role="button" tabindex="0">' + badge +
+      '<div class="pcard' + (p.inFor ? ' came' : '') + '" data-el="' + p.el + '" data-mult="' + (p.mult || 0) + '" role="button" tabindex="0">' + badge +
         '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
         '<div class="pname">' + esc(p.name) + '</div>' +
         footer +
@@ -2166,18 +2180,18 @@
       '</div></div>';
   }
 
-  function pitchHtml(pit, metric) {
+  function pitchHtml(pit, metric, swapped) {
     var h = '<div class="pitch"><div class="pmark">' +
       '<span class="goal"></span><span class="box18"></span><span class="box6"></span>' +
       '<span class="spot"></span><span class="arc"></span><span class="halfway"></span>' +
       '<span class="circle"></span></div>';
     h += pit.lines.map(function (ln) {
       if (!ln.players.length) return "";
-      return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false, metric); }).join("") + '</div>';
+      return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false, metric, swapped); }).join("") + '</div>';
     }).join("");
     h += '</div>';
     if (pit.bench.length) {
-      h += '<div class="pbench">' + pit.bench.map(function (p) { return pp(p, true, metric); }).join("") + '</div>';
+      h += '<div class="pbench">' + pit.bench.map(function (p) { return pp(p, true, metric, swapped); }).join("") + '</div>';
     }
     return h;
   }
@@ -2226,7 +2240,7 @@
         'Game On\u2019s 245 managers. FPL-wide ownership is in Player prices.</div>' : '');
   }
 
-  function mountPitch(box, ds, id, gw, metric) {
+  function mountPitch(box, ds, id, gw, metric, swapped) {
     var gws = K.squadGws(ds);
     if (!gws.length) return;
     gw = gw || gws[gws.length - 1];
@@ -2237,6 +2251,9 @@
       return;
     }
     if (!METRICS[metric]) metric = "pts";
+    // Turning the cards over only makes sense for the gameweek being shown,
+    // so changing gameweek turns them back.
+    swapped = !!swapped && !!pit.swaps;
     state.pitchGw = +gw; state.pitchMetric = metric;
 
     var h = '<div class="pgwline">';
@@ -2261,17 +2278,29 @@
       return '<button type="button"' + (metric === k ? ' class="on"' : '') + ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
     }).join("") + '</div>';
     h += '</div>';
+    // A transfer has two halves and the squad only ever shows one. This turns
+    // the new faces over to the players they replaced, and what those went on
+    // to score — offered only when there was a transfer to show.
+    if (pit.swaps) {
+      h += '<button type="button" class="swapbtn' + (swapped ? ' on' : '') + '" id="pitchSwap">' +
+        (swapped ? 'Back to the squad' : 'Show ' + num(pit.swaps) + ' transfer' + (pit.swaps === 1 ? '' : 's')) +
+        '</button>';
+    }
 
     box.setAttribute("data-bgw", gw);
-    h += pitchHtml(pit, metric);
+    h += pitchHtml(pit, metric, swapped);
     box.innerHTML = h;
 
     $("#pitchGwSel", box).addEventListener("change", function () {
-      mountPitch(box, ds, id, +this.value, metric);
+      mountPitch(box, ds, id, +this.value, metric, false);
     });
     $(".psegrow", box).addEventListener("click", function (e) {
       var b = e.target.closest("button[data-metric]");
-      if (b) mountPitch(box, ds, id, gw, b.getAttribute("data-metric"));
+      if (b) mountPitch(box, ds, id, gw, b.getAttribute("data-metric"), swapped);
+    });
+    var swapBtn = $("#pitchSwap", box);
+    if (swapBtn) swapBtn.addEventListener("click", function () {
+      mountPitch(box, ds, id, gw, metric, !swapped);
     });
   }
 
@@ -2538,7 +2567,51 @@
       h += hcard("Biggest fall", "−" + num(g.biggestFall.move), g.biggestFall.name, g.biggestFall.id,
         num(g.fallers) + " managers moved down");
     }
+    if (g.fplAverage !== null) {
+      h += hcard("Beat FPL's average", num(g.beatFpl), "of " + g.count + " managers", null,
+        "the world scored " + num(g.fplAverage));
+    }
+    h += hcard("A good week was", num(g.topQuarter) + "+", "the top quarter", null,
+      "bottom quarter: " + num(g.bottomQuarter) + " or less");
+    h += hcard("Left on the bench", num(g.benchTotal), "across the league", null,
+      num(g.benchAvg) + " each on average");
+    if (g.chipsPlayed) {
+      var kinds = Object.keys(g.chipKinds).map(function (c) {
+        return num(g.chipKinds[c]) + " " + (CHIP_NAME[c] || c);
+      }).join(" · ");
+      h += hcard("Chips played", num(g.chipsPlayed), "this gameweek", null, kinds);
+    }
     h += '</div>';
+    h += bucketTable(g);
+    return h;
+  }
+
+  // The whole league in bands of equal width, best first: where the gameweek
+  // actually landed, rather than only how far apart its two ends were.
+  function bucketTable(g) {
+    if (!g.buckets || !g.buckets.length) return "";
+    var myScore = null;
+    if (state.me) {
+      var ds = S.dataset();
+      if (ds) myScore = K.gwScore(ds, state.me, g.gw);
+    }
+    var h = '<div class="section-title"><h2>Where everyone landed</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="tablewrap"><table class="t bktbl"><thead><tr>' +
+      '<th>Points</th><th class="bkbarh"></th><th class="num">Managers</th><th class="num">Share</th>' +
+      '</tr></thead><tbody>';
+    h += g.buckets.map(function (b) {
+      var mine = myScore !== null && myScore >= b.lo && myScore <= b.hi;
+      var avg = g.average >= b.lo && g.average <= b.hi;
+      return '<tr' + (mine ? ' class="me"' : '') + '>' +
+        '<td class="bkband">' + num(b.lo) + '\u2013' + num(b.hi) +
+          (mine ? ' <span class="pill gold">you</span>'
+                : (avg ? ' <span class="pill">average</span>' : '')) + '</td>' +
+        '<td class="bkbar"><span style="width:' + b.bar + '%"></span></td>' +
+        '<td class="num"><b>' + num(b.n) + '</b></td>' +
+        '<td class="num">' + b.pct + '%</td></tr>';
+    }).join("");
+    h += '</tbody></table></div><div class="note bknote">Bands of ' +
+      num(g.bucketWidth) + ' points, best first.</div></div>';
     return h;
   }
 

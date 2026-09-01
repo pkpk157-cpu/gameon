@@ -969,6 +969,24 @@
       if (pl.mult > 0) { total += pl.base * pl.mult; scoring.push(pl); }
     });
 
+    // Who each new face replaced. The transfer log names both ends of every
+    // swap, so a card can be turned over to show the player sold for him and
+    // what he went on to score — which is the half of a transfer nobody can
+    // see once the deadline passes.
+    var swaps = ((ds.moves || {})[gw] || {})[id] || [];
+    if (swaps.length) {
+      var outFor = {};
+      swaps.forEach(function (sw) { outFor[sw[0]] = sw[1]; });
+      var all15 = bench.concat(rows[1] || [], rows[2] || [], rows[3] || [], rows[4] || []);
+      all15.forEach(function (p) {
+        var outEl = outFor[p.el];
+        if (outEl == null) return;
+        var om = els[outEl] || ["?", 0, "", 0, 0];
+        p.inFor = { el: outEl, name: om[0], type: om[1], team: om[2],
+                    pts: (lp[outEl] || 0) + (pb[outEl] || 0) };
+      });
+    }
+
     // Star the squad's top scorer (ties: first one wins).
     var best = null;
     scoring.forEach(function (p) { if (!best || p.pts > best.pts) best = p; });
@@ -1052,7 +1070,7 @@
              average: n ? Math.round(sum / n) : null, highest: top,
              avgEo: scoring.length ? Math.round((eoSum / scoring.length) * 10) / 10 : 0,
              topEo: topEo || 0, squadValue: valSum, topPrice: topPrice || 0,
-             bank: bank, sellValue: sellValue,
+             bank: bank, sellValue: sellValue, swaps: swaps.length,
              leagueAvgEo: eot ? eot.leagueAvgEo : 0,
              leagueAvgValue: eot ? eot.leagueAvgValue : 0 };
   };
@@ -1227,7 +1245,7 @@
       var mid = sorted[Math.floor(sorted.length / 2)];
       var avg = Math.round(sum / rows.length);
       gwStats = {
-        count: rows.length,
+        gw: +gw, count: rows.length,
         top: sorted[0], second: sorted[1] || null, low: sorted[sorted.length - 1],
         average: avg, median: mid ? mid.p : null,
         range: sorted[0].p - sorted[sorted.length - 1].p,
@@ -1237,6 +1255,57 @@
         transfersTotal: trTotal, mostTransfers: best(rows, "transfers"),
         noTransfer: rows.filter(function (r) { return !r.transfers; }).length
       };
+      // How the week was spread, not just where its ends were. The quartiles
+      // say what a good and a poor week actually looked like; FPL's own
+      // average says whether the league as a whole had a good one.
+      var at = function (frac) {
+        return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * frac))].p;
+      };
+      gwStats.topQuarter = at(0.25);
+      gwStats.bottomQuarter = at(0.75);
+      gwStats.benchAvg = Math.round(benchTotal / rows.length);
+      var gwEvent = ((ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) {
+        return +e.id === +gw;
+      })[0];
+      // FPL publishes no average until a gameweek finishes; 0 means "not yet".
+      gwStats.fplAverage = (gwEvent && gwEvent.average > 0) ? gwEvent.average : null;
+      if (gwStats.fplAverage !== null) {
+        gwStats.beatFpl = rows.filter(function (r) { return r.p > gwStats.fplAverage; }).length;
+      }
+      var chipCount = 0, chipKinds = {};
+      Object.keys(pk || {}).forEach(function (mid) {
+        var c = pk[mid] && pk[mid].c;
+        if (c) { chipCount++; chipKinds[c] = (chipKinds[c] || 0) + 1; }
+      });
+      gwStats.chipsPlayed = chipCount;
+      gwStats.chipKinds = chipKinds;
+
+      // The whole league in brackets of equal width, best band first. The
+      // width is chosen so the table is readable — six to twelve rows —
+      // rather than fixed, because a quiet week and a double gameweek do not
+      // span the same range.
+      var lowP = sorted[sorted.length - 1].p, highP = sorted[0].p;
+      var span = Math.max(1, highP - lowP);
+      var width = [2, 5, 10, 20, 25, 50, 100].filter(function (w) {
+        return Math.ceil((span + 1) / w) <= 12;
+      })[0] || 100;
+      var start = Math.floor(lowP / width) * width;
+      var buckets = [];
+      for (var bLo = start; bLo <= highP; bLo += width) {
+        buckets.push({ lo: bLo, hi: bLo + width - 1, n: 0 });
+      }
+      rows.forEach(function (r) {
+        var i = Math.floor((r.p - start) / width);
+        if (i >= 0 && i < buckets.length) buckets[i].n++;
+      });
+      var widest = 0;
+      buckets.forEach(function (b) { if (b.n > widest) widest = b.n; });
+      buckets.forEach(function (b) {
+        b.pct = rows.length ? Math.round((b.n / rows.length) * 100) : 0;
+        b.bar = widest ? Math.round((b.n / widest) * 100) : 0;
+      });
+      gwStats.buckets = buckets.reverse();
+      gwStats.bucketWidth = width;
       // League movement only means anything for the newest gameweek.
       if (+gw === +cur) {
         var moves = C.classic(ds).filter(function (r) { return r.move; });
