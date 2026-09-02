@@ -514,16 +514,21 @@
     // read as a dash, which looks broken rather than early, so hold the column
     // back until there is genuinely something to put in it.
     var thr = K.priceThreshold(ds);
+    // Whether these figures are FPL's own, published per player, or the ones we
+    // work out ourselves from transfer flow for data captured before we read
+    // FPL's. Either way they are percentages of the same line, so the column
+    // says Progress; what changes is whether a caveat belongs under it.
+    var told = rows.some(function (r) { return r.told; });
     // Before the threshold is known the bar is scaled to the strongest pressure
     // in the whole list, not the filtered view, so filtering or searching never
     // changes how far along anyone looks.
-    var scale = thr.measured ? 0 : rows.reduce(function (m, r) {
+    var scale = (told || thr.measured) ? 0 : rows.reduce(function (m, r) {
       return Math.max(m, Math.abs(r.pressure || 0));
     }, 0);
     // Nothing to say yet: on the very first capture there is no threshold and
     // no flow either, and a column of dashes reads as broken rather than early.
     var tracked = rows.some(function (r) { return r.pressure != null; }) &&
-      (thr.measured || scale > 0);
+      (told || thr.measured || scale > 0);
     if (!state.pricePos) state.pricePos = "all";
 
     // Each column knows how to order itself and which way round it should read
@@ -539,7 +544,7 @@
       { k: "go",    t: "Game On", num: 1, first: -1,
         cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
     ];
-    if (tracked) COLS.push({ k: "move", t: thr.measured ? "Progress" : "Pressure", num: 1, first: -1,
+    if (tracked) COLS.push({ k: "move", t: (told || thr.measured) ? "Progress" : "Pressure", num: 1, first: -1,
       cmp: function (a, b) { return (a.pressure || 0) - (b.pressure || 0); } });
 
     var colOf = function (k) {
@@ -600,10 +605,10 @@
       panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
         head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale) + '</tbody></table></div>' +
         (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
-        (tracked && !thr.measured
+        (tracked && !told && !thr.measured
           ? '<div class="koline">Pressure orders who is being bought and sold hardest. ' +
             'It becomes a distance to a price change once we have seen a night of real ' +
-            'changes to measure the level against \u2014 FPL does not publish it.</div>'
+            'changes to measure the level against.</div>'
           : '');
 
       if (list.length > FIRST) {

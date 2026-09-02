@@ -2070,6 +2070,12 @@
     // behaves like a head count, so turn one into the other where we know how
     // many are playing. Older data has no such number and gets no progress.
     var playing = Number(pr.total) || 0;
+    // FPL publishes its own figure for every player: how far along he is, signed,
+    // with 100 the line. Ours was a reconstruction of it from transfer counts and
+    // tracked it at a correlation of 0.47 — flagging 57 players to change on a
+    // night FPL itself named 8. Where the game says, the game is used, and the
+    // measured model below stays only for data captured before we read it.
+    var fpl = (pr.fpl && pr.fpl.pct) || null;
     // the most recent recorded change per player, so a move that has already
     // happened is shown as fact rather than as pressure
     var last = {};
@@ -2081,8 +2087,16 @@
       var fplOwners = playing
         ? Math.max(thr.floor || 0, Math.round((owned / 100) * playing)) : 0;
       // Whether the flow behind this player covers the whole run-up to his next
-      // change, or only the part since we started watching him.
-      var sure = !pr.exact || pr.exact[id] !== 0;
+      // change, or only the part since we started watching him. FPL's own
+      // figure carries no such doubt.
+      var said = fpl && fpl[id] != null && isFinite(fpl[id]) ? fpl[id] : null;
+      var sure = said != null || !pr.exact || pr.exact[id] !== 0;
+      var mine = (has && fplOwners) ? thr.progressOf(fplOwners, net) : null;
+      var move = said != null ? said : mine;
+      // FPL will not move a locked price whatever the flow behind it, and says
+      // so; and it marks a figure it has not finished working out.
+      var lock = (pr.fpl && pr.fpl.lock && pr.fpl.lock[id]) || null;
+      var calibrating = !!(pr.fpl && pr.fpl.cal && pr.fpl.cal[id]);
       return {
         id: +id, name: meta[0], full: meta[5] || "",
         type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
@@ -2096,11 +2110,16 @@
         // reading and sorting the column cannot disagree with what it draws.
         // Before then it is the raw flow against his ownership, which orders
         // the two directions on one scale without claiming a distance.
-        pressure: (has && fplOwners) ? (thr.measured ? thr.progressOf(fplOwners, net)
-                                                     : net / fplOwners) : null,
+        pressure: move != null ? move
+          : ((has && fplOwners && !thr.measured) ? net / fplOwners : null),
         // null, not zero, when there is nothing to work it out from: an empty
         // bar would claim he is going nowhere, which we would not know.
-        progress: (has && fplOwners) ? thr.progressOf(fplOwners, net) : null
+        progress: move,
+        // where the figure came from, so the table can say so rather than let
+        // a reader assume the game published a number we worked out ourselves
+        told: said != null,
+        lockedUntil: lock,
+        calibrating: calibrating
       };
     });
   };
