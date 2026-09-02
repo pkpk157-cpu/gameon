@@ -333,7 +333,9 @@ async function h2hAll(id) {
   // adds something, instead of us finding out months later.
   const KNOWN_EL = ["id", "web_name", "first_name", "second_name", "element_type", "team",
     "now_cost", "selected_by_percent", "cost_change_event", "cost_change_start",
-    "transfers_in", "transfers_out"];
+    "transfers_in", "transfers_out",
+    "price_change_percent", "price_change_hourly_rate", "price_change_projections",
+    "price_change_locked_until", "price_change_calibrating"];
   const sample = (bs.elements || [])[0];
   if (sample) {
     const unread = Object.keys(sample).filter((k) => KNOWN_EL.indexOf(k) === -1);
@@ -436,8 +438,32 @@ async function h2hAll(id) {
   // Published: what the app reads, plus what the next run needs to diff against.
   // cost_change_event and cost_change_start are used within this run only —
   // publishing them cost about 9KB a fetch and nothing ever read them back.
+  // FPL's own price-change figures, published on every player and used by its
+  // app: how far along he is, which way and how fast he is moving, and where it
+  // expects him to be over the next few price runs. We had been estimating all
+  // of this from transfer counts. Kept raw and unrounded here — what it means
+  // is settled against real changes before anything is drawn from it.
+  const fplPct = {}, fplRate = {}, fplProj = {}, fplLock = {}, fplCal = {};
+  (bs.elements || []).forEach((el) => {
+    const id = el.id;
+    const pct = parseFloat(el.price_change_percent);
+    if (isFinite(pct)) fplPct[id] = pct;
+    const rate = Number(el.price_change_hourly_rate);
+    if (isFinite(rate) && rate !== 0) fplRate[id] = rate;
+    // [offset, percent, likelihood] per projection, offsets in the order FPL
+    // gives them; dropped when it projects nothing
+    const proj = (el.price_change_projections || []).map((x) =>
+      [Number(x.offset), parseFloat(x.projected_percent), Number(x.likelihood)])
+      .filter((x) => x.every(isFinite));
+    if (proj.length) fplProj[id] = proj;
+    if (el.price_change_locked_until) fplLock[id] = el.price_change_locked_until;
+    if (el.price_change_calibrating) fplCal[id] = 1;
+  });
+
   const prices = { at: stamp, now: priceNow, owned,
-                   tIn, tOut, netSince, exact, total };
+                   tIn, tOut, netSince, exact, total,
+                   fpl: { pct: fplPct, rate: fplRate, proj: fplProj,
+                          lock: fplLock, cal: fplCal } };
 
   // A finished gameweek's deadline is history. FPL does move deadlines when
   // fixtures are rescheduled around European and cup weeks, and the app reads
