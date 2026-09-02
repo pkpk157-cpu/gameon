@@ -2260,7 +2260,17 @@
   }
 
   function pitchHtml(pit, metric, swapped) {
-    var h = '<div class="pitch"><div class="pmark">' +
+    // Every card on a pitch is the same size, and the size is whatever the
+    // busiest line can carry: a 3-5-2 with five across otherwise drew a
+    // midfield of narrower cards than the two men in front of it. The bench
+    // takes the same width so the whole team reads as one set of cards.
+    var across = pit.lines.reduce(function (m, ln) {
+      return Math.max(m, ln.players.length);
+    }, Math.min(pit.bench.length, 4) || 1);
+    // Five in a line is the only formation that cannot hold a full-size card on
+    // a phone, so that is the one that buys width back out of the gap.
+    var geom = '--across:' + across + ';--pgap:' + (across >= 5 ? 8 : 14) + 'px';
+    var h = '<div class="pitch" style="' + geom + '"><div class="pmark">' +
       '<span class="goal"></span><span class="box18"></span><span class="box6"></span>' +
       '<span class="spot"></span><span class="arc"></span><span class="halfway"></span>' +
       '<span class="circle"></span></div>';
@@ -2270,7 +2280,8 @@
     }).join("");
     h += '</div>';
     if (pit.bench.length) {
-      h += '<div class="pbench">' + pit.bench.map(function (p) { return pp(p, true, metric, swapped); }).join("") + '</div>';
+      h += '<div class="pbench" style="' + geom + '">' +
+        pit.bench.map(function (p) { return pp(p, true, metric, swapped); }).join("") + '</div>';
     }
     return h;
   }

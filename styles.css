@@ -653,8 +653,8 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pseg button.on { background:var(--glass-hi); color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.14); }
 
 /* the pitch itself */
-.pitch { position:relative; border-radius:12px 12px 4px 4px; padding:74px 4px 18px; overflow:hidden;
-  display:flex; flex-direction:column; gap:10px; min-height:460px;
+.pitch { position:relative; border-radius:12px 12px 4px 4px; padding:74px 6px 22px; overflow:hidden;
+  display:flex; flex-direction:column; gap:14px; min-height:556px;
   background:
     linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,0) 20%, rgba(255,255,255,.12)),
     repeating-linear-gradient(180deg, #24a35a 0 56px, #1f9553 56px 112px);
@@ -673,20 +673,31 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
   border-top:0; }
 .pmark .halfway { top:50%; width:100%; height:0; border-width:2px 0 0; }
 .pmark .circle { top:50%; width:118px; height:118px; margin-top:-59px; border-radius:50%; }
-.pitch > .prow { position:relative; z-index:1; display:flex; justify-content:center; gap:4px; flex:1; align-items:center; }
+.pitch > .prow { position:relative; z-index:1; display:flex; justify-content:center;
+  gap:var(--pgap, 14px); flex:1; align-items:center; }
 
-/* one player — cells share the row so a Bench Boost XI (up to six across)
-   shrinks to fit instead of spilling over the touchline */
-.pcell { width:22%; max-width:92px; min-width:0; }
-.pitch > .prow > .pcell { flex:1 1 0; }
+/* One player. Every card is the same size whatever the formation: sharing the
+   row out instead made a four-man midfield wider and squatter than the three
+   in front of it, and pushed its cards edge to edge with no grass between
+   them. Fixed width and a real gap, and the row centres itself — but they can
+   still give ground, so a Bench Boost XI (up to six across) shrinks to fit
+   rather than spilling over the touchline. */
+.pcell { width:calc((100% - (var(--across, 4) - 1) * var(--pgap, 14px)) / var(--across, 4));
+  max-width:72px; min-width:0; }
+.pitch > .prow > .pcell { flex:0 1 auto; }
 .pposlbl { text-align:center; font-size:10px; font-weight:800; letter-spacing:.6px;
   color:var(--ink-faint); text-transform:uppercase; margin-bottom:4px; }
 .pcard { position:relative; border-radius:7px; overflow:hidden; background:rgba(6,60,32,.42);
   box-shadow:0 2px 6px rgba(0,0,0,.28); }
-.pshirt { display:block; padding:5px 0 2px; }
-.jsy { display:block; width:38px; height:36px; margin:0 auto; filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
-.pname { background:#fff; color:#2b0b34; font-size:10.5px; font-weight:700; line-height:1.25;
-  padding:3px 3px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* The shirt gets the room to be the thing you see first — the card reads as a
+   portrait rather than a squat tile. */
+.pshirt { display:block; padding:10px 0 6px; }
+.jsy { display:block; width:42px; height:40px; margin:0 auto; filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+/* Tight, because the name bar is the width of the card and some surnames are
+   not: every point of padding is a character of "Calvert-Lewin". */
+.pname { background:#fff; color:#2b0b34; font-size:10px; font-weight:700; line-height:1.3;
+  letter-spacing:-.2px; padding:3px 2px; text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ppts { background:#37003c; color:#fff; font-size:11.5px; font-weight:800; line-height:1.3;
   padding:3px 3px; text-align:center; font-variant-numeric:tabular-nums; }
 /* the opponent, shown in the points slot until kick-off */
@@ -699,9 +710,8 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pb.star { right:2px; background:#00ff87; color:#0a3d24; font-size:9px; }
 
 /* bench strip */
-.pbench { display:flex; justify-content:space-around; gap:4px; padding:12px 6px 10px;
+.pbench { display:flex; justify-content:center; gap:var(--pgap, 14px); padding:14px 8px 12px;
   border-radius:0 0 12px 12px; background:linear-gradient(180deg, #d9f2e2, #f4fbf7); }
-.pbench .pcell { width:24%; }
 .pbench .pcard { background:#2a8a55; }
 /* the bench strip is always light, so its labels stay dark in both themes */
 .pbench .pposlbl { color:#4a6b58; }
@@ -726,8 +736,9 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .cmppitch { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .cmppitch .col { min-width:0; }
 .cmppitch .pitch { padding:40px 2px 10px; min-height:300px; gap:5px; border-radius:8px; }
-.cmppitch .pitch .prow { gap:2px; }
-.cmppitch .pcell { min-width:0; width:24%; }
+.cmppitch .pitch { --pgap:4px; }
+.cmppitch .pitch .prow { gap:4px; }
+.cmppitch .pcell { min-width:0; max-width:52px; }
 .cmppitch .jsy { width:24px; height:23px; }
 .cmppitch .pname { font-size:8px; padding:2px 1px; }
 .cmppitch .ppts { font-size:9px; padding:2px 1px; }
