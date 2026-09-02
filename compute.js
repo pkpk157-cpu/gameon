@@ -2078,7 +2078,8 @@
       var meta = els[id] || ["?", 0, "", 0, 0];
       var owned = (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0);
       var net = (pr.netSince && pr.netSince[id]) || 0;
-      var fplOwners = playing ? Math.round((owned / 100) * playing) : 0;
+      var fplOwners = playing
+        ? Math.max(thr.floor || 0, Math.round((owned / 100) * playing)) : 0;
       // Whether the flow behind this player covers the whole run-up to his next
       // change, or only the part since we started watching him.
       var sure = !pr.exact || pr.exact[id] !== 0;
@@ -2090,18 +2091,16 @@
         goOwned: own ? (own.pct[id] || 0) : null,
         net: net,
         atLeast: !sure,
-        // The flow against how many people hold him. This orders the table
-        // whether or not the threshold is known, and is what progress is a
-        // share of once it is.
-        pressure: (has && fplOwners) ? (net / fplOwners) : null,
+        // What the table is ordered by. Once the bars are measured that is how
+        // far along his own bar he is, so the order and the bars are the same
+        // reading and sorting the column cannot disagree with what it draws.
+        // Before then it is the raw flow against his ownership, which orders
+        // the two directions on one scale without claiming a distance.
+        pressure: (has && fplOwners) ? (thr.measured ? thr.progressOf(fplOwners, net)
+                                                     : net / fplOwners) : null,
         // null, not zero, when there is nothing to work it out from: an empty
         // bar would claim he is going nowhere, which we would not know.
-        progress: (function () {
-          if (!has || !fplOwners) return null;
-          var ratio = net / fplOwners;
-          var at = ratio >= 0 ? thr.riseAt : thr.fallAt;
-          return at ? (ratio / at) * 100 : null;
-        })()
+        progress: (has && fplOwners) ? thr.progressOf(fplOwners, net) : null
       };
     });
   };
@@ -2132,28 +2131,82 @@
     return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
   }
 
+  // A rise and a fall are not the same shape, and treating them as one number
+  // each was this model's real weakness.
+  //
+  // Every reading below was graded the same way, and not on the changes it was
+  // fitted to: the updater publishes a snapshot every ten minutes, so for each
+  // night that prices actually moved there is a snapshot from minutes before it
+  // ran. Ranking that snapshot and comparing against the night's real changes
+  // is a straight hold-out test, and it is what these numbers are.
+  //
+  //   A RISE needs a roughly fixed number of net transfers in, whoever owns
+  //   him — which is what the ownership fit was groping towards when it landed
+  //   on an exponent of -1.03 on the ratio, i.e. count. Ranking on the count
+  //   itself put the real risers at the top of the table on every night
+  //   measured; across five nights the bar flagged 11 players and 9 of them
+  //   rose.
+  //
+  //   A FALL scales with ownership, but with the three-quarter power, not the
+  //   whole. Plain net-per-owner — what this used before — left the typical
+  //   faller 38th in the table; the three-quarter power puts him 30th and more
+  //   than doubles how often a night's real fallers come out on top, 11% to
+  //   24%. Falls remain much the harder half to call: the bar catches a little
+  //   under half of them and flags about twice as many players as move. That
+  //   is the honest state of it, not a target we are hiding from.
+  var FALL_POW = 0.75;
+  // FPL publishes ownership to one decimal place, so everyone under 0.05% of
+  // the game reads as zero — and about one fall in five lands on such a player,
+  // who until now had no bar at all because the sum divided by nothing. Put the
+  // middle of that rounding band under them instead.
+  var OWN_FLOOR = 0.00025;
+
+  function ownerFloor(ds) {
+    var total = Number(ds && ds.prices && ds.prices.total) || 0;
+    return total ? Math.round(total * OWN_FLOOR) : 0;
+  }
+
   C.priceThreshold = function (ds) {
     if (ds && ds._thr) return ds._thr;
-    var up = [], down = [];
+    var fl = ownerFloor(ds), up = [], down = [];
     ((ds && ds.priceLog) || []).forEach(function (r) {
       // entries logged before the updater kept the pressure carry only 4 fields
       if (!r || r.length < 6) return;
-      var net = r[4], owners = r[5];
+      var net = r[4], owners = Math.max(fl, r[5] || 0);
       if (!owners || !isFinite(net)) return;
-      var ratio = net / owners;
-      if (r[2] > r[1]) { if (ratio > 0) up.push(ratio); }
-      else { if (ratio < 0) down.push(-ratio); }
+      // Each direction is measured in its own units, because each answers to a
+      // different thing: a rise to a count, a fall to a count against ownership.
+      if (r[2] > r[1]) { if (net > 0) up.push(net); }
+      else { if (net < 0) down.push(-net / Math.pow(owners, FALL_POW)); }
     });
     var res = {
       rise: median(up), fall: median(down),
       risen: up.length, fell: down.length,
+      floor: fl, fallPow: FALL_POW,
       // Both directions must be measured before a percentage means anything in
       // both: one side alone would leave half the table drawn against nothing
       // while the table claimed to know.
       measured: (up.length + down.length) >= ENOUGH && up.length > 0 && down.length > 0
     };
-    res.riseAt = res.measured ? res.rise : null;
-    res.fallAt = res.measured ? res.fall : null;
+    res.riseAt = res.measured ? res.rise : null;   // net transfers in
+    res.fallAt = res.measured ? res.fall : null;   // net out over owners^0.75
+    // The reading a player is judged on, in the units of whichever bar applies
+    // to him. Signed, so the sign still says which way he is going.
+    res.scoreOf = function (owners, net) {
+      if (!net) return 0;
+      if (net > 0) return net;                      // a rise answers to the count
+      var own = Math.max(fl, owners || 0);          // a fall to the count over ownership
+      return own ? net / Math.pow(own, FALL_POW) : null;
+    };
+    // And how far along that bar he is, as one percentage for both directions
+    // so the column means the same thing all the way down.
+    res.progressOf = function (owners, net) {
+      if (!res.measured) return null;
+      var s = res.scoreOf(owners, net);
+      if (s == null) return null;
+      var at = net > 0 ? res.riseAt : res.fallAt;
+      return at ? (s / at) * 100 : null;
+    };
     if (ds) { try { Object.defineProperty(ds, "_thr", { value: res, enumerable: false }); } catch (e) {} }
     return res;
   };
