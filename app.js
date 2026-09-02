@@ -2567,55 +2567,101 @@
   }
 
   /* ---- one tab each ----------------------------------------------------- */
+  // One group per kind of question the gameweek answers, so a reader looking
+  // for transfers is not sifting through scores to find them. A group with
+  // nothing to say prints nothing at all — an early gameweek has no movement,
+  // and most have no chips.
+  function statGroup(title, cards) {
+    var body = cards.filter(Boolean).join("");
+    if (!body) return "";
+    return '<div class="statgrp">' + esc(title) + '</div><div class="hgrid">' + body + '</div>';
+  }
+
   function statsGw(H) {
     var g = H.gwStats;
     if (!g) return '<div class="callout">No scores recorded for this gameweek yet.</div>';
     var h = '<div class="statlead">' + esc(H.gwName) +
       (H.live ? ' <span class="pill live">Live</span>' : '') + '</div>';
-    h += '<div class="hgrid">';
-    if (H.potw) {
-      h += hcard("Player of the week", num(H.potw.pts), H.potw.name, null,
-        H.potw.team + (H.potw.ownedPct !== null && H.potw.ownedPct !== undefined
-          ? " · " + H.potw.ownedPct + "% of the league" : ""), "star");
-    }
-    h += hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy");
-    h += hcard("League average", num(g.average), g.count + " managers", null,
-      g.median !== null ? ("median " + num(g.median)) : "", "chart");
-    h += hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player, "down");
-    h += hcard("Beat the average", num(g.aboveAvg), "of " + g.count + " managers", null,
-      num(g.range) + " between best and worst", "check");
-    if (g.mostBench && g.mostBench.bench > 0) {
-      h += hcard("Most benched", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id, "points benched", "bench");
-    }
-    if (g.mostHits && g.mostHits.hits > 0) {
-      h += hcard("Biggest hit", "−" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
-        num(g.mostHits.transfers) + " transfers", "warn");
-    }
-    h += hcard("Transfers made", num(g.transfersTotal), "across the league", null,
-      num(g.noTransfer) + " made none · −" + num(g.hitTotal) + " pts in hits", "swap");
-    if (g.biggestClimb) {
-      h += hcard("Biggest climb", "+" + num(g.biggestClimb.move), g.biggestClimb.name, g.biggestClimb.id,
-        num(g.climbers) + " managers moved up", "up");
-    }
-    if (g.biggestFall) {
-      h += hcard("Biggest fall", "−" + num(g.biggestFall.move), g.biggestFall.name, g.biggestFall.id,
-        num(g.fallers) + " managers moved down", "down");
-    }
-    if (g.fplAverage !== null) {
-      h += hcard("Beat FPL's average", num(g.beatFpl), "of " + g.count + " managers", null,
-        "the world scored " + num(g.fplAverage), "globe");
-    }
-    h += hcard("A good week was", num(g.topQuarter) + "+", "the top quarter", null,
-      "bottom quarter: " + num(g.bottomQuarter) + " or less", "target");
-    h += hcard("Left on the bench", num(g.benchTotal), "across the league", null,
-      num(g.benchAvg) + " each on average", "bench");
+
+    h += statGroup("Scores", [
+      hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy"),
+      hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player, "down"),
+      hcard("League average", num(g.average), g.count + " managers", null,
+        g.median !== null ? ("median " + num(g.median)) : "", "chart"),
+      hcard("A good week was", num(g.topQuarter) + "+", "the top quarter", null,
+        "bottom quarter: " + num(g.bottomQuarter) + " or less", "target"),
+      hcard("Beat the average", num(g.aboveAvg), "of " + g.count + " managers", null,
+        num(g.range) + " between best and worst", "check"),
+      g.fplAverage !== null
+        ? hcard("Beat FPL's average", num(g.beatFpl), "of " + g.count + " managers", null,
+            "the world scored " + num(g.fplAverage), "globe")
+        : ""
+    ]);
+
+    h += statGroup("Left on the bench", [
+      (g.mostBench && g.mostBench.bench > 0)
+        ? hcard("Most benched", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id,
+            "points benched", "bench")
+        : "",
+      hcard("Across the league", num(g.benchTotal), "points benched", null,
+        num(g.benchAvg) + " each on average", "chart")
+    ]);
+
+    var dealt = g.count - g.noTransfer;
+    h += statGroup("Transfers", [
+      hcard("Total transfers", num(g.transfersTotal), "across the league", null,
+        g.hitTotal ? ("\u2212" + num(g.hitTotal) + " pts in hits") : "no hits taken", "swap"),
+      hcard("Made a transfer", num(dealt), "of " + g.count + " managers", null,
+        dealt ? (Math.round((dealt / g.count) * 100) + "% of the league") : "nobody moved", "users"),
+      hcard("Made none", num(g.noTransfer), "kept the same squad", null,
+        Math.round((g.noTransfer / g.count) * 100) + "% of the league", "shield"),
+      (g.mostTransfers && g.mostTransfers.transfers > 0)
+        ? hcard("Most transfers", num(g.mostTransfers.transfers), g.mostTransfers.name,
+            g.mostTransfers.id, "in one gameweek", "flame")
+        : "",
+      (g.mostHits && g.mostHits.hits > 0)
+        ? hcard("Biggest hit", "\u2212" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
+            num(g.mostHits.transfers) + " transfers", "warn")
+        : ""
+    ]);
+
+    h += statGroup("Movement", [
+      g.biggestClimb
+        ? hcard("Biggest climb", "+" + num(g.biggestClimb.move), g.biggestClimb.name,
+            g.biggestClimb.id, num(g.climbers) + " managers moved up", "up")
+        : "",
+      g.biggestFall
+        ? hcard("Biggest fall", "\u2212" + num(g.biggestFall.move), g.biggestFall.name,
+            g.biggestFall.id, num(g.fallers) + " managers moved down", "down")
+        : ""
+    ]);
+
+    var chipCards = [];
     if (g.chipsPlayed) {
       var kinds = Object.keys(g.chipKinds).map(function (c) {
         return num(g.chipKinds[c]) + " " + (CHIP_NAME[c] || c);
-      }).join(" · ");
-      h += hcard("Chips played", num(g.chipsPlayed), "this gameweek", null, kinds, "sparkle");
+      }).join(" \u00b7 ");
+      chipCards.push(hcard("Chips played", num(g.chipsPlayed), "this gameweek", null, kinds, "sparkle"));
+      // each chip gets its own card, and each opens the list of who played it
+      Object.keys(g.chipKinds).forEach(function (c) {
+        chipCards.push('<div class="hcard" data-chipgo="' + esc(c) + '" data-chipgw="' + g.gw +
+          '" role="button" tabindex="0">' +
+          '<div class="hl">' + sicon("sparkle") + '<span>' + esc(CHIP_NAME[c] || c) + '</span></div>' +
+          '<div class="hv">' + num(g.chipKinds[c]) + '</div>' +
+          '<div class="hw">managers</div>' +
+          '<div class="hs">tap to see who</div></div>');
+      });
     }
-    h += '</div>';
+    h += statGroup("Chips", chipCards);
+
+    h += statGroup("Player of the week", [
+      H.potw
+        ? hcard(H.potw.name, num(H.potw.pts), H.potw.team, null,
+            (H.potw.ownedPct !== null && H.potw.ownedPct !== undefined)
+              ? H.potw.ownedPct + "% of the league owned him" : "", "star")
+        : ""
+    ]);
+
     h += bucketTable(g);
     return h;
   }

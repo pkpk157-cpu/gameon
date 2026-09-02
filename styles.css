@@ -880,6 +880,14 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   background:linear-gradient(135deg, var(--pl-purple), var(--pl-pink));
   box-shadow:0 4px 12px -6px rgba(233,0,82,.8); }
 .statlead { font-size:12.5px; font-weight:700; color:var(--ink-faint); margin:2px 2px 12px; }
+/* a group heading inside a tab: quieter than a section title, which would
+   shout six times down one screen */
+.statgrp { display:flex; align-items:center; gap:8px; margin:2px 2px 8px;
+  font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+  color:var(--ink-faint); }
+.statgrp::after { content:""; flex:1; height:1px; background:var(--line); }
+.hcard[data-chipgo] { cursor:pointer; }
+.hcard[data-chipgo]:hover { border-color:var(--accent); }
 .statlead .pill { vertical-align:middle; }
 
 /* ---- spacing for the per-competition control rows --------------------- */
