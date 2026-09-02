@@ -489,7 +489,27 @@
       (label ? '<b>' + label + '</b>' : '') + '</span>';
   }
 
-  function priceRows(rows, tracked, scale) {
+  // How fast he is moving, in the same percentage points the bar is drawn in,
+  // and coloured the same way — up towards a rise, down towards a fall.
+  function rateCell(r) {
+    if (r.perHour == null) return '<span class="rate flat">\u2013</span>';
+    var up = r.perHour >= 0, v = Math.abs(r.perHour);
+    return '<span class="rate ' + (up ? 'up' : 'down') + '">' +
+      (up ? '+' : '\u2212') + (v < 10 ? v.toFixed(2) : v.toFixed(1)) + '</span>';
+  }
+  // When FPL's own projection has him crossing the line. Prices move once a
+  // night, so this is a count of nights: a dash means its projection does not
+  // reach the line inside the three it publishes. Both wordings are rendered
+  // and the stylesheet picks whichever the screen can afford.
+  var DUE_LONG = ["Tonight", "Tomorrow", "2 days"], DUE_SHORT = ["Tngt", "Tmrw", "2d"];
+  function dueCell(r) {
+    var i = r.dueIn;
+    if (i == null || i < 0 || i >= DUE_LONG.length) return '<span class="due flat">\u2013</span>';
+    return '<span class="due' + (i === 0 ? ' soon' : '') + '">' +
+      '<b class="lw">' + DUE_LONG[i] + '</b><b class="sw">' + DUE_SHORT[i] + '</b></span>';
+  }
+
+  function priceRows(rows, tracked, scale, forward) {
     return rows.map(function (r) {
       var dir = progressCell(r, scale);
       return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
@@ -498,7 +518,9 @@
         '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
         '<td class="num">' + (r.goOwned == null ? '\u2013'
             : '<b>' + r.goOwned.toFixed(1) + '%</b>') + '</td>' +
-        (tracked ? '<td class="num">' + dir + '</td>' : '') + '</tr>';
+        (tracked ? '<td class="num">' + dir + '</td>' : '') +
+        (forward ? '<td class="num">' + rateCell(r) + '</td>' +
+                   '<td class="num">' + dueCell(r) + '</td>' : '') + '</tr>';
     }).join("");
   }
 
@@ -537,15 +559,29 @@
     var COLS = [
       { k: "name",  t: "Player",  first: 1,
         cmp: function (a, b) { return COLL.compare(a.name, b.name); } },
-      { k: "price", t: "Price",   num: 1, first: -1,
+      { k: "price", t: "Price", s: "\u00a3", num: 1, first: -1,
         cmp: function (a, b) { return a.price - b.price; } },
       { k: "owned", t: "FPL",     num: 1, first: -1,
         cmp: function (a, b) { return a.owned - b.owned; } },
-      { k: "go",    t: "Game On", num: 1, first: -1,
+      { k: "go",    t: "Game On", s: "GO", num: 1, first: -1,
         cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
     ];
-    if (tracked) COLS.push({ k: "move", t: (told || thr.measured) ? "Progress" : "Pressure", num: 1, first: -1,
+    if (tracked) COLS.push({ k: "move", t: (told || thr.measured) ? "Progress" : "Pressure",
+      s: (told || thr.measured) ? "Prog" : "", num: 1, first: -1,
       cmp: function (a, b) { return (a.pressure || 0) - (b.pressure || 0); } });
+    // Only FPL's own figures carry a rate and a projection; our measured model
+    // has neither, and empty columns would say we had lost them rather than
+    // never had them.
+    var forward = told && rows.some(function (r) { return r.perHour != null || r.dueIn != null; });
+    if (forward) {
+      COLS.push({ k: "rate", t: "Per hr", s: "/hr", num: 1, first: -1,
+        cmp: function (a, b) { return (a.perHour || 0) - (b.perHour || 0); } });
+      // soonest first, and everyone FPL does not expect to move sits behind them
+      COLS.push({ k: "due", t: "Time", num: 1, first: 1,
+        cmp: function (a, b) {
+          return (a.dueIn == null ? 99 : a.dueIn) - (b.dueIn == null ? 99 : b.dueIn);
+        } });
+    }
 
     var colOf = function (k) {
       for (var i = 0; i < COLS.length; i++) if (COLS[i].k === k) return COLS[i];
@@ -592,10 +628,14 @@
       var head = COLS.map(function (c) {
         var on = c.k === state.priceSort;
         var arrow = on ? (dir === 1 ? "\u2191" : "\u2193") : "";
+        // Two wordings where a header has a short one, so a narrow screen can
+        // drop to it rather than push the last column off the edge. The full
+        // name is the label either way, so what is read out never shortens.
         return '<th class="sortable' + (c.num ? " num" : "") + (on ? " sorted" : "") +
-          '" data-sort="' + c.k + '" role="button" tabindex="0" aria-sort="' +
-          (on ? (dir === 1 ? "ascending" : "descending") : "none") + '">' +
-          esc(c.t) + '<span class="sarrow">' + arrow + '</span></th>';
+          '" data-sort="' + c.k + '" role="button" tabindex="0" aria-label="' + esc(c.t) +
+          '" aria-sort="' + (on ? (dir === 1 ? "ascending" : "descending") : "none") + '">' +
+          (c.s ? '<span class="lw">' + esc(c.t) + '</span><span class="sw">' + esc(c.s) + '</span>'
+               : esc(c.t)) + '<span class="sarrow">' + arrow + '</span></th>';
       }).join("");
 
       var panel = $("#prPanel", host);
@@ -603,7 +643,7 @@
       // and wins on order, which left the rows unreachable by any gesture even
       // though scrollTop still moved them from script.
       panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
-        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale) + '</tbody></table></div>' +
+        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale, forward) + '</tbody></table></div>' +
         (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
         (tracked && !told && !thr.measured
           ? '<div class="koline">Pressure orders who is being bought and sold hardest. ' +
@@ -619,7 +659,7 @@
           // table; appending the rest of a list nobody is looking at any more
           // would mix two sorts together.
           if (mine !== gen || !body.parentNode) return;
-          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked, scale));
+          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked, scale, forward));
         });
       }
 

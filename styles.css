@@ -42,6 +42,8 @@
   --prog-down:#ffc0b0; --prog-down-ink:#7a2413;
   --prog-go:#25c274; --prog-go-ink:#05301e;
   --prog-drop:#ff725e; --prog-drop-ink:#3d0d05;
+  --rate-up:#0a7a41; --rate-down:#b53326;
+  --due-soon:#d0004f;
   --glass-hi:rgba(255,255,255,.9); --glass-shadow:0 10px 34px -12px rgba(30,30,70,.22);
   --field:rgba(255,255,255,.6); --chip:rgba(20,20,45,.05);
   /* wallpaper */
@@ -77,6 +79,8 @@
   --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
   --prog-go:#25c274; --prog-go-ink:#042416;
   --prog-drop:#ff725e; --prog-drop-ink:#2b0a04;
+  --rate-up:#25c274; --rate-down:#ff725e;
+  --due-soon:#ff4fa3;
     --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
     --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
     --wall:
@@ -108,6 +112,8 @@
   --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
   --prog-go:#25c274; --prog-go-ink:#042416;
   --prog-drop:#ff725e; --prog-drop-ink:#2b0a04;
+  --rate-up:#25c274; --rate-down:#ff725e;
+  --due-soon:#ff4fa3;
   --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
   --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
   --wall:
@@ -1000,23 +1006,50 @@ table.t.prizetbl .mgr { font-size:10.5px; }
 .tie .sd { flex:none; font-size:10px; font-weight:700; color:var(--ink-faint); }
 .tie.pending .nm { color:var(--ink-faint); font-weight:600; font-style:italic; }
 
-/* The price table carries five columns, four of them numeric. On a 320px phone
+/* The price table carries seven columns, six of them numeric. On a 320px phone
    the generic table metrics push the last two off the edge — and those two are
-   the whole point of the table — so it gets its own tighter spacing. */
+   the whole point of the table — so it gets its own tighter spacing. Every
+   column but the player is centred: they are short readings of one thing each,
+   and centring keeps six of them evenly spaced across a narrow screen where
+   right-alignment would bunch them against their neighbours. */
 table.t.pricetbl { width:100%; table-layout:auto; }
-table.t.pricetbl th, table.t.pricetbl td { padding:9px 4px; }
+table.t.pricetbl th, table.t.pricetbl td { padding:9px 3px; }
+table.t.pricetbl td.num, table.t.pricetbl th.num { text-align:center; }
 .freeze table.t.pricetbl th:first-child, .freeze table.t.pricetbl td:first-child { padding-left:9px; }
 .freeze table.t.pricetbl th:last-child, .freeze table.t.pricetbl td:last-child { padding-right:9px; }
-table.t.pricetbl th { font-size:9.5px; letter-spacing:.3px; }
-table.t.pricetbl td.num { font-size:13px; }
-table.t.pricetbl .move { font-size:12px; white-space:nowrap; }
+table.t.pricetbl th { font-size:9px; letter-spacing:.2px; }
+table.t.pricetbl td.num { font-size:12.5px; }
+table.t.pricetbl .move { font-size:11.5px; white-space:nowrap; }
 /* A long surname must give way rather than push the last column off the edge —
    the position and club underneath still say who this is. */
-table.t.pricetbl td.name { min-width:0; max-width:84px; white-space:nowrap; }
+table.t.pricetbl td.name { min-width:0; max-width:76px; white-space:nowrap; }
 table.t.pricetbl td.name .who,
 table.t.pricetbl td.name .mgr { display:block; overflow:hidden; text-overflow:ellipsis; }
-table.t.pricetbl td.name .who { font-size:13.5px; }
-table.t.pricetbl td.name .mgr { font-size:10.5px; }
+table.t.pricetbl td.name .who { font-size:13px; }
+table.t.pricetbl td.name .mgr { font-size:10px; }
+
+/* How fast, and when. The rate takes the same up/down colours as the bar, so a
+   glance down the two columns tells one story rather than two. */
+table.t.pricetbl .rate { font-variant-numeric:tabular-nums; font-weight:600; }
+/* Its own pair rather than the app's --good/--bad, which are tuned for badges
+   and larger type: at this size on this row they read 3.5:1 and 4.5:1. These
+   two are matched to each other in lightness — 0.51 against 0.52 in light,
+   0.72 against 0.72 in dark, where they are the same two colours the bar wears
+   once a change is due — and clear 5.4:1 at their worst. */
+table.t.pricetbl .rate.up { color:var(--rate-up); }
+table.t.pricetbl .rate.down { color:var(--rate-down); }
+table.t.pricetbl .rate.flat, table.t.pricetbl .due.flat { color:var(--ink-faint); font-weight:500; }
+table.t.pricetbl .due { font-size:11px; font-weight:600; color:var(--ink-soft); }
+/* The night it actually happens is the one worth spotting from across the
+   table. Not the plain accent: at 11px on a dark row that reads 4.2:1, so this
+   is the same pink lifted until it clears 5.4:1. */
+table.t.pricetbl .due.soon { color:var(--due-soon); font-weight:800; }
+/* Seven columns only fit a phone in their short wording — "GO", "Prog", "Tmrw"
+   — so that is the default and the full words come back when there is room.
+   Headers carry the full name as their label either way, so nothing a screen
+   reader announces is ever the abbreviation. */
+table.t.pricetbl .lw { display:none; }
+table.t.pricetbl .sw { display:inline; }
 
 /* Tap a header to sort by it; tap again to reverse. The arrow only shows on
    the column actually in use, and it reserves its width either way so the
@@ -1031,18 +1064,43 @@ table.t th.sortable .sarrow { display:inline-block; margin-left:2px;
    screen has to give, so only the column wearing it pays for it. */
 table.t th.sortable .sarrow:empty { display:none; }
 
-/* The very narrow phones (320px) need a little more give still. */
+/* The very narrow phones (320px) need a little more give still: the surname
+   gives up more of itself, and "Tomorrow" becomes "Tmrw" rather than the last
+   column falling off the edge. */
 @media (max-width:360px) {
-  table.t.pricetbl td.name { max-width:74px; }
-  table.t.pricetbl th, table.t.pricetbl td { padding:9px 3px; }
+  table.t.pricetbl td.name { max-width:62px; }
+  table.t.pricetbl th, table.t.pricetbl td { padding:9px 2px; }
+  table.t.pricetbl th { font-size:8.5px; letter-spacing:0; }
+  table.t.pricetbl td.num { font-size:11.5px; }
+  table.t.pricetbl .move { font-size:10.5px; }
+  table.t.pricetbl .due { font-size:10.5px; }
 }
 
-/* Once there is room, let it breathe again. */
+/* Each step up spends the room it has on the surname first, which is the only
+   thing here that was ever being cut. The full header wordings cost about 90px
+   across six columns, so they wait until the card can carry them — which is a
+   good deal wider than the screen, the card being inset either side. */
 @media (min-width:400px) {
-  table.t.pricetbl th, table.t.pricetbl td { padding:10px 9px; }
-  table.t.pricetbl td.name { max-width:none; }
+  table.t.pricetbl th, table.t.pricetbl td { padding:10px 5px; }
+  table.t.pricetbl td.name { max-width:96px; }
+  table.t.pricetbl td.num { font-size:13px; }
+  table.t.pricetbl th { font-size:9.5px; }
+}
+
+@media (min-width:640px) {
+  table.t.pricetbl th, table.t.pricetbl td { padding:10px 7px; }
+  table.t.pricetbl td.name { max-width:150px; }
   table.t.pricetbl td.name .who { font-size:14px; }
   table.t.pricetbl td.num, table.t.pricetbl .move { font-size:13.5px; }
+  table.t.pricetbl th { font-size:10px; letter-spacing:.3px; }
+  table.t.pricetbl .due { font-size:12px; }
+  table.t.pricetbl .lw { display:inline; }
+  table.t.pricetbl .sw { display:none; }
+}
+
+@media (min-width:860px) {
+  table.t.pricetbl th, table.t.pricetbl td { padding:10px 9px; }
+  table.t.pricetbl td.name { max-width:240px; }
 }
 
 /* a decision the league still has to make, not a state of the data */

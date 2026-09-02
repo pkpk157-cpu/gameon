@@ -2059,6 +2059,24 @@
   // needed them, so this reads the player table and treats the price record as
   // an enrichment — the list works from the first load, and gains its change
   // and flow columns once the updater has been keeping them.
+  // FPL projects the same percentage forward over the next few price runs, one
+  // a day apart. Two readings fall out of that: how fast he is moving, and the
+  // first run its own projection has him crossing the line. Both are taken from
+  // the projected percentages rather than the hourly rate published beside them,
+  // which is counted in transfers and so cannot be shown next to a percentage.
+  function fromProjections(proj) {
+    var out = { perHour: null, dueIn: null };
+    if (!proj || !proj.length) return out;
+    for (var i = 0; i < proj.length; i++) {
+      if (Math.abs(proj[i][1]) >= 100) { out.dueIn = proj[i][0]; break; }
+    }
+    if (proj.length > 1) {
+      var a = proj[0], b = proj[proj.length - 1], days = b[0] - a[0];
+      if (days > 0) out.perHour = (b[1] - a[1]) / (days * 24);
+    }
+    return out;
+  }
+
   C.priceTable = function (ds) {
     var els = (ds && ds.elements) || null;
     if (!els) return null;
@@ -2076,6 +2094,7 @@
     // night FPL itself named 8. Where the game says, the game is used, and the
     // measured model below stays only for data captured before we read it.
     var fpl = (pr.fpl && pr.fpl.pct) || null;
+    var projs = (pr.fpl && pr.fpl.proj) || null;
     // the most recent recorded change per player, so a move that has already
     // happened is shown as fact rather than as pressure
     var last = {};
@@ -2097,6 +2116,7 @@
       // so; and it marks a figure it has not finished working out.
       var lock = (pr.fpl && pr.fpl.lock && pr.fpl.lock[id]) || null;
       var calibrating = !!(pr.fpl && pr.fpl.cal && pr.fpl.cal[id]);
+      var fwd = fromProjections(projs && projs[id]);
       return {
         id: +id, name: meta[0], full: meta[5] || "",
         type: meta[1], pos: PPOS[meta[1]] || "", team: meta[2],
@@ -2119,7 +2139,12 @@
         // a reader assume the game published a number we worked out ourselves
         told: said != null,
         lockedUntil: lock,
-        calibrating: calibrating
+        calibrating: calibrating,
+        // percentage points an hour, signed the same way the bar is
+        perHour: fwd.perHour,
+        // 0 tonight, 1 tomorrow, 2 the night after; null if its own projection
+        // does not reach the line inside that window
+        dueIn: fwd.dueIn
       };
     });
   };
