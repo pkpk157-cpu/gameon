@@ -41,6 +41,7 @@
   --prog-up:#9fe6c4; --prog-up-ink:#0d5136;
   --prog-down:#ffc0b0; --prog-down-ink:#7a2413;
   --prog-go:#25c274; --prog-go-ink:#05301e;
+  --prog-drop:#ff725e; --prog-drop-ink:#3d0d05;
   --glass-hi:rgba(255,255,255,.9); --glass-shadow:0 10px 34px -12px rgba(30,30,70,.22);
   --field:rgba(255,255,255,.6); --chip:rgba(20,20,45,.05);
   /* wallpaper */
@@ -75,6 +76,7 @@
   --prog-up:#1d6347; --prog-up-ink:#b7f4d8;
   --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
   --prog-go:#25c274; --prog-go-ink:#042416;
+  --prog-drop:#ff725e; --prog-drop-ink:#2b0a04;
     --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
     --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
     --wall:
@@ -105,6 +107,7 @@
   --prog-up:#1d6347; --prog-up-ink:#b7f4d8;
   --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
   --prog-go:#25c274; --prog-go-ink:#042416;
+  --prog-drop:#ff725e; --prog-drop-ink:#2b0a04;
   --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
   --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
   --wall:
@@ -327,8 +330,13 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 /* ordering only, with no number to read: a slimmer bar so it does not look
    like a measurement that has simply lost its label */
 .prog.bare { height:11px; }
-.prog.full i { background:var(--prog-go); }
-.prog.up.full b, .prog.down.full b { color:var(--prog-go-ink); }
+/* Past the line he is going tonight, which is worth saying loudly — but in the
+   colour of the direction he is going. One shared "going" green here painted a
+   player 155% of the way to a FALL the same as one about to rise. */
+.prog.up.full i { background:var(--prog-go); }
+.prog.up.full b { color:var(--prog-go-ink); }
+.prog.down.full i { background:var(--prog-drop); }
+.prog.down.full b { color:var(--prog-drop-ink); }
 tr.zone-top td { background:var(--good-wash); }
 tr.zone-bot td { background:var(--bad-wash); }
 tr.me td { background:var(--accent-wash); }
