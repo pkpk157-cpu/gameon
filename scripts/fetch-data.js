@@ -324,6 +324,27 @@ async function h2hAll(id) {
   const teamShort = {};
   const teamNames = {};
   (bs.teams || []).forEach((t) => { teamShort[t.id] = t.short_name; teamNames[t.short_name] = t.name; });
+
+  // What FPL publishes about a player that we are not reading. We reinvented a
+  // price-change progress bar from transfer counts, and a rival site says its
+  // own progress "comes directly from FPL" — so a field we never looked at may
+  // have been sitting in this response the whole time. Print the list once a
+  // run: it costs a line in the log and answers that question every time FPL
+  // adds something, instead of us finding out months later.
+  const KNOWN_EL = ["id", "web_name", "first_name", "second_name", "element_type", "team",
+    "now_cost", "selected_by_percent", "cost_change_event", "cost_change_start",
+    "transfers_in", "transfers_out"];
+  const sample = (bs.elements || [])[0];
+  if (sample) {
+    const unread = Object.keys(sample).filter((k) => KNOWN_EL.indexOf(k) === -1);
+    console.log("bootstrap element fields we do not read (" + unread.length + "): " + unread.join(", "));
+    // and what they actually hold on one real player, so a promising name is
+    // not just a name
+    const shown = {};
+    unread.forEach((k) => { const v = sample[k]; if (v !== null && v !== "" && v !== 0) shown[k] = v; });
+    console.log("  non-empty on " + sample.web_name + ": " + JSON.stringify(shown));
+  }
+
   elements = {};
   (bs.elements || []).forEach((el) => {
     // The table shows the short name FPL uses, but people search for the name
