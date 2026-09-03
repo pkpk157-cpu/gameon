@@ -44,6 +44,7 @@
   --prog-drop:#ff725e; --prog-drop-ink:#3d0d05;
   --rate-up:#0a7a41; --rate-down:#b53326;
   --due-soon:#d0004f;
+  --dash:#5f5f6d;
   --glass-hi:rgba(255,255,255,.9); --glass-shadow:0 10px 34px -12px rgba(30,30,70,.22);
   --field:rgba(255,255,255,.6); --chip:rgba(20,20,45,.05);
   /* wallpaper */
@@ -81,6 +82,7 @@
   --prog-drop:#ff725e; --prog-drop-ink:#2b0a04;
   --rate-up:#25c274; --rate-down:#ff725e;
   --due-soon:#ff4fa3;
+  --dash:#9a98a6;
     --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
     --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
     --wall:
@@ -114,6 +116,7 @@
   --prog-drop:#ff725e; --prog-drop-ink:#2b0a04;
   --rate-up:#25c274; --rate-down:#ff725e;
   --due-soon:#ff4fa3;
+  --dash:#9a98a6;
   --glass-hi:rgba(255,255,255,.10); --glass-shadow:0 14px 40px -12px rgba(0,0,0,.6);
   --field:rgba(255,255,255,.06); --chip:rgba(255,255,255,.07);
   --wall:
@@ -709,6 +712,21 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pb.cap, .pb.vice { left:2px; background:#37003c; color:#fff; }
 .pb.star { right:2px; background:#00ff87; color:#0a3d24; font-size:9px; }
 
+/* How close a player's price is to moving, in the corner of his card. Only in
+   the value view, only on the newest pitch, and only for the players actually
+   near the line — see MOVE_MIN in compute.js for why fifteen of these would be
+   noise. Filled is going tonight; outlined is drifting that way, darkened
+   behind so the bright ink still clears 5.4:1 over either stripe of the grass. */
+.pmv { position:absolute; top:2px; right:2px; z-index:3; display:flex; align-items:center;
+  gap:1px; padding:1px 3px 1px 2px; border-radius:4px; font-style:normal; font-weight:800;
+  font-size:8.5px; line-height:1.15; font-variant-numeric:tabular-nums;
+  background:rgba(0,0,0,.6); box-shadow:0 1px 3px rgba(0,0,0,.4); }
+.pmv b { font-size:7px; line-height:1; }
+.pmv.up { color:var(--prog-go); box-shadow:inset 0 0 0 1px var(--prog-go), 0 1px 3px rgba(0,0,0,.4); }
+.pmv.down { color:var(--prog-drop); box-shadow:inset 0 0 0 1px var(--prog-drop), 0 1px 3px rgba(0,0,0,.4); }
+.pmv.soon.up { background:var(--prog-go); color:var(--prog-go-ink); box-shadow:0 1px 3px rgba(0,0,0,.45); }
+.pmv.soon.down { background:var(--prog-drop); color:var(--prog-drop-ink); box-shadow:0 1px 3px rgba(0,0,0,.45); }
+
 /* bench strip */
 .pbench { display:flex; justify-content:center; gap:var(--pgap, 14px); padding:14px 8px 12px;
   border-radius:0 0 12px 12px; background:linear-gradient(180deg, #d9f2e2, #f4fbf7); }
@@ -1049,7 +1067,9 @@ table.t.pricetbl .rate { font-variant-numeric:tabular-nums; font-weight:600; }
    once a change is due — and clear 5.4:1 at their worst. */
 table.t.pricetbl .rate.up { color:var(--rate-up); }
 table.t.pricetbl .rate.down { color:var(--rate-down); }
-table.t.pricetbl .rate.flat, table.t.pricetbl .due.flat { color:var(--ink-faint); font-weight:500; }
+/* The dash is a reading too — "nothing expected" — so it has to clear the same
+   bar as the figures. The app's faint ink sits just under it on a dark row. */
+table.t.pricetbl .rate.flat, table.t.pricetbl .due.flat { color:var(--dash); font-weight:500; }
 table.t.pricetbl .due { font-size:11px; font-weight:600; color:var(--ink-soft); }
 /* The night it actually happens is the one worth spotting from across the
    table. Not the plain accent: at 11px on a dark row that reads 4.2:1, so this

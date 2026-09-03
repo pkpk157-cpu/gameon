@@ -2238,6 +2238,18 @@
     }
     var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
     if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star">★</i>';
+    // How close his price is to moving, in the corner the top-scorer star
+    // leaves free in this view. Filled means it goes tonight, outlined means he
+    // is drifting that way; the percent sign is dropped because the arrow and
+    // the colour have already said what the number is a percentage of, and
+    // those six pixels are what let three digits sit on a 320px phone.
+    if (metric === "val" && p.move) {
+      var mv = p.move, mvn = Math.round(mv.mag);
+      badge += '<i class="pmv ' + (mv.up ? "up" : "down") + (mv.soon ? " soon" : "") +
+        '" role="img" aria-label="' + mvn + '% of the way to a price ' +
+        (mv.up ? "rise" : "fall") + (mv.soon ? ", expected tonight" : "") + '">' +
+        '<b>' + (mv.up ? "\u25b2" : "\u25bc") + '</b>' + mvn + '</i>';
+    }
     // Before his match kicks off a player's card names the opponent — MUN (A)
     // — the way the official app does; the points take the slot the moment
     // the fixture starts.

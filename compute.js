@@ -1034,6 +1034,23 @@
       if (topPrice === null || p.price > topPrice) topPrice = p.price;
     });
 
+    // Which of these fifteen is close to a price change. FPL publishes this as
+    // a right-now reading with no per-gameweek history, so it belongs on the
+    // newest pitch and nowhere else: hung on an older squad it would be today's
+    // number under last month's team, which would be a lie told tidily.
+    if (+gw === +ds.pitchGw) {
+      var moves = priceMoves(ds);
+      everyone.forEach(function (p) {
+        var m = moves[p.el];
+        if (!m) return;
+        var mag = Math.abs(m.pct);
+        if (mag < MOVE_MIN) return;
+        p.move = { pct: m.pct, mag: mag, up: m.pct >= 0,
+                   // tonight, as against merely drifting that way
+                   soon: m.dueIn === 0 || mag >= 100 };
+      });
+    }
+
     // What the squad is worth, and what it would actually fetch. These are two
     // different numbers: FPL hands back only half of a player's rise, rounded
     // down per tenth, while a fall is borne in full.
@@ -2074,6 +2091,31 @@
       var a = proj[0], b = proj[proj.length - 1], days = b[0] - a[0];
       if (days > 0) out.perHour = (b[1] - a[1]) / (days * 24);
     }
+    return out;
+  }
+
+  // How close to a price change a player has to be before his card says so.
+  // Every one of the 600-odd players carries a reading and the median is 28%,
+  // so badging them all would put fifteen numbers on a pitch where, measured
+  // across the league, fewer than one in seven squads holds a single player
+  // whose price actually moves that night. Half way is where it starts to mean
+  // something.
+  var MOVE_MIN = 50;
+
+  // FPL's own reading per player, kept as a lookup because a pitch wants
+  // fifteen of them and priceTable builds six hundred.
+  function priceMoves(ds) {
+    if (ds && ds._pmv) return ds._pmv;
+    var out = {}, f = (ds && ds.prices && ds.prices.fpl) || null;
+    if (f && f.pct) {
+      Object.keys(f.pct).forEach(function (id) {
+        var pct = f.pct[id];
+        if (!isFinite(pct)) return;
+        var fwd = fromProjections(f.proj && f.proj[id]);
+        out[id] = { pct: pct, dueIn: fwd.dueIn };
+      });
+    }
+    if (ds) { try { Object.defineProperty(ds, "_pmv", { value: out, enumerable: false }); } catch (e) {} }
     return out;
   }
 
