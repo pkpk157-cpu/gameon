@@ -690,12 +690,95 @@
   // kick-off time until a game starts, then the live score with the minute,
   // then the final score. The rows ride the same published fixtures the pitch
   // cards use, so the live poll keeps them ticking between full syncs.
+  // Won, drawn, lost as a run of five, newest last — the shape of a team's form
+  // before any of the numbers are read.
+  function plForm(last5) {
+    if (!last5 || !last5.length) return '<span class="l5"></span>';
+    var pad = 5 - last5.length, out = "";
+    last5.forEach(function (r) {
+      var t = r === "W" ? "won" : r === "L" ? "lost" : "drew";
+      out += '<i class="l5r ' + r.toLowerCase() + '" title="' + t + '">' +
+        (r === "W" ? "\u2713" : r === "L" ? "\u2715" : "\u2013") + '</i>';
+    });
+    while (pad-- > 0) out += '<i class="l5r none"></i>';
+    return '<span class="l5" role="img" aria-label="last ' + last5.length + ': ' +
+      last5.join(", ") + '">' + out + '</span>';
+  }
+
+  // Fixtures or table: one head for both, so the toggle does not jump.
+  function plHead(tab) {
+    return '<div class="pseg psegwide" role="tablist">' +
+      '<button type="button" role="tab" data-pl="fixtures"' +
+        (tab === "fixtures" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Fixtures</button>' +
+      '<button type="button" role="tab" data-pl="table"' +
+        (tab === "table" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Table</button>' +
+      '</div>';
+  }
+  function plWire(host, ds) {
+    var all = (ds && ds.gwFixtures) || {};
+    $all('[data-pl]', host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (b.getAttribute("data-pl") === "table") { location.hash = "pl/table"; return; }
+        var gws = Object.keys(all).map(Number).sort(function (x, y) { return x - y; });
+        var gw = (ds.pitchGw && all[ds.pitchGw]) ? +ds.pitchGw : gws[gws.length - 1];
+        location.hash = gw ? "pl/" + gw : "pl";
+      });
+    });
+  }
+
+  // The table, from the same fixtures the scoreboard draws. Eleven columns is
+  // more than a phone has, so the ones that can be worked out from the rest —
+  // won, drawn, lost, and the goals either way — step back as the screen
+  // narrows. Played, goal difference and points never do.
+  function renderPlTable(host, ds) {
+    var t = K.plTable(ds);
+    if (!t || !t.rows.length) {
+      host.innerHTML = plHead("table") +
+        '<div class="callout">The season’s fixtures arrive with the next data sync — the table builds itself from them.</div>';
+      plWire(host, ds);
+      return;
+    }
+    var COLS = [
+      ["mp", "Played", "Pl"], ["w", "Won", "W"], ["d", "Drawn", "D"], ["l", "Lost", "L"],
+      ["gf", "Goals for", "GF"], ["ga", "Goals against", "GA"],
+      ["gd", "Goal difference", "GD"], ["pts", "Points", "Pts"]
+    ];
+    var h = plHead("table") + '<div class="card"><div class="freeze"><table class="t pltbl">' +
+      '<thead><tr><th class="pos" aria-label="Position">#</th><th class="name">Club</th>' +
+      COLS.map(function (c) {
+        return '<th class="num c-' + c[0] + '" aria-label="' + esc(c[1]) + '">' + esc(c[2]) + '</th>';
+      }).join("") + '<th class="num c-l5" aria-label="Last five results">Last 5</th></tr></thead><tbody>';
+    t.rows.forEach(function (r) {
+      // Three go down, which is fixed; four is the smallest number of European
+      // places, which is not — so the band marks where a club sits and leaves
+      // the prize to the caption.
+      var band = r.pos <= 4 ? " top" : (r.pos > t.teams - 3 ? " drop" : "");
+      h += '<tr class="plrow' + band + '"><td class="pos">' + r.pos + '</td>' +
+        '<td class="name"><span class="who">' + esc(r.name) + '</span></td>' +
+        COLS.map(function (c) {
+          var v = r[c[0]];
+          if (c[0] === "gd" && v > 0) v = "+" + v;
+          return '<td class="num c-' + c[0] + (c[0] === "pts" ? " pts" : "") + '">' + v + '</td>';
+        }).join("") +
+        '<td class="num c-l5">' + plForm(r.last5) + '</td></tr>';
+    });
+    h += '</tbody></table></div>' +
+      '<div class="koline">Ordered on points, then goal difference, then goals scored; clubs level on all ' +
+      'three share a place. Built from the results on the fixtures page, so a match counts from the final ' +
+      'whistle. The top four and the bottom three are marked — the bottom three are the ones relegated.' +
+      '</div></div>';
+    host.innerHTML = h;
+    plWire(host, ds);
+  }
+
   function renderPl(host, ds) {
+    if (state.plTab === "table") return renderPlTable(host, ds);
     var all = (ds && ds.gwFixtures) || {};
     var gws = Object.keys(all).map(Number).sort(function (a, b) { return a - b; });
     if (!gws.length) {
-      host.innerHTML = '<div class="section-title"><h2>Premier League</h2><div class="rule"></div></div>' +
+      host.innerHTML = plHead("fixtures") +
         '<div class="callout">The gameweek’s fixtures arrive with the next data sync — check back in a few minutes.</div>';
+      plWire(host, ds);
       return;
     }
     // The address picks the gameweek; without one, open on the current one.
@@ -740,7 +823,7 @@
         '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + '</span></div>' +
         (cap ? '<div class="fxw">' + cap + '</div>' : "") + '</div>';
     };
-    var h = '<div class="plnav">' +
+    var h = plHead("fixtures") + '<div class="plnav">' +
       '<button type="button" class="gwarr" id="plPrev" aria-label="Earlier gameweek"' + (at > 0 ? '' : ' disabled') + '>‹</button>' +
       '<h2>Gameweek ' + gw + '</h2>' +
       '<button type="button" class="gwarr" id="plNext" aria-label="Later gameweek"' + (at < gws.length - 1 ? '' : ' disabled') + '>›</button>' +
@@ -756,6 +839,7 @@
     }; };
     $("#plPrev", host).addEventListener("click", flip(-1));
     $("#plNext", host).addEventListener("click", flip(1));
+    plWire(host, ds);
   }
 
   /* ---- the section menu -------------------------------------------------- */
@@ -1026,7 +1110,10 @@
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
     if (view === "profile") state.profileId = parts[1] || null;
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
-    if (view === "pl") state.plGw = +parts[1] || null;
+    if (view === "pl") {
+      state.plTab = parts[1] === "table" ? "table" : "fixtures";
+      state.plGw = +parts[1] || null;
+    }
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
     track(view === "rules" && parts[1] ? "/rules/" + parts[1] : "/" + view);
     render();

@@ -1310,6 +1310,64 @@ table.t.bktbl td.bkbar span {
 table.t.bktbl tr.me td.bkbar span { background:linear-gradient(90deg, var(--gold), #e6a417); }
 /* the caption under the table sits against the card wall without this */
 .bknote { margin:6px 14px 0; }
+/* ---- the Premier League table ------------------------------------------
+   Eleven columns is more than a phone has. Played, goal difference and points
+   always show, because they are what the table is for; won/drawn/lost and the
+   goals either way can be worked out from each other, so they wait for room.
+   The user asked for no sideways scroll on the price table and the same holds
+   here — measured at every width from 320 up. */
+table.t.pltbl { width:100%; table-layout:auto; }
+table.t.pltbl th, table.t.pltbl td { padding:9px 3px; }
+table.t.pltbl th { font-size:9px; letter-spacing:.2px; }
+table.t.pltbl td.num, table.t.pltbl th.num { text-align:center; font-variant-numeric:tabular-nums; }
+table.t.pltbl td.num { font-size:12.5px; }
+table.t.pltbl .pts { font-weight:800; }
+/* the position, and the band that says where the club sits */
+table.t.pltbl th.pos, table.t.pltbl td.pos { width:1%; text-align:right; padding-left:9px;
+  font-size:11.5px; font-weight:700; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+table.t.pltbl td.name { min-width:0; max-width:96px; white-space:nowrap; }
+table.t.pltbl td.name .who { display:block; font-size:13px; font-weight:700;
+  overflow:hidden; text-overflow:ellipsis; }
+/* A 3px edge rather than a whole tinted row: twenty rows of wash would fight
+   the numbers, and the edge is what a league table actually uses. */
+table.t.pltbl tr.plrow td.pos { border-left:3px solid transparent; }
+table.t.pltbl tr.plrow.top td.pos { border-left-color:var(--good); }
+table.t.pltbl tr.plrow.drop td.pos { border-left-color:var(--bad); }
+
+/* last five, newest last */
+.l5 { display:inline-flex; gap:2px; align-items:center; }
+.l5r { width:13px; height:13px; border-radius:50%; flex:none; font-style:normal;
+  font-size:8px; font-weight:800; line-height:13px; text-align:center; }
+.l5r.w { background:var(--good); color:#fff; }
+.l5r.l { background:var(--bad); color:#fff; }
+.l5r.d { background:var(--ink-faint); color:#fff; }
+.l5r.none { background:var(--chip); border:1px solid var(--line); }
+
+@media (max-width:359px) {
+  table.t.pltbl th, table.t.pltbl td { padding:9px 2px; }
+  table.t.pltbl td.name { max-width:74px; }
+  table.t.pltbl .c-w, table.t.pltbl .c-d, table.t.pltbl .c-l { display:none; }
+}
+@media (max-width:520px) {
+  table.t.pltbl .c-gf, table.t.pltbl .c-ga { display:none; }
+}
+/* The form run only goes when the club names would start losing letters for
+   it — measured, not assumed: the name column carries the slack, so at 360 and
+   up it can give the run its 45px and still print every club in full. */
+@media (max-width:359px) {
+  table.t.pltbl .c-l5 { display:none; }
+}
+@media (min-width:560px) {
+  table.t.pltbl th, table.t.pltbl td { padding:10px 7px; }
+  table.t.pltbl td.name { max-width:none; }
+  table.t.pltbl th { font-size:10px; }
+  table.t.pltbl td.num { font-size:13.5px; }
+}
+
+/* the toggle spans the card, so Fixtures and Table read as one control */
+.pseg.psegwide { width:100%; max-width:320px; }
+.pseg.psegwide button { flex:1 1 0; padding:7px 10px; }
+
 .plnav { display:flex; align-items:center; justify-content:center; gap:10px; margin:2px 0 14px; }
 .plnav h2 { margin:0; min-width:170px; text-align:center; }
 .gwarr {

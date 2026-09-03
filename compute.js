@@ -2123,6 +2123,89 @@
     return out;
   }
 
+  /* ---- the Premier League table ----------------------------------------
+     Built from the same published fixtures the scoreboard and the pitch cards
+     read, so the two can never disagree: a result the scoreboard shows is a
+     result the table has counted. Nothing extra is fetched for it.
+
+     A match counts once the final whistle has gone — finished_provisional —
+     rather than once FPL has folded the bonus in, which is a fantasy
+     bookkeeping step and not a football one. A game in play is therefore not
+     yet in the table, which is how every league table behaves.
+
+     Order is points, then goal difference, then goals scored. Teams level on
+     all three share a position and the next one is skipped, exactly as the
+     league publishes it: two teams tied for 19th, and no 20th.  */
+  C.plTable = function (ds) {
+    if (ds && ds._plt) return ds._plt;
+    var all = (ds && ds.gwFixtures) || null;
+    if (!all) return null;
+    var names = (ds && ds.teamNames) || {};
+    var byTeam = {};
+    var seat = function (t) {
+      return byTeam[t] || (byTeam[t] = { team: t, name: names[t] || t,
+        mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0, last5: [] });
+    };
+    // Every club that has a fixture anywhere in the season gets a row, so the
+    // table is twenty deep from the first day rather than filling up as clubs
+    // happen to play.
+    Object.keys(all).forEach(function (gw) {
+      (all[gw] || []).forEach(function (f) {
+        if (f && f[0]) seat(f[0]);
+        if (f && f[1]) seat(f[1]);
+      });
+    });
+    // Chronological, so "last five" means the last five actually played and
+    // not the last five the gameweek numbering happens to list.
+    var played = [];
+    Object.keys(all).forEach(function (gw) {
+      (all[gw] || []).forEach(function (f) {
+        if (!f || !f[0] || !f[1]) return;
+        if (!(f[3] || f[8])) return;                    // not full time yet
+        if (f[4] == null || f[5] == null) return;       // no score published
+        played.push({ gw: +gw, at: f[7] || "", h: f[0], a: f[1], hs: +f[4], as: +f[5] });
+      });
+    });
+    played.sort(function (x, y) {
+      return (x.at < y.at ? -1 : x.at > y.at ? 1 : 0) || (x.gw - y.gw);
+    });
+    played.forEach(function (m) {
+      var H = seat(m.h), A = seat(m.a);
+      H.mp++; A.mp++;
+      H.gf += m.hs; H.ga += m.as;
+      A.gf += m.as; A.ga += m.hs;
+      if (m.hs > m.as) { H.w++; A.l++; H.pts += 3; H.last5.push("W"); A.last5.push("L"); }
+      else if (m.hs < m.as) { A.w++; H.l++; A.pts += 3; A.last5.push("W"); H.last5.push("L"); }
+      else { H.d++; A.d++; H.pts++; A.pts++; H.last5.push("D"); A.last5.push("D"); }
+    });
+    var rows = Object.keys(byTeam).map(function (t) {
+      var r = byTeam[t];
+      r.gd = r.gf - r.ga;
+      r.last5 = r.last5.slice(-5);
+      return r;
+    });
+    rows.sort(function (a, b) {
+      return (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) ||
+             (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    });
+    // Joint where the three ordered measures are all level; alphabetical order
+    // decides who is printed first but does not separate them.
+    var pos = 0, prev = null;
+    rows.forEach(function (r, i) {
+      var key = r.pts + "/" + r.gd + "/" + r.gf;
+      if (key !== prev) { pos = i + 1; prev = key; }
+      r.pos = pos;
+      r.joint = false;
+    });
+    rows.forEach(function (r) {
+      var same = rows.filter(function (o) { return o.pos === r.pos; });
+      if (same.length > 1) r.joint = true;
+    });
+    var res = { rows: rows, played: played.length, teams: rows.length };
+    if (ds) { try { Object.defineProperty(ds, "_plt", { value: res, enumerable: false }); } catch (e) {} }
+    return res;
+  };
+
   C.priceTable = function (ds) {
     var els = (ds && ds.elements) || null;
     if (!els) return null;
