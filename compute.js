@@ -2084,12 +2084,16 @@
   function fromProjections(proj) {
     var out = { perHour: null, dueIn: null };
     if (!proj || !proj.length) return out;
-    for (var i = 0; i < proj.length; i++) {
-      if (Math.abs(proj[i][1]) >= 100) { out.dueIn = proj[i][0]; break; }
+    // Published as one percentage per run, in run order — but a dataset cached
+    // before that carries [offset, percent, likelihood] triples, and a stale
+    // copy in the browser's own store is exactly what this would meet.
+    var pct = proj.map(function (x) { return (x && x.length) ? x[1] : x; });
+    for (var i = 0; i < pct.length; i++) {
+      if (Math.abs(pct[i]) >= 100) { out.dueIn = i; break; }
     }
-    if (proj.length > 1) {
-      var a = proj[0], b = proj[proj.length - 1], days = b[0] - a[0];
-      if (days > 0) out.perHour = (b[1] - a[1]) / (days * 24);
+    if (pct.length > 1) {
+      var days = pct.length - 1;
+      out.perHour = (pct[pct.length - 1] - pct[0]) / (days * 24);
     }
     return out;
   }

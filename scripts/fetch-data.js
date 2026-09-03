@@ -214,6 +214,11 @@ async function h2hAll(id) {
   // stepped back through the season. A finished gameweek's squads and points
   // never change, so we reuse whatever the last run already wrote and only
   // fetch the gameweeks we are missing (plus the live one, which moves).
+
+  // Per gameweek: how many squads were checked, and how many matched with and
+  // without bonus. A handful of bytes, and it is the standing record of which
+  // formula FPL is actually counting — the fetcher's own arithmetic checked
+  // against the game's.
   const liveAudit = {};
 
   // Everything that moves during a gameweek, in one request pair: each player's
@@ -438,23 +443,28 @@ async function h2hAll(id) {
   // Published: what the app reads, plus what the next run needs to diff against.
   // cost_change_event and cost_change_start are used within this run only —
   // publishing them cost about 9KB a fetch and nothing ever read them back.
-  // FPL's own price-change figures, published on every player and used by its
-  // app: how far along he is, which way and how fast he is moving, and where it
-  // expects him to be over the next few price runs. We had been estimating all
-  // of this from transfer counts. Kept raw and unrounded here — what it means
-  // is settled against real changes before anything is drawn from it.
-  const fplPct = {}, fplRate = {}, fplProj = {}, fplLock = {}, fplCal = {};
+  // FPL's own price-change figures, published on every player: how far along he
+  // is, where it expects him to be over the next few price runs, and the two
+  // things that explain a player who never moves however hard he is sold — a
+  // price locked until a stated time, and a figure still being calibrated.
+  // Carried raw and unrounded; against a real night of changes the percentage
+  // called all twelve movers and nothing else.
+  const fplPct = {}, fplProj = {}, fplLock = {}, fplCal = {};
   (bs.elements || []).forEach((el) => {
     const id = el.id;
     const pct = parseFloat(el.price_change_percent);
     if (isFinite(pct)) fplPct[id] = pct;
-    const rate = Number(el.price_change_hourly_rate);
-    if (isFinite(rate) && rate !== 0) fplRate[id] = rate;
-    // [offset, percent, likelihood] per projection, offsets in the order FPL
-    // gives them; dropped when it projects nothing
-    const proj = (el.price_change_projections || []).map((x) =>
-      [Number(x.offset), parseFloat(x.projected_percent), Number(x.likelihood)])
-      .filter((x) => x.every(isFinite));
+    // Just the projected percentages, one per price run in the order FPL gives
+    // them. The offset it sends alongside each is the position in this array,
+    // and the likelihood is not read by anything — carrying both cost 11KB of
+    // a file that is committed every ten minutes. price_change_hourly_rate is
+    // dropped for the same reason: it counts transfers, not percent, so it can
+    // never be shown against a percentage and nothing asks for it.
+    const proj = (el.price_change_projections || [])
+      .slice()
+      .sort((a, b) => Number(a.offset) - Number(b.offset))
+      .map((x) => parseFloat(x.projected_percent))
+      .filter(isFinite);
     if (proj.length) fplProj[id] = proj;
     if (el.price_change_locked_until) fplLock[id] = el.price_change_locked_until;
     if (el.price_change_calibrating) fplCal[id] = 1;
@@ -462,8 +472,7 @@ async function h2hAll(id) {
 
   const prices = { at: stamp, now: priceNow, owned,
                    tIn, tOut, netSince, exact, total,
-                   fpl: { pct: fplPct, rate: fplRate, proj: fplProj,
-                          lock: fplLock, cal: fplCal } };
+                   fpl: { pct: fplPct, proj: fplProj, lock: fplLock, cal: fplCal } };
 
   // A finished gameweek's deadline is history. FPL does move deadlines when
   // fixtures are rescheduled around European and cup weeks, and the app reads

@@ -11,6 +11,17 @@ your league runs:
 - **Pyramid Battle** — 4 divisions × 3 mini-seasons, promotion/relegation
 - **General Rules** + every prize table for reference
 
+Alongside those, from the burger menu and from any manager's name:
+
+- **Stats & highlights** — the gameweek and the season in cards, with the
+  league sorted into bands
+- **Premier League** — the 20 clubs' fixtures, live scores and minutes
+- **Player prices** — every player's ownership and how close his price is to
+  moving, taken from FPL's own figure
+- **A manager's profile** — the pitch for any gameweek, points, ownership or
+  value on each card, the transfers that built it, form, and a head-to-head
+  against your own team
+
 Everything derives from one primitive — each manager's **per-gameweek net
 score (hits included) + bench points** — so all tabs stay consistent.
 
@@ -22,36 +33,39 @@ score (hits included) + bench points** — so all tabs stay consistent.
    FPL league URL). Optionally add H2H league IDs and a joining fee.
    Participants pick their own team by name under the gear menu, which
    highlights them across every tab and adds a shortcut to their profile.
-3. Tap **↻ Refresh from FPL**. The app pulls the roster and every manager's
-   history, then fills in all tabs.
+3. That is usually all. The app loads the published `data.json` and fills in
+   every tab; the ↻ button is there to pull straight from the FPL API yourself
+   if you want the very latest, or to set the league up the first time.
 
-### Why a proxy?
+### Where the data comes from
 
-The FPL API is public and **needs no API key**, but it sends no CORS header,
-so a browser can't call it directly. Requests route through a public CORS
-proxy (default: allorigins). If it's slow or down, pick another in
-**Settings → Data source**, or point at your own proxy with a
-`https://your-proxy/?url={url}` template.
+`data.json` is built for everyone by a GitHub Action, not by a person: on each
+run `scripts/fetch-data.js` reads the FPL API from the runner (which reaches it
+directly, so no proxy and no API key), `scripts/verify-data.js` checks the
+result against FPL's own totals, and the file is committed and deployed to
+Pages in the same job. Nobody has to export anything by hand, and 245 phones
+never hit the FPL API for the same numbers.
 
-## Recommended workflow for the organiser (avoids 245 people hammering a proxy)
-
-1. Once per gameweek, open the app and **↻ Refresh**.
-2. **Settings → Export data.json**.
-3. Commit that file as **`gameon/data.json`**.
-
-Everyone else's app loads `gameon/data.json` automatically (no live FPL calls),
-so it's fast and reliable for the whole league. They can still refresh live if
-they want the very latest.
+The workflow carries its own `schedule:`, but GitHub drops and delays scheduled
+runs badly — enough to miss a deadline — so a Cloudflare Worker cron dispatches
+it every ten minutes as well. That same worker is the CORS proxy the browser
+uses, and it accepts only `fantasy.premierleague.com/api/` URLs: the FPL API
+sends no CORS header, so a page cannot call it directly, and an open proxy is
+not something to leave lying about. `config.js` lists fallback proxies if it is
+ever unreachable.
 
 ## Live gameweek (players played)
 
-While a gameweek is in progress the LMS tab shows a **Live** view with a
-**Played** column (e.g. `10/12`, captain counts twice) and highlights the
-bottom N managers in the **drop zone** in red. On refresh, for the in-progress
-GW the app pulls `event/{gw}/live/` (minutes) and each surviving manager's
-`entry/{id}/event/{gw}/picks/`, counting started players (weighted by
-multiplier) who have minutes. No API key is needed — all FPL endpoints are
-public. Endpoints used: `bootstrap-static`, `fixtures`, `event/{gw}/live`,
+While a gameweek is in play every tab scores live. The published file carries
+the slow half — squads, standings, history — and the browser folds the fast
+half over it every two minutes through the proxy: each player's points and
+minutes from `event/{gw}/live/`, plus `fixtures/` to know which matches have
+started. Bonus is worked out from bps before FPL publishes it, and drops back
+to FPL's own the moment a fixture is finalised.
+
+The LMS tab additionally shows a **Played** column (e.g. `10/12`, captain
+counts twice) and highlights the bottom N managers in the **drop zone** in red.
+No API key is needed — all FPL endpoints are public. Endpoints used: `bootstrap-static`, `fixtures`, `event/{gw}/live`,
 `entry/{id}`, `entry/{id}/history`, `entry/{id}/event/{gw}/picks`,
 `element-summary/{id}`, `leagues-classic/{id}/standings`,
 `leagues-h2h/{id}/standings`.
@@ -78,12 +92,18 @@ Import/Export moves the whole bundle (config + overrides + data) as one file.
 | File | Purpose |
 |------|---------|
 | `index.html` | app shell + tab layout |
-| `styles.css` | dark "stadium" theme (gold/purple) |
+| `styles.css` | the theme — light, dark or whatever the phone is set to |
 | `config.js` | default rules, prizes, schedules (editable in Settings) |
 | `api.js` | CORS-proxied FPL client + concurrency pool |
-| `data.js` | settings/overrides (localStorage) + dataset (IndexedDB) + refresh + import/export |
+| `data.js` | settings/overrides (localStorage) + dataset (IndexedDB) + the live overlay + import/export |
 | `compute.js` | all competition math |
 | `app.js` | UI rendering, refresh flow, admin panel |
+| `data.json` | what the Action publishes; what every phone actually reads |
+| `scripts/fetch-data.js` | the Action's fetcher — builds `data.json` from the FPL API |
+| `scripts/verify-data.js` | checks that file against FPL's own totals before it ships |
+| `scripts/bonus.js` | provisional bonus from bps, shared by the fetcher and the app |
+| `worker.js` | the Cloudflare Worker: FPL-only CORS proxy, and the cron that dispatches the Action |
+| `.github/workflows/` | fetch-and-publish, and the Pages deploy |
 | `sw.js`, `manifest.json`, `icon.svg` | PWA (installable, offline shell) |
 
 Not affiliated with the Premier League or FPL. Data © the Fantasy Premier League.
