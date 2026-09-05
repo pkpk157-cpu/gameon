@@ -1590,27 +1590,41 @@
   // What a manager has actually won, kept separate from what they are on
   // course for. A league plays for real money — showing an unsettled standing
   // as winnings would be plainly wrong.
-  C.winnings = function (ds, id) {
-    if (!ds || !id) return null;
-    id = +id;
-    var items = [], settledTotal = 0, onTrackTotal = 0;
-    function add(comp, label, amount, settled) {
+  // What every manager has won, in one pass.
+  //
+  // This used to be worked out one manager at a time, and each of those calls
+  // rebuilt the classic table, every month, the whole pyramid and the LMS run
+  // from scratch: about 17ms a manager, so a league of 245 spent four seconds
+  // on a laptop and the better part of half a minute on a phone, with the main
+  // thread locked the whole way. The four tables do not depend on which
+  // manager is being asked about, so they are built once and walked.
+  C.winningsAll = function (ds) {
+    var out = {};
+    if (!ds || !ds.managers) return out;
+    var seat = function (id) {
+      return out[id] || (out[id] = { items: [], settled: 0, onTrack: 0, total: 0 });
+    };
+    (ds.managers || []).forEach(function (m) { seat(+m.id); });
+    function add(id, comp, label, amount, settled) {
       if (!amount) return;
-      items.push({ comp: comp, label: label, amount: amount, settled: !!settled });
-      if (settled) settledTotal += amount; else onTrackTotal += amount;
+      var w = seat(+id);
+      w.items.push({ comp: comp, label: label, amount: amount, settled: !!settled });
+      if (settled) w.settled += amount; else w.onTrack += amount;
+      w.total += amount;
     }
 
     // Classic only pays out at the end of the season.
     var finished = C.finishedGws(ds);
     var seasonDone = finished.length >= (cfg().totalGameweeks || 38);
     C.classic(ds).forEach(function (r) {
-      if (+r.id === id && r.prize) add("Classic", "#" + r.computedRank + " overall", r.prize, seasonDone);
+      if (r.prize) add(r.id, "Classic", "#" + r.computedRank + " overall", r.prize, seasonDone);
     });
 
     // A month pays once every one of its gameweeks is done.
     C.monthly(ds).forEach(function (m) {
-      var row = m.rows.filter(function (r) { return +r.id === id; })[0];
-      if (row && row.prize) add("Monthly", (m.label || m.name) + " · #" + row.pos, row.prize, m.complete);
+      m.rows.forEach(function (r) {
+        if (r.prize) add(r.id, "Monthly", (m.label || m.name) + " · #" + r.pos, r.prize, m.complete);
+      });
     });
 
     // A pyramid mini-season pays once its gameweeks are done.
@@ -1618,19 +1632,26 @@
     C.pyramid(ds).seasons.forEach(function (se) {
       var done = (se.gws || []).length > 0 && se.gws.every(function (g) { return fset[g]; });
       se.divisions.forEach(function (dv) {
-        var row = dv.rows.filter(function (r) { return +r.id === id; })[0];
-        if (row && row.prize) add("Pyramid", se.name + " · " + dv.name + " · #" + row.pos, row.prize, done);
+        dv.rows.forEach(function (r) {
+          if (r.prize) add(r.id, "Pyramid", se.name + " · " + dv.name + " · #" + r.pos, r.prize, done);
+        });
       });
     });
 
     // Last Manager Standing pays when a champion exists.
     var lms = C.lms(ds);
-    if (lms.champion && +lms.champion.id === id) {
-      add("Last Manager", "Champion", (cfg().lms.prizes || {}).champion, true);
+    if (lms.champion) {
+      add(lms.champion.id, "Last Manager", "Champion", (cfg().lms.prizes || {}).champion, true);
     }
+    return out;
+  };
 
-    return { items: items, settled: settledTotal, onTrack: onTrackTotal,
-             total: settledTotal + onTrackTotal };
+  // One manager's share of the above. The rules live in one place, so a
+  // profile's XP card and the winnings page cannot drift apart.
+  C.winnings = function (ds, id) {
+    if (!ds || !id) return null;
+    var w = C.winningsAll(ds)[+id];
+    return w || { items: [], settled: 0, onTrack: 0, total: 0 };
   };
 
   // Where a manager sits against the paid places in the Classic league.

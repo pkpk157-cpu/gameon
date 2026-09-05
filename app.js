@@ -25,6 +25,9 @@
     book: '<path d="M5 4.5A2 2 0 0 1 7 3h11v15H7a2 2 0 0 0-2 2V4.5Z"/><path d="M5 18.5A2 2 0 0 0 7 21h11"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M20 12a8 8 0 0 0-.12-1.36l1.9-1.48-2-3.46-2.24.9a7.9 7.9 0 0 0-2.36-1.36L14.7 3h-4L10.3 5.3a7.9 7.9 0 0 0-2.36 1.36l-2.24-.9-2 3.46 1.9 1.48A8 8 0 0 0 5.48 12a8 8 0 0 0 .12 1.36l-1.9 1.48 2 3.46 2.24-.9a7.9 7.9 0 0 0 2.36 1.36l.4 2.34h4l.4-2.34a7.9 7.9 0 0 0 2.36-1.36l2.24.9 2-3.46-1.9-1.48A8 8 0 0 0 20 12Z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5M12 7.8h.01"/>',
+    coin: '<ellipse cx="12" cy="7.4" rx="7" ry="3"/>' +
+      '<path d="M5 7.4v4.3c0 1.66 3.13 3 7 3s7-1.34 7-3V7.4"/>' +
+      '<path d="M5 11.7v4.3c0 1.66 3.13 3 7 3s7-1.34 7-3v-4.3"/>',
     person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
     sync: '<path d="M20 11a8 8 0 0 0-14.3-4.4M4 13a8 8 0 0 0 14.3 4.4"/><path d="M5 3v4h4M19 21v-4h-4"/>'
   };
@@ -118,11 +121,6 @@
   var G_FOOT = '<circle cx="15" cy="15" r="7.4" fill="#fff"/>' +
     '<path d="M15 12.3l2.6 1.9-1 3h-3.2l-1-3Z" fill="rgba(0,0,0,.3)"/>' +
     '<path d="M15 12.3V7.7M17.6 14.2l4.3-1.5M16.6 17.2l2.7 3.7M13.4 17.2l-2.7 3.7M12.4 14.2 8.1 12.7" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.2"/>';
-  // stacked coins, for the winnings section
-  var G_COIN = '<ellipse cx="15" cy="10.4" rx="7.2" ry="2.9" fill="#fff"/>' +
-    '<path d="M7.8 10.4v3.1c0 1.6 3.2 2.9 7.2 2.9s7.2-1.3 7.2-2.9v-3.1" fill="#fff"/>' +
-    '<path d="M7.8 14.9v3.1c0 1.6 3.2 2.9 7.2 2.9s7.2-1.3 7.2-2.9v-3.1" fill="#fff" opacity=".82"/>' +
-    '<ellipse cx="15" cy="10.4" rx="3.9" ry="1.5" fill="rgba(0,0,0,.22)"/>';
   var G_CHART = '<path d="M8.3 20.6l4.3-4.5 3 2.4 5.8-6.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
     '<path d="M17.7 11.9h3.7v3.7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
   var TILE = {
@@ -312,6 +310,7 @@
     // 3 — the league
     h += '<div class="menu"><div class="lab-sm">League</div>' +
       menuItem("pfStats", "classic", "Stats & highlights") +
+      menuItem("pfWinnings", "coin", "Winnings") +
       menuItem("pfCompare", "h2h", "Head to head") +
       menuItem("pfRules", "book", "Game rules") +
       '</div>';
@@ -369,6 +368,7 @@
     });
     function go(hash) { closeProfile(true); navFromOverlay(hash); }
     $("#pfStats").addEventListener("click", function () { go("stats"); });
+    $("#pfWinnings").addEventListener("click", function () { go("winnings"); });
     $("#pfCompare").addEventListener("click", function () { go("compare"); });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
     if (me) {
@@ -855,8 +855,9 @@
      Ordered most first; level amounts share a place. */
   function renderWinnings(host, ds) {
     if (!ds || !ds.managers || !ds.managers.length) { host.innerHTML = emptyState(); return; }
+    var all = K.winningsAll(ds);
     var rows = ds.managers.map(function (m) {
-      var w = K.winnings(ds, m.id);
+      var w = all[+m.id] || { items: [], settled: 0, onTrack: 0 };
       return { id: m.id, name: m.entryName, who: m.playerName || "", amount: w.settled,
                onTrack: w.onTrack,
                items: w.items.filter(function (i) { return i.settled; }) };
@@ -867,7 +868,7 @@
       // Nothing is settled yet, which is a state worth naming rather than an
       // empty page: it says what has to happen before anyone appears here.
       var waiting = ds.managers.reduce(function (n, m) {
-        return n + (K.winnings(ds, m.id).onTrack > 0 ? 1 : 0);
+        return n + (((all[+m.id] || {}).onTrack > 0) ? 1 : 0);
       }, 0);
       host.innerHTML = '<div class="card"><div class="bd">' +
         '<div class="wnone"><b>Nothing is settled yet.</b>' +
@@ -926,12 +927,10 @@
         i: tile("mpl", "#9d5bd2", "#43146e", G_FOOT) },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: tile("mgo", "#ffd76a", "#e6a417", G_TROPHY) },
-      { k: "winnings", go: "winnings", t: "Winnings", s: "Who has money in the bank, most first",
-        i: tile("mwn", "#ffd76a", "#c98a12", G_COIN) },
       { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving",
         i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
     ];
-    var inLeague = here !== "prices" && here !== "pl" && here !== "winnings";
+    var inLeague = here !== "prices" && here !== "pl";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
         var on = (it.k === "league") ? inLeague : (here === it.k);
@@ -3080,8 +3079,9 @@
     h += '</div>';
 
     // Who is winning money, settled first.
+    var wAll = K.winningsAll(ds);
     var purse = ds.managers.map(function (m) {
-      var w = K.winnings(ds, m.id);
+      var w = wAll[+m.id] || { settled: 0, onTrack: 0, total: 0 };
       return { id: m.id, name: m.entryName, settled: w.settled, onTrack: w.onTrack, total: w.total };
     }).filter(function (x) { return x.total > 0; })
       .sort(function (a, b) { return (b.settled - a.settled) || (b.onTrack - a.onTrack); });
