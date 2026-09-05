@@ -936,8 +936,12 @@
     // everyone there has played.
     var clubFx = {};
     (((ds.gwFixtures || {})[gw]) || []).forEach(function (f) {
-      (clubFx[f[0]] = clubFx[f[0]] || []).push({ opp: f[1], home: true, started: !!f[2], finished: !!f[3] });
-      (clubFx[f[1]] = clubFx[f[1]] || []).push({ opp: f[0], home: false, started: !!f[2], finished: !!f[3] });
+      // over is the final whistle (finished_provisional) — the same moment the
+      // scoreboard turns "live" into "Full time" — so a card and the fixture
+      // row above it never disagree about whether a match is still on.
+      var over = !!(f[3] || f[8]);
+      (clubFx[f[0]] = clubFx[f[0]] || []).push({ opp: f[1], home: true, started: !!f[2], finished: !!f[3], over: over });
+      (clubFx[f[1]] = clubFx[f[1]] || []).push({ opp: f[0], home: false, started: !!f[2], finished: !!f[3], over: over });
     });
     function build(el, mult, isCap, isVice) {
       var meta = els[el] || ["?", 0, "", 0, 0];
@@ -949,11 +953,13 @@
       // The card shows the opponent until the player's match kicks off, then
       // the points take over. "Yet to play" is every fixture still unstarted.
       var waiting = fx.length > 0 && fx.every(function (x) { return !x.started; });
+      // In play right now: his points are still moving, and the card says so.
+      var live = fx.some(function (x) { return x.started && !x.over; });
       var oppText = fx.map(function (x) { return x.opp + (x.home ? " (H)" : " (A)"); }).join(" · ");
       return { el: el, name: meta[0], type: meta[1], team: meta[2], pos: POS[meta[1]] || "",
                pts: base * (mult || 1), base: base, prov: prov,
                price: meta[3] || 0, eo: (eot && eot.eo[el]) || 0,
-               opp: oppText, waiting: waiting,
+               opp: oppText, waiting: waiting, live: live,
                cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
 

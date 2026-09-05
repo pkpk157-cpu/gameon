@@ -2498,11 +2498,14 @@
     // Before his match kicks off a player's card names the opponent — MUN (A)
     // — the way the official app does; the points take the slot the moment
     // the fixture starts.
-    var footer;
-    if ((!metric || metric === "pts") && p.waiting && p.opp) {
+    // While his match is in play the points bar lights up, as the official
+    // app's does, so a glance says whose score is still moving.
+    var footer, ptsView = !metric || metric === "pts";
+    if (ptsView && p.waiting && p.opp) {
       footer = '<div class="ppts opp">' + esc(p.opp) + '</div>';
     } else {
-      footer = '<div class="ppts' + (metric && metric !== "pts" ? ' alt' : '') + '">' + esc(metricOf(p, metric)) + '</div>';
+      footer = '<div class="ppts' + (ptsView ? (p.live ? ' live' : '') : ' alt') + '"' +
+        (ptsView && p.live ? ' title="In play"' : '') + '>' + esc(metricOf(p, metric)) + '</div>';
     }
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
