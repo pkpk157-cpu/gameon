@@ -706,6 +706,8 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
   font-size:8.5px; line-height:1.15; font-variant-numeric:tabular-nums;
   background:rgba(0,0,0,.6); box-shadow:0 1px 3px rgba(0,0,0,.4); }
 .pmv b { font-size:7px; line-height:1; }
+/* three digits — past the line, waiting for the night — go a shade tighter so they clear a 320px card */
+.pmv.w3 { font-size:8px; padding:1px 2px 1px 1px; gap:0; }
 .pmv.up { color:var(--prog-go); box-shadow:inset 0 0 0 1px var(--prog-go), 0 1px 3px rgba(0,0,0,.4); }
 .pmv.down { color:var(--prog-drop); box-shadow:inset 0 0 0 1px var(--prog-drop), 0 1px 3px rgba(0,0,0,.4); }
 .pmv.soon.up { background:var(--prog-go); color:var(--prog-go-ink); box-shadow:0 1px 3px rgba(0,0,0,.45); }
@@ -1440,3 +1442,41 @@ table.t.pltbl tr.plrow.drop td.pos { border-left-color:var(--bad); }
 
 /* chip pills that open the who-played-it page */
 button.chipgo { cursor:pointer; font:inherit; font-size:12px; border:1px solid var(--gold); }
+
+/* a Premier League fixture opened: the two squads side by side */
+.fx.tap { cursor:pointer; }
+.mhead { padding:0; overflow:hidden; }
+.mcols { display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:start; }
+.mcol, .mcols > .card + .card { margin:0; padding:0; overflow:hidden; min-width:0; }
+.mclub {
+  display:flex; align-items:baseline; justify-content:space-between; gap:6px;
+  padding:10px 10px 8px; border-bottom:1px solid var(--line-strong);
+}
+.mclub b { font-size:13px; font-weight:800; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mtot { flex:none; font-size:12px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--accent); }
+.mrow {
+  display:flex; align-items:center; gap:5px; padding:9px 10px; min-width:0;
+  border-bottom:1px solid var(--line); cursor:pointer;
+}
+.mrow:last-child { border-bottom:0; }
+.mrow:active { background:var(--glass-hi); }
+.mn { flex:1 1 auto; min-width:0; font-size:12.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mpos { flex:none; font-size:9px; font-weight:700; letter-spacing:.06em; color:var(--ink-faint); }
+.mv { flex:none; min-width:30px; text-align:right; font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; }
+.mrow.dim .mn, .mrow.dim .mv { color:var(--ink-faint); font-weight:600; }
+.mrest { border-top:1px solid var(--line); }
+.mcols + .koline { margin-top:14px; }
+.mrest summary {
+  list-style:none; cursor:pointer; padding:9px 10px; font-size:11.5px; font-weight:700;
+  color:var(--ink-soft); user-select:none;
+}
+.mrest summary::-webkit-details-marker { display:none; }
+.mrest summary::after { content:" ▾"; }
+.mrest[open] summary::after { content:" ▴"; }
+.mrest[open] summary { border-bottom:1px solid var(--line); }
+@media (max-width: 359px) {
+  .mpos { display:none; }
+  .mrow { padding:9px 7px; }
+  .mclub { padding:9px 7px 7px; }
+  .mn { font-size:12px; }
+}

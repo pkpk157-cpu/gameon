@@ -777,6 +777,7 @@
   }
 
   function renderPl(host, ds) {
+    if (state.plMatch) return renderMatch(host, ds);
     if (state.plTab === "table") return renderPlTable(host, ds);
     var all = (ds && ds.gwFixtures) || {};
     var gws = Object.keys(all).map(Number).sort(function (a, b) { return a - b; });
@@ -806,28 +807,7 @@
       if (!cur || cur.label !== label) { cur = { label: label, fx: [] }; groups.push(cur); }
       cur.fx.push(f);
     });
-    var row = function (f) {
-      // finished_provisional is full time on the pitch — the final whistle has
-      // gone even while FPL still folds the bonus in — so it reads Full time.
-      var started = !!f[2], done = !!f[3] || !!f[8];
-      var hs = f[4], as = f[5], mins = f[6] || 0, ko = f[7] ? new Date(f[7]) : null;
-      var pill, cap = "";
-      if (!started) {
-        var t = ko ? ko.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "TBC";
-        pill = '<div class="fxsc ahead"><span class="fxv">' + esc(t) + '</span></div>';
-      } else if (hs == null || as == null) {
-        // a dataset cached before scores were published: the next sync fills them
-        pill = '<div class="fxsc ahead"><span class="fxv">–</span></div>';
-        cap = done ? "Full time" : "In play";
-      } else {
-        pill = '<div class="fxsc"><span class="fxp">' + hs + '</span><span class="fxp">' + as + '</span></div>';
-        cap = done ? "Full time" : '<span class="golive">' + (mins ? mins + "′ · " : "") + 'live</span>';
-      }
-      return '<div class="fx' + (started ? "" : " ahead") + '">' +
-        '<div class="fxs l"><span class="fxm">' + esc(full(f[0])) + '</span></div>' + pill +
-        '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + '</span></div>' +
-        (cap ? '<div class="fxw">' + cap + '</div>' : "") + '</div>';
-    };
+    var row = function (f) { return plFixtureRow(f, full, gw); };
     var h = plHead("fixtures") + '<div class="plnav">' +
       '<button type="button" class="gwarr" id="plPrev" aria-label="Earlier gameweek"' + (at > 0 ? '' : ' disabled') + '>‹</button>' +
       '<h2>Gameweek ' + gw + '</h2>' +
@@ -844,7 +824,105 @@
     }; };
     $("#plPrev", host).addEventListener("click", flip(-1));
     $("#plNext", host).addEventListener("click", flip(1));
+    // every fixture is a doorway to its match
+    $all("[data-plfx]", host).forEach(function (el) {
+      el.addEventListener("click", function () { location.hash = "pl/" + el.getAttribute("data-plfx"); });
+    });
     plWire(host, ds);
+  }
+
+  // One fixture as a row: the kick-off time until it starts, the live score
+  // with the minute, then the final score. finished_provisional is full time on
+  // the pitch — the whistle has gone even while FPL still folds the bonus in —
+  // so it reads Full time. Given a gameweek the row is a link to its match.
+  function plFixtureRow(f, full, tapGw) {
+    var started = !!f[2], done = !!f[3] || !!f[8];
+    var hs = f[4], as = f[5], mins = f[6] || 0, ko = f[7] ? new Date(f[7]) : null;
+    var pill, cap = "";
+    if (!started) {
+      var t = ko ? ko.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "TBC";
+      pill = '<div class="fxsc ahead"><span class="fxv">' + esc(t) + '</span></div>';
+    } else if (hs == null || as == null) {
+      // a dataset cached before scores were published: the next sync fills them
+      pill = '<div class="fxsc ahead"><span class="fxv">–</span></div>';
+      cap = done ? "Full time" : "In play";
+    } else {
+      pill = '<div class="fxsc"><span class="fxp">' + hs + '</span><span class="fxp">' + as + '</span></div>';
+      cap = done ? "Full time" : '<span class="golive">' + (mins ? mins + "′ · " : "") + 'live</span>';
+    }
+    var tap = tapGw ? ' tap" data-plfx="' + tapGw + "/" + esc(f[0]) + "-" + esc(f[1]) +
+      '" role="link" tabindex="0" aria-label="' + esc(full(f[0])) + ' v ' + esc(full(f[1])) + ', open the match' : '';
+    return '<div class="fx' + (started ? "" : " ahead") + tap + '">' +
+      '<div class="fxs l"><span class="fxm">' + esc(full(f[0])) + '</span></div>' + pill +
+      '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + '</span></div>' +
+      (cap ? '<div class="fxw">' + cap + '</div>' : "") + '</div>';
+  }
+
+  /* ---- one match ---------------------------------------------------------
+     The two squads side by side, each player with what he has scored this
+     gameweek, from the same points and provisional bonus the pitch cards use.
+     Points, ownership or value on every row, the way a profile's pitch offers
+     them; tap a player for his breakdown. Who featured leads; the rest fold
+     away underneath. Before kick-off the whole squad shows and points wait. */
+  function renderMatch(host, ds) {
+    var m = state.plMatch, sheet = K.matchSheet(ds, m.gw, m.home, m.away);
+    if (!sheet) {
+      host.innerHTML = plHead("fixtures") +
+        '<div class="callout">That match is not in Gameweek ' + m.gw + '’s fixtures.</div>';
+      plWire(host, ds);
+      return;
+    }
+    var metric = METRICS[state.plMetric] ? state.plMetric : "pts";
+    var fx = sheet.fixture, names = ds.teamNames || {};
+    var full = function (k) { return names[k] || k; };
+    var f = [m.home, m.away, fx.started ? 1 : 0, fx.done ? 1 : 0, fx.hs, fx.as, fx.mins, fx.ko, fx.done ? 1 : 0];
+
+    var h = '<div class="card mhead"><div class="fxwrap"><div class="fxgrp">' +
+      plFixtureRow(f, full, null) + '</div></div></div>';
+    h += '<div class="psegrow"><div class="pseg sm">' + Object.keys(METRICS).map(function (k) {
+      return '<button type="button"' + (metric === k ? ' class="on"' : '') +
+        ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
+    }).join("") + '</div></div>';
+
+    var anyProv = false;
+    var rowOf = function (p, dim) {
+      if (p.prov) anyProv = true;
+      var v = metric === "pts" ? (fx.started ? num(p.pts) : "–") : metricOf(p, metric);
+      return '<div class="mrow' + (dim ? ' dim' : '') + '" data-el="' + p.el + '" data-mult="1"' +
+        ' role="button" tabindex="0">' +
+        '<span class="mn">' + esc(p.name) + '</span><span class="mpos">' + esc(p.pos) + '</span>' +
+        '<span class="mv">' + v + '</span></div>';
+    };
+    var col = function (sd) {
+      var c = '<div class="card mcol"><div class="mclub"><b>' + esc(sd.name) + '</b>' +
+        (fx.started && metric === "pts" ? '<span class="mtot">' + num(sd.total) + ' pts</span>' : '') + '</div>';
+      c += sd.featured.map(function (p) { return rowOf(p, false); }).join("");
+      if (sd.rest.length) {
+        if (!fx.started) c += sd.rest.map(function (p) { return rowOf(p, false); }).join("");
+        else c += '<details class="mrest"><summary>Did not feature · ' + sd.rest.length + '</summary>' +
+          sd.rest.map(function (p) { return rowOf(p, true); }).join("") + '</details>';
+      }
+      return c + '</div>';
+    };
+    // data-bgw tells the breakdown modal which gameweek a tapped row belongs to
+    h += '<div class="mcols" data-bgw="' + m.gw + '">' + col(sheet.home) + col(sheet.away) + '</div>';
+
+    var notes = [];
+    if (!fx.started) notes.push("Not kicked off yet — points appear from kick-off. Until then each squad is in price order.");
+    else if (!fx.done) notes.push("In play: points move as the match does, bonus included as it stands.");
+    if (anyProv && fx.started) notes.push("Bonus is provisional until FPL confirms it.");
+    [sheet.home, sheet.away].forEach(function (sd) {
+      if (sd.games > 1) notes.push(sd.name + " plays " + sd.games + " matches this gameweek; these are gameweek points, which FPL does not split by match.");
+    });
+    if (notes.length) h += '<div class="koline">' + notes.map(esc).join(" ") + '</div>';
+
+    host.innerHTML = h;
+    $(".psegrow", host).addEventListener("click", function (e) {
+      var b = e.target.closest("[data-metric]");
+      if (!b) return;
+      state.plMetric = b.getAttribute("data-metric");
+      renderMatch(host, ds);
+    });
   }
 
   /* ---- winnings ---------------------------------------------------------
@@ -1098,7 +1176,7 @@
     $("#barMenu").addEventListener("click", function () { openProfile(); });
     // Tap a player anywhere a pitch is drawn: the FPL-style points breakdown.
     document.addEventListener("click", function (e) {
-      var card = e.target.closest && e.target.closest(".pcard[data-el]");
+      var card = e.target.closest && e.target.closest(".pcard[data-el], .mrow[data-el]");
       if (!card) return;
       var host = card.closest("[data-bgw]");
       if (!host) return;
@@ -1186,6 +1264,8 @@
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
       state.plGw = +parts[1] || null;
+      var mm = /^([A-Z]{3})-([A-Z]{3})$/.exec(parts[2] || "");
+      state.plMatch = (mm && state.plGw) ? { gw: state.plGw, home: mm[1], away: mm[2] } : null;
     }
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
     track(view === "rules" && parts[1] ? "/rules/" + parts[1] : "/" + view);
@@ -1278,7 +1358,11 @@
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
     else { info.style.display = "none"; info.removeAttribute("data-rules"); }
   }
-  function goBack() { location.hash = state.backView || "classic"; }
+  function goBack() {
+    // A match was opened from a list of fixtures; that is where back leads.
+    if (state.view === "pl" && state.plMatch) { location.hash = "pl/" + state.plMatch.gw; return; }
+    location.hash = state.backView || "classic";
+  }
 
   function updateDataState() { /* data freshness now lives in the profile sheet */ }
 
@@ -2406,7 +2490,7 @@
     // those six pixels are what let three digits sit on a 320px phone.
     if (metric === "val" && p.move) {
       var mv = p.move, mvn = Math.round(mv.mag);
-      badge += '<i class="pmv ' + (mv.up ? "up" : "down") + (mv.soon ? " soon" : "") +
+      badge += '<i class="pmv ' + (mv.up ? "up" : "down") + (mv.soon ? " soon" : "") + (mvn > 99 ? " w3" : "") +
         '" role="img" aria-label="' + mvn + '% of the way to a price ' +
         (mv.up ? "rise" : "fall") + (mv.soon ? ", expected tonight" : "") + '">' +
         '<b>' + (mv.up ? "\u25b2" : "\u25bc") + '</b>' + mvn + '</i>';

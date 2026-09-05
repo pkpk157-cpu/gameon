@@ -2144,6 +2144,61 @@
     return out;
   }
 
+  /* ---- one match, both squads --------------------------------------------
+     Every player of the two clubs with what he has scored this gameweek, from
+     the same live points and provisional bonus the pitch cards read, so a
+     player reads the same number here as on any squad that owns him. Who
+     actually featured comes from the stored breakdown — a minutes line is only
+     written for a player who has been on the pitch — so the ones who played
+     lead and the rest sit under them. Before kick-off nobody has featured and
+     the whole squad shows, ordered by price, which is the nearest thing to
+     "who matters" that exists before a team sheet.
+
+     A club that plays twice in a gameweek carries its gameweek total here; the
+     published points are not split by fixture, and the page says so.  */
+  C.matchSheet = function (ds, gw, home, away) {
+    if (!ds || !ds.elements || !ds.gwFixtures) return null;
+    gw = +gw;
+    var fixtures = ds.gwFixtures[gw] || [];
+    var f = fixtures.filter(function (x) { return x[0] === home && x[1] === away; })[0];
+    if (!f) return null;
+    var lp = liveAt(ds, gw), pb = bonusAt(ds, gw), bd = (ds.breakdown || {})[gw] || {};
+    var eot = eoTable(ds, gw), names = ds.teamNames || {};
+    var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+    var minutesOf = function (el) {
+      var r = (bd[el] || []).filter(function (x) { return x[0] === "minutes"; })[0];
+      return r ? +r[1] : null;
+    };
+    var side = function (club) {
+      var players = Object.keys(ds.elements).filter(function (el) {
+        return ds.elements[el][2] === club;
+      }).map(function (el) {
+        var m = ds.elements[el], prov = pb[el] || 0, base = (lp[el] || 0) + prov;
+        return { el: +el, name: m[0], type: m[1], pos: POS[m[1]] || "", team: club,
+                 pts: base, base: base, prov: prov, price: m[3] || 0, owned: m[4] || 0,
+                 eo: (eot && eot.eo[el]) || 0, mins: minutesOf(el) };
+      });
+      var featured = players.filter(function (p) { return p.mins > 0; });
+      var rest = players.filter(function (p) { return !(p.mins > 0); });
+      featured.sort(function (a, b) {
+        return (b.pts - a.pts) || (b.mins - a.mins) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+      });
+      rest.sort(function (a, b) {
+        return (b.price - a.price) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+      });
+      var games = fixtures.filter(function (x) { return x[0] === club || x[1] === club; }).length;
+      var total = 0; featured.forEach(function (p) { total += p.pts; });
+      return { club: club, name: names[club] || club, featured: featured, rest: rest,
+               total: total, games: games };
+    };
+    return {
+      gw: gw,
+      fixture: { home: home, away: away, started: !!f[2], done: !!(f[3] || f[8]),
+                 hs: f[4], as: f[5], mins: f[6] || 0, ko: f[7] || null },
+      home: side(home), away: side(away)
+    };
+  };
+
   /* ---- the Premier League table ----------------------------------------
      Built from the same published fixtures the scoreboard and the pitch cards
      read, so the two can never disagree: a result the scoreboard shows is a
