@@ -118,6 +118,11 @@
   var G_FOOT = '<circle cx="15" cy="15" r="7.4" fill="#fff"/>' +
     '<path d="M15 12.3l2.6 1.9-1 3h-3.2l-1-3Z" fill="rgba(0,0,0,.3)"/>' +
     '<path d="M15 12.3V7.7M17.6 14.2l4.3-1.5M16.6 17.2l2.7 3.7M13.4 17.2l-2.7 3.7M12.4 14.2 8.1 12.7" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.2"/>';
+  // stacked coins, for the winnings section
+  var G_COIN = '<ellipse cx="15" cy="10.4" rx="7.2" ry="2.9" fill="#fff"/>' +
+    '<path d="M7.8 10.4v3.1c0 1.6 3.2 2.9 7.2 2.9s7.2-1.3 7.2-2.9v-3.1" fill="#fff"/>' +
+    '<path d="M7.8 14.9v3.1c0 1.6 3.2 2.9 7.2 2.9s7.2-1.3 7.2-2.9v-3.1" fill="#fff" opacity=".82"/>' +
+    '<ellipse cx="15" cy="10.4" rx="3.9" ry="1.5" fill="rgba(0,0,0,.22)"/>';
   var G_CHART = '<path d="M8.3 20.6l4.3-4.5 3 2.4 5.8-6.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
     '<path d="M17.7 11.9h3.7v3.7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
   var TILE = {
@@ -842,6 +847,73 @@
     plWire(host, ds);
   }
 
+  /* ---- winnings ---------------------------------------------------------
+     Only what is actually won. A competition pays when it finishes, so a
+     month that has been played is money in the bank and a classic table that
+     is still moving is not — the same settled flag every profile already
+     shows, so this page and a manager's own XP card can never disagree.
+     Ordered most first; level amounts share a place. */
+  function renderWinnings(host, ds) {
+    if (!ds || !ds.managers || !ds.managers.length) { host.innerHTML = emptyState(); return; }
+    var rows = ds.managers.map(function (m) {
+      var w = K.winnings(ds, m.id);
+      return { id: m.id, name: m.entryName, who: m.playerName || "", amount: w.settled,
+               onTrack: w.onTrack,
+               items: w.items.filter(function (i) { return i.settled; }) };
+    }).filter(function (x) { return x.amount > 0; })
+      .sort(function (a, b) { return (b.amount - a.amount) || COLL.compare(a.name, b.name); });
+
+    if (!rows.length) {
+      // Nothing is settled yet, which is a state worth naming rather than an
+      // empty page: it says what has to happen before anyone appears here.
+      var waiting = ds.managers.reduce(function (n, m) {
+        return n + (K.winnings(ds, m.id).onTrack > 0 ? 1 : 0);
+      }, 0);
+      host.innerHTML = '<div class="card"><div class="bd">' +
+        '<div class="wnone"><b>Nothing is settled yet.</b>' +
+        '<p>A competition pays out when it finishes — a month when its last gameweek is played, ' +
+        'the Pyramid when its mini-season ends, Classic and Last Manager Standing at the end of ' +
+        'the season. Until then the standings still move.</p>' +
+        (waiting ? '<p>' + num(waiting) + ' manager' + (waiting === 1 ? " is" : "s are") +
+          ' in an XP place as it stands. Their tabs show where they are.</p>' : "") +
+        '</div></div></div>';
+      return;
+    }
+
+    var pot = rows.reduce(function (n, r) { return n + r.amount; }, 0);
+    // Joint on equal amounts, and the next place skipped, as everywhere else.
+    var pos = 0, prev = null;
+    rows.forEach(function (r, i) {
+      if (r.amount !== prev) { pos = i + 1; prev = r.amount; }
+      r.pos = pos;
+    });
+
+    var h = '<div class="pcards">' +
+      pcard("Settled", xpa(pot), rows.length + (rows.length === 1 ? " manager" : " managers") + " paid so far") +
+      pcard("Biggest", xpa(rows[0].amount), rows[0].name) +
+      '</div>';
+    h += '<div class="card"><div class="freeze"><table class="t wintbl"><thead><tr>' +
+      '<th class="pos" aria-label="Position">#</th><th class="name">Manager</th>' +
+      '<th class="num">Won</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      h += '<tr' + (isMe(r.id) ? ' class="me"' : "") + ' data-entry="' + r.id + '">' +
+        '<td class="pos">' + r.pos + '</td>' +
+        '<td class="name"><span class="who">' + esc(r.name) + '</span>' +
+        '<div class="mgr">' + esc(r.who) + '</div>' +
+        '<div class="wfor">' + r.items.map(function (it) {
+          return '<span class="wtag"><b>' + esc(it.comp) + '</b> ' + esc(it.label) +
+            ' <i>' + xpa(it.amount) + '</i></span>';
+        }).join("") + '</div></td>' +
+        '<td class="num"><span class="prize">' + xpa(r.amount) + '</span>' +
+        (r.onTrack ? '<div class="mgr">+' + xpa(r.onTrack) + ' on track</div>' : '') +
+        '</td></tr>';
+    });
+    h += '</tbody></table></div>' +
+      '<div class="koline">Only competitions that have finished. Anything still being played is on ' +
+      'its own tab until its last gameweek is done.</div></div>';
+    host.innerHTML = h;
+  }
+
   /* ---- the section menu -------------------------------------------------- */
   // Sections, shown above everything the gear used to hold — one menu, not two.
   function sectionList() {
@@ -854,10 +926,12 @@
         i: tile("mpl", "#9d5bd2", "#43146e", G_FOOT) },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: tile("mgo", "#ffd76a", "#e6a417", G_TROPHY) },
+      { k: "winnings", go: "winnings", t: "Winnings", s: "Who has money in the bank, most first",
+        i: tile("mwn", "#ffd76a", "#c98a12", G_COIN) },
       { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving",
         i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
     ];
-    var inLeague = here !== "prices" && here !== "pl";
+    var inLeague = here !== "prices" && here !== "pl" && here !== "winnings";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
         var on = (it.k === "league") ? inLeague : (here === it.k);
@@ -1093,7 +1167,7 @@
     var parts = h.split("/");
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
-      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl"]);
+      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl", "winnings"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -1152,11 +1226,12 @@
     compare: { t: "Head to head" },
     stats:   { t: "Stats & highlights" },
     prices:  { t: "Player prices" },
-    pl:      { t: "Premier League" }
+    pl:      { t: "Premier League" },
+    winnings:{ t: "Winnings" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
-  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl"];
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl", "winnings"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -1229,6 +1304,7 @@
     if (state.view === "stats") return renderStats(host, S.dataset());
     if (state.view === "prices") return renderPrices(host, S.dataset());
     if (state.view === "pl") return renderPl(host, S.dataset());
+    if (state.view === "winnings") return renderWinnings(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();
