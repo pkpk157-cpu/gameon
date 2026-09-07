@@ -2244,6 +2244,8 @@
      off, live gameweek included — so a bucket can never disagree with the
      standings.
 
+     Ordered best band first, like the gameweek table of the same name.
+
      The bucket width is chosen from the spread rather than fixed: five points
      apart in August and fifty in May would both be useless, so it takes the
      roundest step that keeps the field inside fourteen rows. That holds all
@@ -2284,10 +2286,12 @@
     var sorted = totals.slice().sort(function (a, b) { return a - b; });
     var mid = Math.floor(sorted.length / 2);
     var median = sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+    // Best band first, the way the gameweek's own version of this table reads:
+    // a league table starts at the top, and so should a picture of one.
+    buckets.reverse();
     return { buckets: buckets, width: width, most: most, count: rows.length,
              low: lo, high: hi, median: median,
-             leader: { id: rows[0].id, name: rows[0].entryName, total: rows[0].total },
-             bucketOf: at };
+             leader: { id: rows[0].id, name: rows[0].entryName, total: rows[0].total } };
   };
 
   /* ---- gameweek status ---------------------------------------------------
