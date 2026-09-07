@@ -1465,19 +1465,23 @@
       // a manager's own name — escaped, it is not ours to trust as markup
       if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
-    // Competition tabs have no subtitle of their own, so the next deadline and
-    // how old the numbers are live there, costing no extra space. On a very
-    // narrow screen the sync half drops rather than truncating the deadline.
-    if (!sub && TABS.some(function (t) { return t.id === state.view; })) {
+    // How old the numbers are belongs on every page, not just the competition
+    // tabs: a table is only as true as its last sync, and the page that says
+    // so cannot be the one page you happen not to be on. Competition tabs also
+    // carry the deadline, which they have the room for; on a very narrow
+    // screen the sync half drops rather than truncating it.
+    if (!sub) {
       var ds2 = S.dataset();
       // While a gameweek is being played the bar names IT, not the next
       // deadline — a weekend of "GW3 in 6d" over live GW2 tables reads wrong.
       var liveNow = ds2 ? K.liveGwId(ds2) : null;
-      if (liveNow) {
-        sub += '<span>GW' + liveNow + ' live</span>';
-      } else {
-        var dl = ds2 ? K.nextDeadline(ds2) : null;
-        if (dl) sub += '<span>GW' + dl.gw + ' ' + esc(untilText(dl.msLeft)) + '</span>';
+      if (TABS.some(function (t) { return t.id === state.view; })) {
+        if (liveNow) {
+          sub += '<span>GW' + liveNow + ' live</span>';
+        } else {
+          var dl = ds2 ? K.nextDeadline(ds2) : null;
+          if (dl) sub += '<span>GW' + dl.gw + ' ' + esc(untilText(dl.msLeft)) + '</span>';
+        }
       }
       if (ds2 && ds2.updatedAt) {
         // During live play the overlay refreshes the moving numbers between
@@ -1485,10 +1489,17 @@
         // working live feed never reads as a stale app.
         var syncTs = Date.parse(ds2.updatedAt);
         var la = (liveNow && S.liveAt) ? S.liveAt() : null;
-        var word = (la && la > syncTs) ? 'live ' : 'synced ';
         var ts = (la && la > syncTs) ? la : syncTs;
-        sub += '<span class="syncago">' + (sub ? ' \u00b7 ' : '') + word +
-          esc(agoText(Date.now() - ts)) + '</span>';
+        var age = Date.now() - ts;
+        // The updater publishes every ten minutes. Half an hour without one is
+        // not a quiet afternoon, it is something broken, and a table nobody
+        // has told you is old is worse than no table.
+        var stale = age > 30 * 60 * 1000;
+        sub += '<span class="syncago' + (stale ? ' stale' : '') + '">' +
+          (sub ? ' \u00b7 ' : '') +
+          (stale ? 'not synced for ' + esc(spanText(age))
+                 : ((la && la > syncTs) ? 'live ' : 'synced ') + esc(agoText(age))) +
+          '</span>';
       }
     }
     $("#barTitle").textContent = title;
@@ -3909,11 +3920,16 @@
   // "just now" / "8m ago" / "3h ago"
   function agoText(ms) {
     if (ms < 0) return "just now";
+    if (Math.round(ms / 60000) < 1) return "just now";
+    return spanText(ms) + " ago";
+  }
+  // The same length of time without the "ago", for a sentence that already
+  // says when: "not synced for 40m" rather than "not synced for 40m ago".
+  function spanText(ms) {
     var m = Math.round(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
-    if (m < 1) return "just now";
-    if (h < 1) return m + "m ago";
-    if (d < 1) return h + "h ago";
-    return d + "d ago";
+    if (h < 1) return m + "m";
+    if (d < 1) return h + "h";
+    return d + "d";
   }
 
   // "in 2d 4h" / "in 40m" / "closed"

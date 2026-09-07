@@ -1002,8 +1002,13 @@ table.t.prizetbl td.pcomp b { font-size:13.5px; }
 table.t.prizetbl td.ppos { font-size:15px; font-weight:800; width:46px; }
 table.t.prizetbl td.pstate .mgr { margin-top:2px; }
 table.t.prizetbl .mgr { font-size:10.5px; }
-/* the deadline matters more than the sync age when the bar is tight */
-@media (max-width:349px) { .barsub .syncago { display:none; } }
+/* Data older than the updater's ten minutes: said plainly rather than left to
+   be noticed. Bright enough to read as a warning on the bar's dark purple. */
+.barsub .syncago.stale { color:#ffd166; font-weight:800; }
+.topbar .barsub .syncago.stale { color:#ffd166; }
+/* the deadline matters more than the sync age when the bar is tight, but a
+   warning that the numbers are old is never the half to drop */
+@media (max-width:349px) { .barsub .syncago { display:none; } .barsub .syncago.stale { display:inline; } }
 
 /* ---- knockout bracket -------------------------------------------------- */
 .korow { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }

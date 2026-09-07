@@ -539,17 +539,6 @@ async function h2hAll(id) {
           if (Object.keys(fresh.bonus).length) liveBonus[gw] = fresh.bonus;
           keepStats(gw, fresh);
           breakdown[gw] = fresh.expl;
-          // players played is derived from the frozen squads and fresh minutes
-          for (const id of Object.keys(picks[gw])) {
-            let played = 0, total = 0;
-            (picks[gw][id].p || []).forEach((pk) => {
-              if (pk[1] > 0) { total += pk[1]; if ((fresh.mins[pk[0]] || 0) > 0) played += pk[1]; }
-            });
-            if (!history[id]) history[id] = {};
-            if (!history[id][gw]) history[id][gw] = { p: 0, h: 0, b: 0, t: 0 };
-            history[id][gw].pl = played;
-            history[id][gw].plt = total || 12;
-          }
           console.log("GW " + gw + " — live refresh only, " + Object.keys(picks[gw]).length +
                       " squads reused (no squad requests)");
           audit(gw, picks[gw], fresh.pts, fresh.bonus);
@@ -558,7 +547,6 @@ async function h2hAll(id) {
           console.log("GW " + gw + " — live refresh failed, falling back to a full read: " + e.message);
         }
       }
-      const inProgress = !!(ev && ev.is_current && !settled);
       console.log("GW " + gw + " — fetching squads…");
       try {
         const stats = await liveFor(gw, settled);
@@ -573,16 +561,6 @@ async function h2hAll(id) {
               c: (pk.active_chip || ""),
               p: list.map((p) => [p.element, p.multiplier, p.is_captain ? 1 : 0, p.is_vice_captain ? 1 : 0])
             };
-            if (inProgress) {
-              let played = 0, total = 0;
-              list.forEach((p) => {
-                if (p.multiplier > 0) { total += p.multiplier; if ((mins[p.element] || 0) > 0) played += p.multiplier; }
-              });
-              if (!history[m.id]) history[m.id] = {};
-              if (!history[m.id][gw]) history[m.id][gw] = { p: 0, h: 0, b: 0, t: 0 };
-              history[m.id][gw].pl = played;
-              history[m.id][gw].plt = total || 12;
-            }
           } catch (e) { /* skip this manager */ }
         }, 6);
         if (Object.keys(got).length) {
@@ -664,6 +642,45 @@ async function h2hAll(id) {
                 " squads (GW " + pitchGw + "), transfers across " +
                 Object.keys(moves).length + " gameweek(s)");
   }
+
+  /* ---- how many of a manager's players actually played -------------------
+     Counted by multiplier, so a captain is worth two of the twelve and a
+     triple captain three of thirteen.
+
+     Counted here, once, from the squads and minutes finally held — not while
+     the gameweek is being played. FPL applies automatic substitutions when a
+     gameweek finalises and then returns the eleven that actually scored, with
+     the substitute renumbered into the starting positions and the man he
+     replaced moved to the bench. A count taken during the afternoon therefore
+     counts someone who was later replaced, and this used to be computed only
+     then and copied forward for good: a squad whose blank was substituted
+     read 11 of 12 for the rest of the season, while its points included the
+     substitute's.
+
+     Minutes come from the breakdown, which every path — live, settled, or
+     reused — leaves in place, so the count and the tap-a-player breakdown can
+     never tell different stories. A gameweek without one is left alone for
+     the carry-forward below to handle. */
+  Object.keys(picks).forEach((gwStr) => {
+    const bd = breakdown[gwStr];
+    if (!bd || !picks[gwStr]) return;
+    const minutesOf = (el) => {
+      const rows = bd[el] || [];
+      for (const r of rows) if (r[0] === "minutes") return r[1] || 0;
+      return 0;
+    };
+    Object.keys(picks[gwStr]).forEach((id) => {
+      let played = 0, total = 0;
+      ((picks[gwStr][id] || {}).p || []).forEach((pk) => {
+        if (pk[1] > 0) { total += pk[1]; if (minutesOf(pk[0]) > 0) played += pk[1]; }
+      });
+      if (!total) return;
+      if (!history[id]) history[id] = {};
+      if (!history[id][gwStr]) history[id][gwStr] = { p: 0, h: 0, b: 0, t: 0 };
+      history[id][gwStr].pl = played;
+      history[id][gwStr].plt = total;
+    });
+  });
 
   // ---- played counts and tie-break stats must survive the squad reuse -----
   // pl/plt (players played, from live minutes) and liveStats (goals, clean

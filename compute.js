@@ -75,6 +75,34 @@
     return total;
   }
 
+  /* How many of a manager's players actually featured, counted by multiplier
+     so a captain is worth two of the twelve. Recounted from the squad and the
+     breakdown's minutes whenever both are held, rather than read off the
+     history row: FPL substitutes a blank out when a gameweek finalises, and a
+     figure written while the match was on counts the man who was replaced. A
+     gameweek whose breakdown we no longer carry falls back to the stored row,
+     which is the only answer left for it. */
+  function playedCount(ds, entryId, gw) {
+    var row = (ds.history[entryId] || {})[gw] || null;
+    var stored = (row && row.pl != null)
+      ? { played: row.pl, total: row.plt || 12 } : null;
+    var squad = ds.picks && ds.picks[gw] && ds.picks[gw][entryId];
+    var bd = (ds.breakdown || {})[gw];
+    if (!squad || !squad.p || !bd) return stored || { played: null, total: 12 };
+    var minutesOf = function (el) {
+      var rows = bd[el] || [];
+      for (var i = 0; i < rows.length; i++) if (rows[i][0] === "minutes") return rows[i][1] || 0;
+      return 0;
+    };
+    var played = 0, total = 0;
+    squad.p.forEach(function (pk) {
+      if (pk[1] > 0) { total += pk[1]; if (minutesOf(pk[0]) > 0) played += pk[1]; }
+    });
+    if (!total) return stored || { played: null, total: 12 };
+    return { played: played, total: total };
+  }
+  C.playedCount = playedCount;
+
   function gwScore(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return null;
@@ -381,9 +409,10 @@
       var elimSet = {}; eliminatedIds.forEach(function (id) { elimSet[id] = 1; });
       var table = contenders.map(function (c) {
         var hh = (ds.history[c.id] && ds.history[c.id][gw]) ? ds.history[c.id][gw] : null;
+        var pc = playedCount(ds, c.id, gw);
         return { id: c.id, name: nm(mm, c.id), player: pl(mm, c.id),
                  score: c.score, bench: c.bench, hit: hh ? hh.h : 0,
-                 played: (hh && hh.pl != null) ? hh.pl : null, playedTotal: (hh && hh.plt) ? hh.plt : 12,
+                 played: pc.played, playedTotal: pc.total,
                  eliminated: !!elimSet[c.id] };
       }).sort(function (a, b) { return (a.score - b.score) || (a.bench - b.bench); });
 
@@ -428,9 +457,10 @@
         // row lags during a live gameweek, and reading it raw left this table
         // on zeros while the rest of the app moved.
         var sc = gwScore(ds, id, liveGw);
+        var pc = playedCount(ds, id, liveGw);
         return { id: id, name: nm(mm, id), player: pl(mm, id),
                  score: sc == null ? 0 : sc, bench: gwBench(ds, id, liveGw), hit: hh ? hh.h : 0,
-                 played: (hh && hh.pl != null) ? hh.pl : null, playedTotal: (hh && hh.plt) ? hh.plt : 12,
+                 played: pc.played, playedTotal: pc.total,
                  eliminated: false, atRisk: false };
       }).sort(function (a, b) { return (a.score - b.score) || (a.bench - b.bench); });
       // Bottom `need` are in the drop zone (would be eliminated if the GW ended now).
