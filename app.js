@@ -3311,6 +3311,8 @@
     h += hcard("Never took a hit", num(se.cleanest), "managers", null, "no transfer costs yet", "shield");
     h += '</div>';
 
+    h += whereEveryoneLanded(ds);
+
     // Who is winning money, settled first.
     var wAll = K.winningsAll(ds);
     var purse = ds.managers.map(function (m) {
@@ -3334,6 +3336,38 @@
     h += hcard("Chips played", num(se.chipsPlayed), "so far this season", null, "", "sparkle");
     h += '</div>';
     return h;
+  }
+
+  /* The league as a shape rather than a ladder. A table of 245 rows says who
+     is where; this says how tightly the field is packed and where you sit
+     inside it — which is the thing you cannot see from a position alone.
+     Buckets and totals both come from compute, so they are settled on the
+     same numbers as the Classic table. */
+  function whereEveryoneLanded(ds) {
+    var sp = K.pointsSpread(ds);
+    if (!sp || !sp.buckets.length) return "";
+    var mine = state.me ? +state.me : null;
+    var myBucket = null;
+    if (mine) {
+      sp.buckets.forEach(function (b, i) {
+        if (b.names.some(function (x) { return +x.id === mine; })) myBucket = i;
+      });
+    }
+    var h = '<div class="section-title"><h2>Where everyone landed</h2><div class="rule"></div></div>';
+    h += '<div class="card"><div class="sprlead">' +
+      num(sp.count) + ' managers, ' + num(sp.low) + ' to ' + num(sp.high) + ' points' +
+      ' \u00b7 median ' + num(sp.median) + '</div>';
+    h += sp.buckets.map(function (b, i) {
+      var w = sp.most ? Math.round((b.n / sp.most) * 100) : 0;
+      return '<div class="sprow' + (i === myBucket ? ' me' : '') + '">' +
+        '<span class="sprg">' + num(b.from) + '\u2013' + num(b.to) + '</span>' +
+        '<span class="sprb"><i style="width:' + w + '%"></i></span>' +
+        '<span class="sprn">' + num(b.n) +
+        (i === myBucket ? '<b class="sprme">You</b>' : '') + '</span></div>';
+    }).join("");
+    h += '<div class="sprfoot">Season totals, hits taken off \u2014 the same numbers ' +
+      'the Classic table is settled on. Buckets are ' + num(sp.width) + ' points wide.</div>';
+    return h + '</div>';
   }
 
   function statsFame(H) {

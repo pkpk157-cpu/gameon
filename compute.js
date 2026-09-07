@@ -2205,6 +2205,61 @@
     };
   };
 
+  /* ---- where everyone landed ---------------------------------------------
+     The league's season totals as a distribution rather than a ladder. A
+     table of 245 rows says who is where; this says what the field looks like,
+     and where any one manager sits inside it.
+
+     Totals are the same ones the Classic table is settled on — hits taken
+     off, live gameweek included — so a bucket can never disagree with the
+     standings.
+
+     The bucket width is chosen from the spread rather than fixed: five points
+     apart in August and fifty in May would both be useless, so it takes the
+     roundest step that keeps the field inside fourteen rows. That holds all
+     season — a 60-point spread in August buckets by five, a 1,200-point one
+     in May by a hundred, and both come out around a dozen rows. */
+  var BUCKET_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500];
+
+  C.pointsSpread = function (ds) {
+    if (!ds || !ds.managers || !ds.managers.length) return null;
+    var rows = C.classic(ds);
+    var totals = rows.map(function (r) { return r.total || 0; });
+    var lo = Math.min.apply(null, totals), hi = Math.max.apply(null, totals);
+    var span = hi - lo;
+    var width = BUCKET_STEPS[BUCKET_STEPS.length - 1];
+    for (var i = 0; i < BUCKET_STEPS.length; i++) {
+      // the finest step that still fits on a phone wins: a coarser one hides
+      // where the field actually clusters
+      if (Math.floor(span / BUCKET_STEPS[i]) + 1 <= 14) { width = BUCKET_STEPS[i]; break; }
+    }
+    var first = Math.floor(lo / width) * width;
+    var last = Math.floor(hi / width) * width;
+    var buckets = [];
+    for (var v = first; v <= last; v += width) {
+      buckets.push({ from: v, to: v + width - 1, n: 0, pct: 0, names: [] });
+    }
+    var at = function (t) { return Math.floor((t - first) / width); };
+    rows.forEach(function (r) {
+      var b = buckets[at(r.total || 0)];
+      if (b) { b.n++; b.names.push({ id: r.id, name: r.entryName }); }
+    });
+    var most = 0;
+    buckets.forEach(function (b) {
+      b.pct = Math.round((b.n / rows.length) * 1000) / 10;
+      if (b.n > most) most = b.n;
+    });
+    // The median is the honest middle of a skewed field, which an average of
+    // season totals is not.
+    var sorted = totals.slice().sort(function (a, b) { return a - b; });
+    var mid = Math.floor(sorted.length / 2);
+    var median = sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+    return { buckets: buckets, width: width, most: most, count: rows.length,
+             low: lo, high: hi, median: median,
+             leader: { id: rows[0].id, name: rows[0].entryName, total: rows[0].total },
+             bucketOf: at };
+  };
+
   /* ---- gameweek status ---------------------------------------------------
      Where each gameweek has got to, read from the same published flags every
      other page reads, so this can never tell a different story from the
