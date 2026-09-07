@@ -3324,13 +3324,18 @@
 
     h += whereEveryoneLanded(ds);
 
-    // Who is winning money, settled first.
+    // Who is winning money. Ordered by the figure the row actually prints —
+    // settled plus what is still being played for. It used to lead on the
+    // settled half alone, which put a manager on 23,500 above one on 50,900
+    // and made a ranked list read as though it were in no order at all; worse,
+    // the eight shown were the top eight of a different measure from the one
+    // beside them. Settled money breaks a tie, since it is the half in hand.
     var wAll = K.winningsAll(ds);
     var purse = ds.managers.map(function (m) {
       var w = wAll[+m.id] || { settled: 0, onTrack: 0, total: 0 };
       return { id: m.id, name: m.entryName, settled: w.settled, onTrack: w.onTrack, total: w.total };
     }).filter(function (x) { return x.total > 0; })
-      .sort(function (a, b) { return (b.settled - a.settled) || (b.onTrack - a.onTrack); });
+      .sort(function (a, b) { return (b.total - a.total) || (b.settled - a.settled); });
     if (purse.length) {
       h += '<div class="section-title"><h2>XP</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="bd">';
