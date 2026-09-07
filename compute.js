@@ -2205,6 +2205,69 @@
     };
   };
 
+  /* ---- gameweek status ---------------------------------------------------
+     Where each gameweek has got to, read from the same published flags every
+     other page reads, so this can never tell a different story from the
+     scoreboard or the tables. Six steps, in the order they actually happen:
+
+       lock    the deadline has passed and squads are set
+       ko      at least one match has kicked off
+       ft      every match has reached full time
+       bonus   FPL has confirmed the bonus on every match
+       final   FPL has finalised the gameweek (finished and data-checked)
+       squads  we hold the settled squads for it
+
+     The last one is ours, not FPL's, and it is here on purpose: it is the
+     difference between FPL being done with a gameweek and this app having
+     caught up with it.
+
+     Full time is finished_provisional — the final whistle — which is a
+     different moment from bonus being confirmed, and the two are separate
+     rows because on a real gameweek they are hours apart. */
+  C.GW_STEPS = [
+    { k: "lock",   s: "Lock",   t: "Deadline passed, squads set" },
+    { k: "ko",     s: "KO",     t: "First match kicked off" },
+    { k: "ft",     s: "FT",     t: "Every match at full time" },
+    { k: "bonus",  s: "Bonus",  t: "Bonus confirmed on every match" },
+    { k: "final",  s: "Final",  t: "Gameweek finalised by FPL" },
+    { k: "squads", s: "Squads", t: "Settled squads stored here" }
+  ];
+
+  C.gwStatus = function (ds, now) {
+    if (!ds || !ds.bootstrap || !ds.bootstrap.events) return null;
+    if (!now && ds._gws) return ds._gws;
+    var at = now || Date.now();
+    var fin = ds.picksFinal || {}, all = ds.gwFixtures || {};
+    var live = C.liveGwId(ds), cur = C.currentGw(ds);
+    var rows = ds.bootstrap.events.map(function (e) {
+      var fx = all[e.id] || [];
+      var dl = e.deadline_time ? Date.parse(e.deadline_time) : null;
+      // A gameweek with no published fixtures cannot have played any, so the
+      // match steps stay open rather than reading as vacuously done.
+      var ko = fx.some(function (f) { return f[2]; });
+      // The deadline is the one step read off the device's own clock rather
+      // than FPL's flags, so a phone set wrong could otherwise show a gameweek
+      // being played before it locked. A match that has kicked off settles it.
+      var lock = ko || (dl != null && dl <= at);
+      var ft = fx.length > 0 && fx.every(function (f) { return f[3] || f[8]; });
+      var bonus = fx.length > 0 && fx.every(function (f) { return f[3]; });
+      var final = !!(e.finished && e.data_checked);
+      var squads = !!fin[e.id];
+      var steps = { lock: lock, ko: ko, ft: ft, bonus: bonus, final: final, squads: squads };
+      var done = 0;
+      C.GW_STEPS.forEach(function (st) { if (steps[st.k]) done++; });
+      return { gw: e.id, name: e.name || ("Gameweek " + e.id), deadline: e.deadline_time || null,
+               fixtures: fx.length,
+               played: fx.filter(function (f) { return f[3] || f[8]; }).length,
+               steps: steps, done: done, total: C.GW_STEPS.length,
+               live: live === e.id, current: cur === e.id };
+    }).sort(function (a, b) { return a.gw - b.gw; });
+    var res = { rows: rows, live: live, current: cur,
+                at: rows.filter(function (r) { return r.steps.lock && !r.steps.final; })[0] || null };
+    if (!now && ds) { try { Object.defineProperty(ds, "_gws", { value: res, enumerable: false }); } catch (e) {} }
+    return res;
+  };
+
   /* ---- the Premier League table ----------------------------------------
      Built from the same published fixtures the scoreboard and the pitch cards
      read, so the two can never disagree: a result the scoreboard shows is a

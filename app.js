@@ -22,6 +22,9 @@
     refresh: '<path d="M20 11a8 8 0 1 0-.6 4"/><path d="M20 4v5h-5"/>',
     download: '<path d="M12 4v10m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/>',
     upload: '<path d="M12 20V10m0 0 4 4m-4-4-4 4"/><path d="M5 5h14"/>',
+    // a checklist: three steps, each ticked off
+    steps: '<path d="M4 6.5 5.5 8 8.5 5"/><path d="M4 12.5 5.5 14 8.5 11"/>' +
+      '<path d="M4 18.5 5.5 20 8.5 17"/><path d="M12 6.5h8"/><path d="M12 12.5h8"/><path d="M12 18.5h8"/>',
     book: '<path d="M5 4.5A2 2 0 0 1 7 3h11v15H7a2 2 0 0 0-2 2V4.5Z"/><path d="M5 18.5A2 2 0 0 0 7 21h11"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M20 12a8 8 0 0 0-.12-1.36l1.9-1.48-2-3.46-2.24.9a7.9 7.9 0 0 0-2.36-1.36L14.7 3h-4L10.3 5.3a7.9 7.9 0 0 0-2.36 1.36l-2.24-.9-2 3.46 1.9 1.48A8 8 0 0 0 5.48 12a8 8 0 0 0 .12 1.36l-1.9 1.48 2 3.46 2.24-.9a7.9 7.9 0 0 0 2.36 1.36l.4 2.34h4l.4-2.34a7.9 7.9 0 0 0 2.36-1.36l2.24.9 2-3.46-1.9-1.48A8 8 0 0 0 20 12Z"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5M12 7.8h.01"/>',
@@ -334,6 +337,12 @@
       segBtn("dark", "moon", "Dark", theme) +
       '</div></div>';
 
+    // 6 — how far along each gameweek is. Kept under the theme because it is
+    // something you look up when a score seems wrong, not every visit.
+    h += '<div class="menu"><div class="lab-sm">Gameweek status</div>' +
+      menuItem("pfGwStatus", "steps", "Gameweek status") +
+      '</div>';
+
     // 6 — where the numbers came from
     // During a live gameweek, say plainly whether the two-minute feed is
     // answering. Without this a dead proxy looks exactly like a quiet
@@ -368,6 +377,7 @@
     });
     function go(hash) { closeProfile(true); navFromOverlay(hash); }
     $("#pfStats").addEventListener("click", function () { go("stats"); });
+    $("#pfGwStatus").addEventListener("click", function () { go("gwstatus"); });
     $("#pfWinnings").addEventListener("click", function () { go("winnings"); });
     $("#pfCompare").addEventListener("click", function () { go("compare"); });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
@@ -925,6 +935,80 @@
     });
   }
 
+  /* ---- gameweek status ---------------------------------------------------
+     Every gameweek and how far along it is. A gameweek does not simply end:
+     the whistle goes, then FPL confirms bonus, then it finalises the points,
+     and those are hours apart. When a score looks wrong the honest answer is
+     usually that one of these steps has not happened yet, so this page shows
+     which. Green is done, red is not yet — red on a gameweek that has not
+     been played is simply the future, not a fault. */
+  function stepRow(st, on) {
+    return '<div class="gwstep' + (on ? ' on' : '') + '">' +
+      '<i class="gwmark" aria-hidden="true">' + (on ? "\u2713" : "\u2715") + '</i>' +
+      '<span class="gwlab">' + esc(st.t) + '</span>' +
+      '<span class="gwyn">' + (on ? "Done" : "Not yet") + '</span></div>';
+  }
+  function renderGwStatus(host, ds) {
+    var st = ds ? K.gwStatus(ds) : null;
+    if (!st || !st.rows.length) {
+      // No published calendar: nothing has milestones yet, and an empty table
+      // would read as though every step had failed.
+      host.innerHTML = '<div class="callout">No gameweeks have been published yet. ' +
+        'Once FPL publishes the season\u2019s calendar every gameweek appears here ' +
+        'with how far along it is.</div>';
+      return;
+    }
+    var steps = K.GW_STEPS;
+    var dayOf = function (iso) {
+      if (!iso) return "";
+      return new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    };
+
+    // The gameweek that is actually in flight leads, spelled out in words —
+    // the table below is quick to scan but only once you know the columns.
+    var focus = st.at;
+    if (!focus) {
+      var done = st.rows.filter(function (r) { return r.steps.final; });
+      focus = done.length ? done[done.length - 1] : st.rows[0];
+    }
+    var h = '<div class="card"><div class="hd"><h3>' + esc(focus.name) + '</h3>' +
+      '<span class="sub">' + focus.done + ' of ' + focus.total + ' done</span></div>' +
+      '<div class="gwsteps">' + steps.map(function (x) {
+        return stepRow(x, focus.steps[x.k]);
+      }).join("") + '</div>' +
+      (focus.fixtures
+        ? '<div class="gwfoot">' + focus.played + ' of ' + focus.fixtures + ' matches at full time' +
+          (focus.deadline ? ' \u00b7 deadline ' + esc(dayOf(focus.deadline)) : '') + '</div>'
+        : '') +
+      '</div>';
+
+    // Then the season at a glance: one row a gameweek, one dot a step.
+    h += '<div class="card"><div class="hd"><h3>Every gameweek</h3></div>' +
+      '<div class="tw"><table class="t gwtbl"><thead><tr><th class="gwh">GW</th>' +
+      steps.map(function (x) { return '<th class="num">' + esc(x.s) + '</th>'; }).join("") +
+      '</tr></thead><tbody>' +
+      st.rows.map(function (r) {
+        return '<tr' + (r.current ? ' class="now"' : '') + '>' +
+          '<td class="gwh"><b>' + r.gw + '</b>' +
+          (r.deadline ? '<span class="gwd">' + esc(dayOf(r.deadline)) + '</span>' : '') + '</td>' +
+          steps.map(function (x) {
+            var on = r.steps[x.k];
+            return '<td class="num"><i class="dot ' + (on ? "on" : "off") + '" role="img" aria-label="' +
+              esc(x.t) + ': ' + (on ? "done" : "not yet") + '"></i></td>';
+          }).join("") + '</tr>';
+      }).join("") +
+      '</tbody></table></div>' +
+      '<div class="gwkey">' + steps.map(function (x) {
+        return '<div><b>' + esc(x.s) + '</b> ' + esc(x.t) + '</div>';
+      }).join("") + '</div></div>';
+
+    h += '<div class="note gwnote">Green is done, red is not yet. A gameweek that has ' +
+      'not been played shows red all the way across, which is simply the future. ' +
+      'Full time is the final whistle; FPL confirms bonus and finalises the points ' +
+      'afterwards, and those steps are hours apart.</div>';
+    host.innerHTML = h;
+  }
+
   /* ---- winnings ---------------------------------------------------------
      Only what is actually won. A competition pays when it finishes, so a
      month that has been played is money in the bank and a classic table that
@@ -1244,7 +1328,8 @@
     var parts = h.split("/");
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
-      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl", "winnings"]);
+      .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
+               "winnings", "gwstatus"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -1306,11 +1391,13 @@
     stats:   { t: "Stats & highlights" },
     prices:  { t: "Player prices" },
     pl:      { t: "Premier League" },
-    winnings:{ t: "Winnings" }
+    winnings:{ t: "Winnings" },
+    gwstatus:{ t: "Gameweek status" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
-  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl", "winnings"];
+  var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
+                   "winnings", "gwstatus"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -1388,6 +1475,7 @@
     if (state.view === "prices") return renderPrices(host, S.dataset());
     if (state.view === "pl") return renderPl(host, S.dataset());
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
+    if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();
