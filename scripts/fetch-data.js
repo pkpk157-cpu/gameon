@@ -738,13 +738,64 @@ async function h2hAll(id) {
       " real fixtures published across " + gws.length + " gameweeks");
   } catch (e) { console.log("  gw fixtures failed (non-fatal): " + e.message); }
 
+  /* ---- when each milestone actually landed ------------------------------
+     The published data says whether a step has happened, never when. These
+     are our own observations: a stamp is written the first run that sees a
+     step turn true, so it is accurate to the ten minutes between runs, and
+     it is never rewritten. Past gameweeks then carry real times, and the one
+     in flight can be told what to expect from them.
+
+     Only a transition is stamped, never a step that was already true when
+     this record began, which would otherwise date every finished gameweek to
+     the day the feature shipped. */
+  const gwStamps = {};
+  Object.keys(prev.gwStamps || {}).forEach((k) => {
+    gwStamps[k] = Object.assign({}, prev.gwStamps[k]);
+  });
+  // Recovered from this repository's own ten-minute history of data.json:
+  // the first commit that carried each flag, which is the same observation a
+  // live stamp makes. Only fills gaps, never overwrites.
+  const SEEN_BEFORE = {
+    2: { ft: "2026-08-31T21:01:03Z", bonus: "2026-09-01T08:20:59Z",
+         final: "2026-09-01T13:01:32Z", squads: "2026-09-01T13:01:32Z" },
+    3: { ft: "2026-09-06T17:40:35Z", bonus: "2026-09-07T08:10:33Z" }
+  };
+  Object.keys(SEEN_BEFORE).forEach((gw) => {
+    const slot = gwStamps[gw] || (gwStamps[gw] = {});
+    Object.keys(SEEN_BEFORE[gw]).forEach((k) => { if (!slot[k]) slot[k] = SEEN_BEFORE[gw][k]; });
+  });
+  {
+    const stampedAt = new Date().toISOString();
+    const prevFxAll = prev.gwFixtures || {};
+    const prevEv = {};
+    (prev.bootstrap && prev.bootstrap.events || []).forEach((e) => { prevEv[e.id] = e; });
+    const prevFinal = prev.picksFinal || {};
+    const stepsOf = (fx, e, finalPicks) => ({
+      ft: fx.length > 0 && fx.every((f) => f[3] || f[8]),
+      bonus: fx.length > 0 && fx.every((f) => f[3]),
+      final: !!(e && e.finished && e.data_checked),
+      squads: !!finalPicks
+    });
+    events.forEach((e) => {
+      const fx = gwFixtures[e.id] || [];
+      if (!fx.length) return;
+      const now = stepsOf(fx, e, picksFinal[e.id]);
+      const before = stepsOf(prevFxAll[e.id] || [], prevEv[e.id], prevFinal[e.id]);
+      const slot = gwStamps[e.id] || (gwStamps[e.id] = {});
+      Object.keys(now).forEach((k) => {
+        if (now[k] && !before[k] && !slot[k]) slot[k] = stampedAt;
+      });
+    });
+    Object.keys(gwStamps).forEach((k) => { if (!Object.keys(gwStamps[k]).length) delete gwStamps[k]; });
+  }
+
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name },
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
-    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.

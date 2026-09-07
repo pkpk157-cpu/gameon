@@ -942,10 +942,20 @@
      usually that one of these steps has not happened yet, so this page shows
      which. Green is done, red is not yet — red on a gameweek that has not
      been played is simply the future, not a fault. */
-  function stepRow(st, on) {
+  // A moment, told the way a person would: the weekday, the date and the time.
+  function whenText(iso) {
+    return new Date(iso).toLocaleString(undefined,
+      { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  function stepRow(st, on, when) {
+    var line = "";
+    if (when && when.at) {
+      line = '<span class="gwwhen' + (when.kind === "expected" ? ' est' : '') + '">' +
+        (when.kind === "expected" ? "Expected " : "") + esc(whenText(when.at)) + '</span>';
+    }
     return '<div class="gwstep' + (on ? ' on' : '') + '">' +
       '<i class="gwmark" aria-hidden="true">' + (on ? "\u2713" : "\u2715") + '</i>' +
-      '<span class="gwlab">' + esc(st.t) + '</span>' +
+      '<span class="gwlab">' + esc(st.t) + line + '</span>' +
       '<span class="gwyn">' + (on ? "Done" : "Not yet") + '</span></div>';
   }
   function renderGwStatus(host, ds) {
@@ -971,10 +981,13 @@
       var done = st.rows.filter(function (r) { return r.steps.final; });
       focus = done.length ? done[done.length - 1] : st.rows[0];
     }
+    var times = K.gwTimes(ds, focus) || {};
     var h = '<div class="card"><div class="hd"><h3>' + esc(focus.name) + '</h3>' +
+      '<button type="button" class="hinfo" id="gwWhat" aria-label="What these mean">' +
+      svg("info", 16) + '</button>' +
       '<span class="sub">' + focus.done + ' of ' + focus.total + ' done</span></div>' +
       '<div class="gwsteps">' + steps.map(function (x) {
-        return stepRow(x, focus.steps[x.k]);
+        return stepRow(x, focus.steps[x.k], times[x.k]);
       }).join("") + '</div>' +
       (focus.fixtures
         ? '<div class="gwfoot">' + focus.played + ' of ' + focus.fixtures + ' matches at full time' +
@@ -1001,11 +1014,57 @@
         }).join("") + '</div>';
     }
 
-    h += '<div class="note gwnote">Full time is the final whistle. FPL confirms ' +
-      'the bonus and finalises the points afterwards, and those steps are hours ' +
-      'apart, so a score can be right and still not be final.</div>';
+    // The detail of what each step and each status means lives behind the
+    // information button: it is worth reading once, not on every visit.
+    var basis = 0;
+    Object.keys(times).forEach(function (k) {
+      if (times[k].kind === "expected" && times[k].basis > basis) basis = times[k].basis;
+    });
+    h += '<div class="note gwnote">A score can be right and still not be final. ' +
+      'Tap <b>\u24d8</b> for what each step and status means.</div>';
 
     host.innerHTML = h;
+    $("#gwWhat", host).addEventListener("click", function () { modal("What these mean", gwHelp(basis)); });
+  }
+
+  /* What the page is actually claiming, in one place. Written to be read once:
+     the six steps in the order they happen, what a match day's badge means,
+     and — the part people ask about — which times are FPL's, which we watched,
+     and which are worked out from what we watched. */
+  function gwHelp(basis) {
+    var list = function (title, rows) {
+      return '<h4 class="gwh4">' + esc(title) + '</h4><dl class="gwdl">' +
+        rows.map(function (r) {
+          return '<dt>' + esc(r[0]) + '</dt><dd>' + r[1] + '</dd>';
+        }).join("") + '</dl>';
+    };
+    var h = list("The gameweek, step by step", [
+      ["Deadline passed", "Squads are set. Nobody can transfer or change a captain for this gameweek any more."],
+      ["First match kicked off", "The gameweek is under way and points have started moving."],
+      ["Every match at full time", "The last whistle has gone. Points are complete apart from bonus, which FPL has not confirmed yet."],
+      ["Bonus confirmed", "FPL has awarded the official bonus on every match. Until then this app shows a provisional bonus worked out from the same bps FPL uses, which is almost always right but is not the official award."],
+      ["Gameweek finalised by FPL", "FPL has closed the gameweek: auto substitutions applied, points settled, nothing more to change."],
+      ["Settled squads stored here", "This app has re-read every squad now the gameweek is closed, so what it shows and what FPL shows are the same."]
+    ]);
+    h += list("A match day's badge", [
+      ["Confirmed", "Every match that day is done and its bonus is official."],
+      ["Awaiting bonus", "Every match that day has finished, but FPL has not confirmed the bonus."],
+      ["In play", "At least one match that day is still being played."],
+      ["To come", "None of that day's matches have kicked off."]
+    ]);
+    h += list("Where the times come from", [
+      ["The deadline and kick-off", "FPL's own published times. Exact."],
+      ["Times without <i>Expected</i>", "Steps we watched happen. This app reads FPL every ten minutes, so these are right to within ten minutes."],
+      ["Times marked <i>Expected</i>", basis
+        ? "Not happened yet, so worked out from the " + num(basis) + " gameweek" +
+          (basis === 1 ? "" : "s") + " we have watched so far. A guide, not a promise, and it sharpens each week."
+        : "Not happened yet. Nothing is shown until we have watched a gameweek go through the same step, so there is nothing here to work from."]
+    ]);
+    h += '<div class="note">Why a gameweek does not simply end: the whistle, the bonus and ' +
+      'the finalising are three separate moments, and in practice they are hours apart. ' +
+      'A day of it can be completely settled while another has not kicked off, which is why ' +
+      'the match days are listed on their own.</div>';
+    return h;
   }
 
   /* ---- winnings ---------------------------------------------------------

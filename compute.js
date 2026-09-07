@@ -2285,7 +2285,10 @@
       });
       var done = 0;
       C.GW_STEPS.forEach(function (st) { if (steps[st.k]) done++; });
+      var kos = fx.map(function (f) { return f[7]; }).filter(Boolean).sort();
       return { gw: e.id, name: e.name || ("Gameweek " + e.id), deadline: e.deadline_time || null,
+               firstKo: kos[0] || null, lastKo: kos[kos.length - 1] || null,
+               stamps: (ds.gwStamps || {})[e.id] || {},
                fixtures: fx.length, days: days,
                played: fx.filter(function (f) { return f[3] || f[8]; }).length,
                steps: steps, done: done, total: C.GW_STEPS.length,
@@ -2295,6 +2298,85 @@
                 at: rows.filter(function (r) { return r.steps.lock && !r.steps.final; })[0] || null };
     if (!now && ds) { try { Object.defineProperty(ds, "_gws", { value: res, enumerable: false }); } catch (e) {} }
     return res;
+  };
+
+  /* ---- when each milestone happened, or is expected ----------------------
+     Three different kinds of answer, and the page says which is which:
+
+       published  the deadline and the first kick-off, exact, FPL's own
+       recorded   we watched it happen, accurate to the ten minutes between
+                  updates (see gwStamps in scripts/fetch-data.js)
+       expected   not yet, so worked out from what we have watched before
+
+     A match lasts about two hours, so full time is the last kick-off plus
+     that. Bonus and finalising are not a fixed wait after the whistle — a
+     gameweek ending Sunday teatime had neither by the following dawn — they
+     land at a time of day, the morning and the afternoon after. So the
+     estimate is the next occurrence of the median time of day we have
+     actually recorded, and the number of gameweeks behind it travels with it
+     so the page can say how much to trust it.
+
+     With nothing recorded there is no estimate, and the page says nothing
+     rather than inventing one. */
+  var MATCH_MS = 2 * 3600 * 1000;
+  var DAY_MS = 24 * 3600 * 1000;
+
+  function medianTimeOfDay(stamps) {
+    // Averaging clock times across midnight is a trap, but every observation
+    // of these steps is a daytime one, so a plain median over milliseconds
+    // past midnight UTC is honest here.
+    var mins = stamps.map(function (iso) {
+      var d = new Date(iso);
+      return ((d.getUTCHours() * 60 + d.getUTCMinutes()) * 60 + d.getUTCSeconds()) * 1000;
+    }).sort(function (a, b) { return a - b; });
+    if (!mins.length) return null;
+    var mid = Math.floor(mins.length / 2);
+    return mins.length % 2 ? mins[mid] : Math.round((mins[mid - 1] + mins[mid]) / 2);
+  }
+  function nextAt(afterMs, msIntoDay) {
+    var d = new Date(afterMs);
+    var day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    var t = day + msIntoDay;
+    while (t <= afterMs) t += DAY_MS;
+    return t;
+  }
+
+  C.gwTimes = function (ds, row) {
+    if (!ds || !row) return null;
+    // A stamp is only honoured while the step it belongs to is still true. FPL
+    // can take a flag back — a postponement after the whistle would do it —
+    // and a step reading "not yet" beside the time it happened is a worse
+    // answer than an estimate.
+    var done = row.steps || {}, out = {};
+    var stamps = {};
+    Object.keys(row.stamps || {}).forEach(function (k) { if (done[k]) stamps[k] = row.stamps[k]; });
+    var put = function (k, iso, kind, n) {
+      out[k] = { at: iso, kind: kind, basis: n || 0 };
+    };
+    // What other gameweeks have shown us about the steps we cannot read off a
+    // fixture list. This gameweek's own stamps are left out: a step it has
+    // already reached is reported, not predicted.
+    var seen = { bonus: [], final: [], squads: [] };
+    Object.keys(ds.gwStamps || {}).forEach(function (g) {
+      if (+g === +row.gw) return;
+      var st = ds.gwStamps[g];
+      Object.keys(seen).forEach(function (k) { if (st[k]) seen[k].push(st[k]); });
+    });
+
+    put("lock", row.deadline, row.deadline ? "published" : null);
+    put("ko", row.firstKo, row.firstKo ? "published" : null);
+    if (stamps.ft) put("ft", stamps.ft, "recorded");
+    else if (row.lastKo) put("ft", new Date(Date.parse(row.lastKo) + MATCH_MS).toISOString(), "expected");
+    else put("ft", null, null);
+
+    var whistle = out.ft && out.ft.at ? Date.parse(out.ft.at) : null;
+    ["bonus", "final", "squads"].forEach(function (k) {
+      if (stamps[k]) { put(k, stamps[k], "recorded"); return; }
+      var tod = medianTimeOfDay(seen[k]);
+      if (tod == null || whistle == null) { put(k, null, null); return; }
+      put(k, new Date(nextAt(whistle, tod)).toISOString(), "expected", seen[k].length);
+    });
+    return out;
   };
 
   /* ---- the Premier League table ----------------------------------------
