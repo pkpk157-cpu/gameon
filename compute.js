@@ -2225,12 +2225,12 @@
      different moment from bonus being confirmed, and the two are separate
      rows because on a real gameweek they are hours apart. */
   C.GW_STEPS = [
-    { k: "lock",   s: "Lock",   t: "Deadline passed, squads set" },
-    { k: "ko",     s: "KO",     t: "First match kicked off" },
-    { k: "ft",     s: "FT",     t: "Every match at full time" },
-    { k: "bonus",  s: "Bonus",  t: "Bonus confirmed on every match" },
-    { k: "final",  s: "Final",  t: "Gameweek finalised by FPL" },
-    { k: "squads", s: "Squads", t: "Settled squads stored here" }
+    { k: "lock",   t: "Deadline passed, squads set" },
+    { k: "ko",     t: "First match kicked off" },
+    { k: "ft",     t: "Every match at full time" },
+    { k: "bonus",  t: "Bonus confirmed on every match" },
+    { k: "final",  t: "Gameweek finalised by FPL" },
+    { k: "squads", t: "Settled squads stored here" }
   ];
 
   C.gwStatus = function (ds, now) {
@@ -2254,10 +2254,39 @@
       var final = !!(e.finished && e.data_checked);
       var squads = !!fin[e.id];
       var steps = { lock: lock, ko: ko, ft: ft, bonus: bonus, final: final, squads: squads };
+      // A gameweek is played across two or three days, and each of those days
+      // reaches full time and then has its bonus confirmed on its own. Grouped
+      // by the local date of kick-off, which is the day a person watched it.
+      var days = [], seen = {};
+      fx.forEach(function (f) {
+        var d = f[7] ? new Date(f[7]) : null;
+        var key = d ? (d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate()) : "tbc";
+        var slot = seen[key];
+        if (!slot) {
+          slot = seen[key] = { key: key, ko: f[7] || null, n: 0, started: 0, ft: 0, bonus: 0 };
+          days.push(slot);
+        }
+        slot.n++;
+        if (f[2]) slot.started++;
+        if (f[3] || f[8]) slot.ft++;
+        if (f[3]) slot.bonus++;
+        if (f[7] && (!slot.ko || f[7] < slot.ko)) slot.ko = f[7];
+      });
+      days.sort(function (a, b) {
+        if (!a.ko) return 1;
+        if (!b.ko) return -1;
+        return a.ko < b.ko ? -1 : a.ko > b.ko ? 1 : 0;
+      });
+      days.forEach(function (d) {
+        d.state = d.bonus === d.n ? "confirmed"
+                : d.ft === d.n ? "ft"
+                : d.started ? "live" : "ahead";
+        d.done = d.state === "confirmed";
+      });
       var done = 0;
       C.GW_STEPS.forEach(function (st) { if (steps[st.k]) done++; });
       return { gw: e.id, name: e.name || ("Gameweek " + e.id), deadline: e.deadline_time || null,
-               fixtures: fx.length,
+               fixtures: fx.length, days: days,
                played: fx.filter(function (f) { return f[3] || f[8]; }).length,
                steps: steps, done: done, total: C.GW_STEPS.length,
                live: live === e.id, current: cur === e.id };

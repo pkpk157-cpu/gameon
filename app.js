@@ -982,30 +982,29 @@
         : '') +
       '</div>';
 
-    // Then the season at a glance: one row a gameweek, one dot a step.
-    h += '<div class="card"><div class="hd"><h3>Every gameweek</h3></div>' +
-      '<div class="tw"><table class="t gwtbl"><thead><tr><th class="gwh">GW</th>' +
-      steps.map(function (x) { return '<th class="num">' + esc(x.s) + '</th>'; }).join("") +
-      '</tr></thead><tbody>' +
-      st.rows.map(function (r) {
-        return '<tr' + (r.current ? ' class="now"' : '') + '>' +
-          '<td class="gwh"><b>' + r.gw + '</b>' +
-          (r.deadline ? '<span class="gwd">' + esc(dayOf(r.deadline)) + '</span>' : '') + '</td>' +
-          steps.map(function (x) {
-            var on = r.steps[x.k];
-            return '<td class="num"><i class="dot ' + (on ? "on" : "off") + '" role="img" aria-label="' +
-              esc(x.t) + ': ' + (on ? "done" : "not yet") + '"></i></td>';
-          }).join("") + '</tr>';
-      }).join("") +
-      '</tbody></table></div>' +
-      '<div class="gwkey">' + steps.map(function (x) {
-        return '<div><b>' + esc(x.s) + '</b> ' + esc(x.t) + '</div>';
-      }).join("") + '</div></div>';
+    // The gameweek is played across two or three days and each of them clears
+    // on its own, so a day that is settled says so rather than being hidden
+    // inside a gameweek that is not.
+    var DAY_STATE = { confirmed: "Confirmed", ft: "Awaiting bonus", live: "In play", ahead: "To come" };
+    if (focus.days && focus.days.length) {
+      h += '<div class="card"><div class="hd"><h3>Match days</h3>' +
+        '<span class="sub">' + focus.days.filter(function (d) { return d.done; }).length +
+        ' of ' + focus.days.length + ' confirmed</span></div>' +
+        focus.days.map(function (d) {
+          return '<div class="gwday' + (d.done ? ' on' : '') + '">' +
+            '<div class="gwdn"><b>' + esc(d.ko
+              ? new Date(d.ko).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })
+              : "Date to be confirmed") + '</b>' +
+            '<span class="gwdm">' + d.n + ' match' + (d.n === 1 ? '' : 'es') +
+            (d.state === "live" ? ' \u00b7 ' + d.ft + ' at full time' : '') + '</span></div>' +
+            '<span class="gwpill">' + esc(DAY_STATE[d.state] || d.state) + '</span></div>';
+        }).join("") + '</div>';
+    }
 
-    h += '<div class="note gwnote">Green is done, red is not yet. A gameweek that has ' +
-      'not been played shows red all the way across, which is simply the future. ' +
-      'Full time is the final whistle; FPL confirms bonus and finalises the points ' +
-      'afterwards, and those steps are hours apart.</div>';
+    h += '<div class="note gwnote">Full time is the final whistle. FPL confirms ' +
+      'the bonus and finalises the points afterwards, and those steps are hours ' +
+      'apart, so a score can be right and still not be final.</div>';
+
     host.innerHTML = h;
   }
 
