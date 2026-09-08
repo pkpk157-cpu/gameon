@@ -643,6 +643,58 @@ async function h2hAll(id) {
                 Object.keys(moves).length + " gameweek(s)");
   }
 
+  /* ---- the squad that is coming, before the deadline locks it ------------
+     FPL publishes nobody's team between deadlines: a squad only becomes
+     readable once its own deadline has passed. So after a gameweek settles,
+     everyone here is still shown the team they finished it with, even the
+     manager who has since played a wildcard and owns fifteen different
+     players.
+
+     The transfer log is public, though, and a transfer appears in it the
+     moment it is made, tagged with the gameweek it belongs to. Last week's
+     squad plus the moves logged against next week is therefore the fifteen a
+     manager will actually own — which is what a price watch needs. It is not
+     the eleven, the captain or the bench order: none of those are in the log,
+     and nothing here pretends otherwise.
+
+     Read only in the window between a gameweek finalising and the next
+     deadline, and at most once an hour: it costs a request per manager, and
+     transfers trickle in over days rather than minutes. */
+  let pending = null;
+  {
+    const cur = events.find((e) => e.id === pitchGw);
+    const next = events.find((e) => e.id === pitchGw + 1);
+    const settled = !!(cur && cur.finished && cur.data_checked);
+    const open = !!(next && settled && next.deadline_time &&
+                    Date.parse(next.deadline_time) > Date.now());
+    const held = (prev.pending && prev.pending.gw === pitchGw + 1) ? prev.pending : null;
+    const fresh = held && held.at && (Date.now() - Date.parse(held.at)) < 55 * 60 * 1000;
+    if (!open) {
+      // Outside the window the answer is the published squad itself, and a
+      // stale reconstruction left lying about would be worse than none.
+      pending = null;
+    } else if (fresh) {
+      pending = held;
+      console.log("pending transfers for GW " + (pitchGw + 1) + " — reused (" +
+                  Object.keys(held.moves || {}).length + " squads)");
+    } else {
+      const got = {};
+      await pool(managers, async (m) => {
+        try {
+          const tr = await getJSON("/entry/" + m.id + "/transfers/");
+          const list = (tr || [])
+            .filter((t) => t.event === pitchGw + 1)
+            .sort((a, b) => (Date.parse(a.time) || 0) - (Date.parse(b.time) || 0))
+            .map((t) => [t.element_in, t.element_out]);
+          if (list.length) got[m.id] = list;
+        } catch (e) { /* that manager simply shows his settled squad */ }
+      }, 6);
+      pending = { gw: pitchGw + 1, at: new Date().toISOString(), moves: got };
+      console.log("pending transfers for GW " + (pitchGw + 1) + " — read " +
+                  Object.keys(got).length + " squads with moves");
+    }
+  }
+
   /* ---- how many of a manager's players actually played -------------------
      Counted by multiplier, so a captain is worth two of the twelve and a
      triple captain three of thirteen.
@@ -812,7 +864,8 @@ async function h2hAll(id) {
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
-    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps,
+    pending
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.

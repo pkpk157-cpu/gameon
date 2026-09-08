@@ -2294,6 +2294,65 @@
              leader: { id: rows[0].id, name: rows[0].entryName, total: rows[0].total } };
   };
 
+  /* ---- next gameweek's squad, before the deadline publishes it -----------
+     Last settled squad, plus the transfers logged against the coming
+     gameweek, applied in the order they were made. A wildcard is thirty-odd
+     of those resolving to a completely new fifteen; churn — a player bought
+     and sold again the same week — cancels out on its own, because applying
+     the moves in order is what a manager actually did.
+
+     What this is: the fifteen he will own. What it is not: the eleven, the
+     captain, or the bench order. None of those are in the transfer log, and
+     the page says so rather than drawing a formation it cannot know. */
+  C.pendingSquad = function (ds, id) {
+    var p = ds && ds.pending;
+    if (!p || !p.gw || !p.moves) return null;
+    var base = ds.picks && ds.picks[p.gw - 1] && ds.picks[p.gw - 1][id];
+    if (!base || !base.p || !base.p.length) return null;
+    var log = p.moves[id] || [];
+    if (!log.length) return null;
+
+    var was = base.p.map(function (pk) { return pk[0]; });
+    var now = was.slice();
+    var applied = 0;
+    log.forEach(function (mv) {
+      var i = now.indexOf(mv[1]);
+      if (i === -1) return;           // out of step with the squad we hold
+      now[i] = mv[0]; applied++;
+    });
+    if (!applied) return null;
+
+    var els = ds.elements || {}, POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
+    var moves = priceMoves(ds);
+    var wasSet = {}; was.forEach(function (e) { wasSet[e] = 1; });
+    var nowSet = {}; now.forEach(function (e) { nowSet[e] = 1; });
+    var card = function (el) {
+      var m = els[el] || ["?", 0, "", 0, 0];
+      // The same reading, and the same threshold, the pitch cards use: a
+      // player is only said to be near a price change when he actually is.
+      var pm = moves[el], move = null;
+      if (pm && isFinite(pm.pct) && Math.abs(pm.pct) >= MOVE_MIN) {
+        var mag = Math.abs(pm.pct);
+        move = { pct: pm.pct, mag: mag, up: pm.pct >= 0,
+                 soon: pm.dueIn === 0 || mag >= 100 };
+      }
+      return { el: +el, name: m[0], type: m[1], pos: POS[m[1]] || "", team: m[2],
+               price: m[3] || 0, owned: m[4] || 0, move: move,
+               isNew: !wasSet[el] };
+    };
+    var squad = now.map(card);
+    squad.sort(function (a, b) {
+      return (a.type - b.type) || (b.price - a.price) ||
+             (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    });
+    var ins = now.filter(function (e) { return !wasSet[e]; }).map(card);
+    var outs = was.filter(function (e) { return !nowSet[e]; }).map(card);
+    var value = 0; squad.forEach(function (c) { value += c.price; });
+    return { gw: p.gw, at: p.at, squad: squad, ins: ins, outs: outs,
+             // what actually changed, not how many times he changed his mind
+             changed: ins.length, logged: log.length, value: value };
+  };
+
   /* ---- gameweek status ---------------------------------------------------
      Where each gameweek has got to, read from the same published flags every
      other page reads, so this can never tell a different story from the

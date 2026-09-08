@@ -956,40 +956,52 @@ table.t.cmptable.seasons td.num.win .sp { color:var(--good); }
 .pffoot .warn { color:var(--accent); font-weight:600; }
 
 /* ---- form chart: points on the left, league position on the right ------ */
-.spark2 svg { display:block; width:100%; height:auto; overflow:visible; }
-.spark2 .lnP { fill:none; stroke:var(--chart-a); stroke-width:2; stroke-linejoin:round;
+/* ---- form charts -------------------------------------------------------
+   Points as bars from zero, league position as a line, in stacked panels
+   sharing one gameweek axis. Never two y-scales over one plot: the measures
+   have no common scale, so an overlay would make their crossings look like
+   something the data does not say. */
+.fchart svg { display:block; width:100%; height:auto; overflow:visible; }
+.fchart .barP { fill:var(--chart-a); }
+.fchart .lnR { fill:none; stroke:var(--chart-b); stroke-width:2; stroke-linejoin:round;
   stroke-linecap:round; vector-effect:non-scaling-stroke; }
-.spark2 .lnR { fill:none; stroke:var(--chart-b); stroke-width:2; stroke-linejoin:round;
-  stroke-linecap:round; stroke-dasharray:5 3; vector-effect:non-scaling-stroke; }
-.spark2 .fill { fill:var(--accent-wash); stroke:none; }
-.spark2 .avg { stroke:var(--line-strong); stroke-width:1; stroke-dasharray:3 4; vector-effect:non-scaling-stroke; }
-/* a surface ring keeps a marker legible where the two lines cross */
-.spark2 .mkP { fill:var(--chart-a); stroke:var(--card-bg); stroke-width:1.6; vector-effect:non-scaling-stroke; }
-.spark2 .mkR { fill:var(--chart-b); stroke:var(--card-bg); stroke-width:1.6; vector-effect:non-scaling-stroke; }
-/* Data labels wear ink, not the series colour — the axes, the legend and the
-   two mark shapes carry identity. The halo keeps them readable over a line. */
-.spark2 text { font-size:9px; font-weight:700; font-variant-numeric:tabular-nums;
+.fchart .mkR { fill:var(--chart-b); stroke:var(--card-bg); stroke-width:1.6; vector-effect:non-scaling-stroke; }
+.fchart .avg { stroke:var(--line-strong); stroke-width:1; stroke-dasharray:3 4; vector-effect:non-scaling-stroke; }
+.fchart .hit { fill:transparent; }
+.fchart text { font-size:9px; font-weight:700; font-variant-numeric:tabular-nums;
   paint-order:stroke; stroke:var(--card-bg); stroke-width:2.6px; stroke-linejoin:round; }
-.spark2 .dlP { fill:var(--ink); text-anchor:middle; }
-.spark2 .dlR { fill:var(--ink-soft); text-anchor:middle; }
-.spark2 .axP { fill:var(--ink-faint); text-anchor:end; font-size:8.5px; }
-.spark2 .axR { fill:var(--ink-faint); text-anchor:start; font-size:8.5px; }
-.spark2 .axG { fill:var(--ink-faint); text-anchor:middle; font-size:8.5px; font-weight:600; }
-.spark2 .lgd { display:flex; flex-wrap:wrap; gap:4px 14px; margin-bottom:4px;
-  font-size:10.5px; font-weight:600; color:var(--ink-faint); }
-.spark2 .lg { display:inline-flex; align-items:center; gap:5px; }
-.spark2 .lg b { font-weight:700; color:var(--ink-faint); opacity:.75; }
-.spark2 .lg i { width:9px; height:9px; border-radius:50%; background:var(--chart-a); }
-.spark2 .lg.b i { border-radius:2px; transform:rotate(45deg); background:var(--chart-b); }
-.sparkfoot { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-top:6px;
-  font-size:11px; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
-.sparkfoot .mid { color:var(--ink-faint); }
-.sparkfoot b { font-size:13px; color:var(--ink); }
+/* values wear ink, never the series colour — the mark beside them carries identity */
+.fchart .dlP { fill:var(--ink); text-anchor:middle; }
+.fchart .dlR { fill:var(--ink-soft); text-anchor:middle; }
+.fchart .axV { fill:var(--ink-faint); text-anchor:end; font-size:8.5px; }
+.fchart .axG { fill:var(--ink-faint); text-anchor:middle; font-size:8.5px; font-weight:600; }
+/* the legend is the control: tap a series to take it off the chart */
+.fchart .lgd { display:flex; flex-wrap:wrap; gap:6px 8px; margin-bottom:8px; }
+.fchart .lg { display:inline-flex; align-items:center; gap:6px; appearance:none; cursor:pointer;
+  font:inherit; font-size:11px; font-weight:700; color:var(--ink-faint);
+  padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+  background:transparent; }
+.fchart .lg.on { color:var(--ink); border-color:var(--line-strong); background:var(--glass-hi); }
+.fchart .lg i { width:10px; height:10px; border-radius:2px; background:var(--ink-faint); flex:none; }
+.fchart .lg.on i.bar { background:var(--chart-a); }
+.fchart .lg.on i.dot { background:var(--chart-b); border-radius:50%; }
+.fchart .pnl { font-size:8.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+  fill:var(--ink-faint); text-anchor:start; }
+/* two managers: colour says who, and the panels say which measure */
+.cmpchart .barA, .cmpchart .mkA { fill:var(--chart-a); }
+.cmpchart .barB, .cmpchart .mkB { fill:var(--chart-b); }
+.cmpchart .mkA, .cmpchart .mkB { stroke:var(--card-bg); stroke-width:1.4; vector-effect:non-scaling-stroke; }
+.cmpchart .lnA { fill:none; stroke:var(--chart-a); stroke-width:2; stroke-linejoin:round;
+  stroke-linecap:round; vector-effect:non-scaling-stroke; }
+.cmpchart .lnB { fill:none; stroke:var(--chart-b); stroke-width:2; stroke-linejoin:round;
+  stroke-linecap:round; vector-effect:non-scaling-stroke; }
+.cmpchart .dlW { fill:var(--ink); text-anchor:middle; }
+.cmpchart .lg.a.on i { background:var(--chart-a); }
+.cmpchart .lg.b.on i { background:var(--chart-b); }
 /* one gameweek is a number, not a line */
 .sparkone { display:flex; align-items:baseline; gap:10px; }
 .sparkone .v { font-size:30px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
 .sparkone .l { font-size:11.5px; color:var(--ink-faint); }
-
 /* ---- refresh button ---------------------------------------------------- */
 #btnSync.spin svg { animation:spin 0.6s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -1569,4 +1581,39 @@ button.chipgo { cursor:pointer; font:inherit; font-size:12px; border:1px solid v
   .sprow { padding: 7px 11px; gap: 7px; }
   .sprg { width: 62px; font-size: 11px; }
   .sprn { min-width: 40px; }
+}
+
+/* the squad that is coming: a list, because the transfer log names who is in
+   and out and nothing about the eleven, the captain or the bench order */
+.pendhd { display:flex; align-items:center; gap:9px; padding:2px 0 10px; }
+.pendhd b { font-size:15px; font-weight:800; }
+.pendmeta { font-size:11.5px; font-weight:600; color:var(--ink-faint); padding-bottom:10px;
+  border-bottom:1px solid var(--line); }
+.pdgrp { padding-top:10px; }
+.pdgrp .lab-sm { margin-bottom:2px; }
+.pdrow { display:flex; align-items:center; gap:8px; padding:8px 2px; border-bottom:1px solid var(--line); }
+.pdrow:last-child { border-bottom:0; }
+.pdn { flex:1 1 auto; min-width:0; font-size:13px; font-weight:700;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pdnew { display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px;
+  font-size:9px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  background:var(--good-wash); color:var(--good); vertical-align:1px; }
+.pdt { flex:none; font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--ink-faint); }
+.pdp { flex:none; min-width:52px; text-align:right; font-size:12.5px; font-weight:800;
+  font-variant-numeric:tabular-nums; }
+.pdmv { flex:none; font-style:normal; font-size:10px; font-weight:800; padding:1px 4px;
+  border-radius:4px; font-variant-numeric:tabular-nums; }
+.pdmv.up { color:var(--good); box-shadow:inset 0 0 0 1px var(--good); }
+.pdmv.down { color:var(--bad); box-shadow:inset 0 0 0 1px var(--bad); }
+.pdmv.soon.up { background:var(--good); color:var(--on-accent); box-shadow:none; }
+.pdmv.soon.down { background:var(--bad); color:var(--on-accent); box-shadow:none; }
+.pdio { padding-top:12px; border-top:1px solid var(--line); margin-top:10px; }
+.pdswap { display:flex; align-items:center; gap:8px; padding:6px 2px; font-size:12.5px; }
+.pdin { font-weight:800; color:var(--good); }
+.pdarr { color:var(--ink-faint); }
+.pdout { font-weight:600; color:var(--ink-soft); text-decoration:line-through; }
+.pendnote { margin-top:12px; }
+@media (max-width: 359px) {
+  .pdt { display:none; }
+  .pdp { min-width:46px; font-size:12px; }
 }
