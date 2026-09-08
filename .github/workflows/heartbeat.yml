@@ -1,0 +1,127 @@
+# ---------------------------------------------------------------------------
+# The league's clock.
+#
+# The updater used to be poked every ten minutes by a cron trigger on a
+# Cloudflare Worker. On 8 September 2026 that trigger stopped firing: the
+# dashboard still showed "Every 10 minutes" and a "Next run" time, no logs, no
+# errors, and nothing ran for three and a half hours. Free Workers offer no
+# execution guarantee for cron, and a clock that can stop without saying so is
+# not a clock.
+#
+# GitHub's own schedule is not a replacement either. This repository asks for
+# twice an hour and gets three to six firings a day, sometimes with five-hour
+# gaps — which is why the Worker existed in the first place.
+#
+# So the clock lives here now, in the same place as the work. This job pokes
+# the updater every ten minutes for the best part of an hour, then hands over
+# to a fresh copy of itself. The chain is what keeps time; everything else is
+# a way of restarting it if it ever breaks:
+#
+#   - GitHub's schedule below restarts it whenever it does fire.
+#   - The Cloudflare cron still pokes the updater directly if it recovers.
+#   - Only one chain can exist at a time (concurrency, cancel-in-progress), so
+#     a restart replaces the old chain rather than doubling the cadence.
+#
+# It also watches the thing it is responsible for: if data.json has not been
+# published for 45 minutes, the step fails, and GitHub emails the repository
+# owner. Silence was the whole problem the first time.
+#
+# The runner spends most of its life asleep. On a public repository Actions
+# minutes are free and unlimited, and this is the project publishing its own
+# data, but if you would rather not lean on that, the paid Cloudflare plan
+# ($5/month) gives the Worker cron a real execution guarantee and this file
+# can go.
+# ---------------------------------------------------------------------------
+name: Heartbeat
+on:
+  # A backstop, not the clock. GitHub honours these when it feels like it,
+  # which is exactly why the chain above does the real work.
+  schedule:
+    - cron: "7,27,47 * * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  # One chain, always. A new heartbeat replaces the one it finds running, so a
+  # backstop firing mid-chain restarts the loop instead of running two.
+  group: heartbeat
+  cancel-in-progress: true
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    # 5 pokes, ten minutes apart, plus the handover — comfortably inside this.
+    timeout-minutes: 70
+    steps:
+      - name: Check the key that keeps the chain alive
+        env:
+          PAT: ${{ secrets.CRON_PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "::error::CRON_PAT is not set. A workflow cannot start another"
+            echo "::error::workflow with the built-in GITHUB_TOKEN — GitHub blocks"
+            echo "::error::that to stop runaway loops — so the chain cannot hand"
+            echo "::error::over and the clock will stop when this run ends."
+            echo "::error::Fix: Settings → Secrets and variables → Actions → New"
+            echo "::error::repository secret, named CRON_PAT, holding a token with"
+            echo "::error::Actions: read and write on this repository."
+            exit 1
+          fi
+
+      - name: Poke the updater every ten minutes
+        env:
+          GH_TOKEN: ${{ secrets.CRON_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          for i in 1 2 3 4 5; do
+            echo "--- poke $i of 5 at $(date -u +%H:%M:%SZ)"
+            # A failed poke costs one cycle; the next one is ten minutes away
+            # and the loop keeps its own time, so it is never fatal on its own.
+            gh workflow run update-data.yml --repo "$REPO" --ref main \
+              || echo "::warning::poke $i failed"
+            if [ "$i" != "5" ]; then sleep 600; fi
+          done
+
+      - name: Check the data actually got published
+        env:
+          GH_TOKEN: ${{ secrets.CRON_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          # Give the last poke room to finish before judging it.
+          sleep 90
+          LAST=$(gh api "repos/$REPO/commits?path=data.json&per_page=1" \
+                   --jq '.[0].commit.committer.date' 2>/dev/null || echo "")
+          if [ -z "$LAST" ]; then
+            echo "::warning::could not read the last data.json commit"
+            exit 0
+          fi
+          AGE=$(( $(date -u +%s) - $(date -u -d "$LAST" +%s) ))
+          echo "data.json last published $LAST — ${AGE}s ago"
+          if [ "$AGE" -gt 2700 ]; then
+            echo "::error::data.json has not been published for $((AGE / 60)) minutes."
+            echo "::error::The clock is running, so the updater itself is failing —"
+            echo "::error::check the most recent 'Update FPL data' run."
+            exit 1
+          fi
+
+      - name: Hand over to the next heartbeat
+        # Runs even if the watchdog above failed: a broken updater must not
+        # also stop the clock, or one problem quietly becomes two.
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.CRON_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          for i in 1 2 3; do
+            if gh workflow run heartbeat.yml --repo "$REPO" --ref main; then
+              echo "handed over"
+              exit 0
+            fi
+            echo "handover attempt $i failed, retrying"
+            sleep $((i * 5))
+          done
+          echo "::error::could not hand over — the chain has stopped. The"
+          echo "::error::scheduled backstop will restart it, eventually."
+          exit 1

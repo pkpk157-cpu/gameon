@@ -87,6 +87,53 @@ auto value:
 
 Import/Export moves the whole bundle (config + overrides + data) as one file.
 
+## The clock — what keeps the data fresh
+
+`data.json` is republished every ten minutes by the **Update FPL data**
+workflow. Three things can start it, in order of how much they can be trusted:
+
+1. **`heartbeat.yml`** — the clock. One run pokes the updater every ten
+   minutes for the best part of an hour, then hands over to a fresh copy of
+   itself. Only one chain exists at a time. It also watches its own work: if
+   `data.json` has not been published for 45 minutes the run fails, and GitHub
+   emails the repository owner.
+2. **GitHub's own `schedule`** — a backstop that restarts the chain if it ever
+   breaks. Do not rely on it: this repository asks for twice an hour and gets
+   three to six firings a day, sometimes with five-hour gaps.
+3. **The Cloudflare Worker cron** — a spare. It pokes the updater directly and
+   now logs what happened when it fails.
+
+**One secret makes this work: `CRON_PAT`.** A workflow cannot start another
+workflow with the built-in `GITHUB_TOKEN` — GitHub blocks it to prevent runaway
+loops — so the chain needs a personal access token to hand over. Settings →
+Secrets and variables → Actions → New repository secret, named `CRON_PAT`,
+holding a fine-grained token with **Actions: read and write** on this
+repository. Without it the heartbeat fails on its first step and says so.
+
+### Why it is built this way
+
+The Worker cron was the only clock until 8 September 2026, when it stopped
+firing. The dashboard still showed "Every 10 minutes" and a next-run time,
+there were no logs and no errors, and nothing ran for three and a half hours.
+Free Workers give no execution guarantee for cron. Nobody noticed for an hour
+because every failure in the Worker was swallowed silently; the first sign was
+the app's own banner saying its numbers were an hour old.
+
+So: the clock moved into the repository, next to the work; the Worker says when
+it fails instead of going quiet; and the heartbeat checks that data is actually
+being published rather than only that it is running.
+
+### If the data goes stale anyway
+
+The app's top bar reads **"not synced for …"** in amber once the data is over
+half an hour old, on every page. That is the signal to check:
+
+- **Actions → Heartbeat** — is a run in progress? If not, run it by hand
+  (Run workflow) and it will chain from there.
+- **Actions → Update FPL data** — are runs failing? The heartbeat's watchdog
+  will have failed too and emailed.
+- **`CRON_PAT`** — a token that has expired or been revoked stops the handover.
+
 ## Files
 
 | File | Purpose |

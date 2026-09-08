@@ -1,0 +1,22 @@
+# Runs on every push. Cheap, and it closes the hole that let a file which had
+# never once parsed sit in this repository for weeks: worker.js is pasted into
+# Cloudflare by hand, so nothing here ever executed it.
+name: Sources parse
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-save js-yaml
+      - run: node scripts/check-sources.js
