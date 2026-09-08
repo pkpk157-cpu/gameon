@@ -4066,11 +4066,13 @@
      A season's shape: what they scored each gameweek, and where that left them
      in the league.
 
-     The two are drawn in stacked panels sharing one gameweek axis, not laid
-     over each other on two y-scales. Points and league position have no common
-     scale, so an overlay makes their crossings look meaningful when they are an
-     artefact of how the two axes were lined up. Stacked, each measure is read
-     against its own baseline and the pair still reads as one season.
+     On one manager the two share a plot: bars for points, the line over them
+     for position. They have no common scale, so where the two cross means
+     nothing — which is why no value axis is drawn against either. Every mark
+     carries its own number instead, and the numbers are the thing to read.
+     Comparing two managers puts points and position in separate panels, since
+     there colour already means which manager and cannot also mean which
+     measure.
 
      Points are bars from zero, because a bar's length is its value and a
      gameweek score is a magnitude. Position is a line, because it is one
@@ -4138,8 +4140,8 @@
     if (pts.length < 2) {
       var one = pts[0];
       return '<div class="sparkone"><span class="v">' + num(one.p) + '</span>' +
-        '<span class="l">GW' + one.gw + (one.r ? ' · ' + ord(one.r) + ' of ' + num(one.of) : '') +
-        ' — a chart needs more than one gameweek</span></div>';
+        '<span class="l">GW' + one.gw + (one.r ? ' \u00b7 ' + ord(one.r) + ' of ' + num(one.of) : '') +
+        ' \u2014 a chart needs more than one gameweek</span></div>';
     }
     var show = formShown();
     var ranked = pts.filter(function (p) { return p.r; });
@@ -4148,70 +4150,74 @@
     if (!onP && !onR) onP = true;
 
     var G = CHART_GEOM;
-    var both = onP && onR;
-    var hP = onP ? (both ? 98 : 132) : 0;
-    var hR = onR ? (both ? 70 : 132) : 0;
-    var H = G.top + hP + (both ? G.gap : 0) + hR + G.foot;
-    var x0 = G.padL + 14, x1 = G.w - G.padR - 14;
+    var plotH = 162;
+    var H = G.top + plotH + G.foot;
+    var top = G.top, bot = top + plotH;
+    var x0 = G.padL + 16, x1 = G.w - G.padR - 16;
     function x(i) { return x0 + (i * (x1 - x0)) / (pts.length - 1); }
-
     var labelAll = pts.length <= 12;
-    var body = "", axes = "";
 
+    var vals = pts.map(function (p) { return p.p; });
+    var hi = Math.max.apply(null, vals), lo = Math.min(0, Math.min.apply(null, vals));
+    if (hi === lo) hi = lo + 1;
+    var yP = function (v) { return bot - ((v - lo) / (hi - lo)) * (plotH - 20); };
+    var zero = yP(0);
+    var avg = vals.reduce(function (t, v) { return t + v; }, 0) / vals.length;
+
+    var rv = ranked.map(function (p) { return p.r; });
+    var best = rv.length ? Math.min.apply(null, rv) : 0;
+    var worst = rv.length ? Math.max.apply(null, rv) : 1;
+    if (worst === best) worst = best + 1;
+    // 1st sits at the top: better is higher, the way a league table reads. The
+    // band is inset so a label above the highest dot and below the lowest both
+    // stay inside the plot.
+    var yR = function (v) { return top + 16 + ((v - best) / (worst - best)) * (plotH - 46); };
+
+    var bg = barGeom(x, pts.length, 1);
+    var body = "", labels = "";
+    var barTop = [];
     if (onP) {
-      var top = G.top, bot = top + hP;
-      var vals = pts.map(function (p) { return p.p; });
-      var hi = Math.max.apply(null, vals), lo = Math.min(0, Math.min.apply(null, vals));
-      if (hi === lo) hi = lo + 1;
-      // headroom for the number that sits above each bar
-      var yP = function (v) { return bot - ((v - lo) / (hi - lo)) * (hP - 14); };
-      var zero = yP(0);
-      var avg = vals.reduce(function (t, v) { return t + v; }, 0) / vals.length;
-      var bg = barGeom(x, pts.length, 1);
-      var lab = labelRule(pts, function (p) { return p.p; });
       body += '<line class="avg" x1="' + x0 + '" x2="' + x1 + '" y1="' + yP(avg).toFixed(1) +
         '" y2="' + yP(avg).toFixed(1) + '"/>';
+      var labP = labelRule(pts, function (p) { return p.p; });
       pts.forEach(function (p, i) {
         var yv = yP(p.p), h = Math.abs(zero - yv), y = Math.min(zero, yv);
+        barTop[i] = y;
         body += '<rect class="barP" x="' + (x(i) - bg.w / 2).toFixed(1) + '" y="' + y.toFixed(1) +
           '" width="' + bg.w.toFixed(1) + '" height="' + Math.max(1, h).toFixed(1) + '" rx="3"/>';
-        if (lab(i)) {
-          body += '<text class="dlP" x="' + x(i).toFixed(1) + '" y="' + (y - 5).toFixed(1) +
+        if (labP(i)) {
+          labels += '<text class="dlP" x="' + x(i).toFixed(1) + '" y="' + (y - 5).toFixed(1) +
             '">' + num(p.p) + '</text>';
         }
       });
-      if (!labelAll) {
-        axes += '<text class="axV" x="' + (x0 - 6) + '" y="' + (top + 8) + '">' + num(hi) + '</text>' +
-          '<text class="axV" x="' + (x0 - 6) + '" y="' + zero.toFixed(1) + '">' + num(lo) + '</text>';
-      }
     }
     if (onR) {
-      var rTop = G.top + hP + (both ? G.gap : 0), rBot = rTop + hR;
-      var rv = ranked.map(function (p) { return p.r; });
-      var best = Math.min.apply(null, rv), worst = Math.max.apply(null, rv);
-      if (worst === best) worst = best + 1;
-      // 1st sits at the top: better is higher, as a league table reads
-      var yR = function (v) { return rTop + 9 + ((v - best) / (worst - best)) * (hR - 22); };
-      var lab2 = labelRule(pts, function (p) { return -(p.r || worst); });
+      // the line is drawn over the bars, never under them
       var seg = [];
       pts.forEach(function (p, i) {
         if (!p.r) return;
         seg.push((seg.length ? "L" : "M") + x(i).toFixed(1) + " " + yR(p.r).toFixed(1));
       });
       body += '<path class="lnR" d="' + seg.join(" ") + '"/>';
+      var labR = labelRule(pts, function (p) { return -(p.r || worst); });
       pts.forEach(function (p, i) {
         if (!p.r) return;
         var y = yR(p.r);
         body += '<circle class="mkR" cx="' + x(i).toFixed(1) + '" cy="' + y.toFixed(1) + '" r="4"/>';
-        if (lab2(i)) {
-          body += '<text class="dlR" x="' + x(i).toFixed(1) + '" y="' + (y + 15).toFixed(1) +
-            '">' + esc(ord(p.r)) + '</text>';
-        }
+        if (!labR(i)) return;
+        // Below the dot by default. Where a bar top is close above it the two
+        // numbers would sit on each other, so this one goes above instead —
+        // every label has a surface halo, so either side stays readable.
+        var flip = onP && barTop[i] != null && y <= barTop[i] && (barTop[i] - y) < 26;
+        labels += '<text class="dlR" x="' + x(i).toFixed(1) + '" y="' +
+          (flip ? (y - 9) : (y + 15)).toFixed(1) + '">' + esc(ord(p.r)) + '</text>';
       });
-      if (!labelAll) {
-        axes += '<text class="axV" x="' + (x0 - 6) + '" y="' + (rTop + 12) + '">' + esc(ord(best)) + '</text>' +
-          '<text class="axV" x="' + (x0 - 6) + '" y="' + (rBot - 2) + '">' + esc(ord(worst)) + '</text>';
-      }
+    }
+
+    var axes = "";
+    if (!labelAll) {
+      if (onP) axes += '<text class="axV" x="' + (x0 - 8) + '" y="' + (top + 8) + '">' + num(hi) + '</text>';
+      if (onR) axes += '<text class="axV" x="' + (x0 - 8) + '" y="' + (bot - 2) + '">' + esc(ord(worst)) + '</text>';
     }
 
     var legend = formLegend([
@@ -4221,10 +4227,10 @@
     return '<div class="fchart">' + legend +
       '<svg viewBox="0 0 ' + G.w + ' ' + H + '" role="img" aria-label="Gameweek points' +
         (hasR ? ' and league position' : '') + ' from GW' + pts[0].gw + ' to GW' + pts[pts.length - 1].gw + '">' +
-        body + axes + gwAxis(pts, x, H - 8) +
-        gwHits(pts, x, G.top - 10, H - G.foot, function (p) {
+        body + labels + axes + gwAxis(pts, x, H - 8) +
+        gwHits(pts, x, G.top - 10, bot + 6, function (p) {
           return "GW" + p.gw + ": " + num(p.p) + " pts" +
-            (p.r ? " · " + ord(p.r) + " of " + num(p.of) : "");
+            (p.r ? " \u00b7 " + ord(p.r) + " of " + num(p.of) : "");
         }) +
       '</svg></div>';
   }
@@ -4251,7 +4257,7 @@
     // the caption sits above each panel, and the closing position is printed
     // past the end of its line, so both need their own room
     var H = G.top + hP + G.gap + hR + G.foot;
-    var x0 = G.padL + 16, x1 = G.w - G.padR - 30;
+    var x0 = G.padL + 16, x1 = G.w - G.padR - 16;
     function x(i) { return x0 + (i * (x1 - x0)) / (pts.length - 1); }
 
     var vals = [];
@@ -4269,7 +4275,7 @@
     var best = hasR ? Math.min.apply(null, rv) : 0, worst = hasR ? Math.max.apply(null, rv) : 1;
     if (worst === best) worst = best + 1;
     var rTop = top + hP + G.gap;
-    var yR = function (v) { return rTop + 9 + ((v - best) / (worst - best)) * (hR - 22); };
+    var yR = function (v) { return rTop + 14 + ((v - best) / (worst - best)) * (hR - 34); };
 
     var bg = barGeom(x, pts.length, sides.length);
     var body = "";
@@ -4286,27 +4292,24 @@
           '" height="' + Math.max(1, h).toFixed(1) + '" rx="3"/>';
       });
     });
-    // The winner of each week is the only number worth printing: two labels a
-    // week over a season is noise, and the bars already carry the comparison.
-    // It sits over the bar it belongs to — centred between the pair it would
-    // read as belonging to either, which is worse than no number at all.
-    if (sides.length > 1) {
-      pts.forEach(function (p, i) {
-        if (!p.a || !p.b || p.a.p === p.b.p) return;
-        var win = p.a.p > p.b.p ? "a" : "b";
-        var si = sides[0].k === win ? 0 : 1;
-        var cx = x(i) - bg.w - 1 + si * (bg.w + 2) + bg.w / 2;
-        body += '<text class="dlW ' + win + '" x="' + cx.toFixed(1) + '" y="' + (yP(p[win].p) - 5).toFixed(1) +
-          '">' + num(p[win].p) + '</text>';
-      });
-    } else {
-      pts.forEach(function (p, i) {
-        var d = p[sides[0].k];
+    // Every bar carries its own number, each over the bar it belongs to. Past a
+    // dozen gameweeks two numbers a week stops fitting, so the labels thin to
+    // the ends and the extremes the way they do on a single manager's chart.
+    var labP = labelRule(pts, function (p) {
+      return Math.max(p.a ? p.a.p : -Infinity, p.b ? p.b.p : -Infinity);
+    });
+    pts.forEach(function (p, i) {
+      if (!labP(i)) return;
+      sides.forEach(function (s, si) {
+        var d = p[s.k];
         if (!d) return;
-        body += '<text class="dlW ' + sides[0].k + '" x="' + x(i).toFixed(1) + '" y="' +
+        var cx = sides.length > 1
+          ? x(i) - bg.w - 1 + si * (bg.w + 2) + bg.w / 2
+          : x(i);
+        body += '<text class="dlW ' + s.k + '" x="' + cx.toFixed(1) + '" y="' +
           (yP(d.p) - 5).toFixed(1) + '">' + num(d.p) + '</text>';
       });
-    }
+    });
     if (hasR) {
       sides.forEach(function (s) {
         var seg = [];
@@ -4323,12 +4326,25 @@
             '" cy="' + yR(d.r).toFixed(1) + '" r="3.6"/>';
         });
       });
-      var endsAt = pts.length - 1;
-      sides.forEach(function (s) {
-        var d = pts[endsAt][s.k];
-        if (!d || !d.r) return;
-        body += '<text class="dlR ' + s.k + '" x="' + (x(endsAt) + 9).toFixed(1) + '" y="' +
-          (yR(d.r) + 3).toFixed(1) + '" text-anchor="start">' + esc(ord(d.r)) + '</text>';
+      // Every position carries its number too. Two managers a place apart put
+      // their dots almost on top of each other, so within each gameweek the
+      // higher dot labels above and the lower one below. Assigning a side per
+      // manager instead breaks the moment their lines cross: the one meant to
+      // label upwards is now underneath, and the two numbers meet in the
+      // middle.
+      var labR = labelRule(pts, function (p) {
+        return -Math.min(p.a && p.a.r ? p.a.r : worst, p.b && p.b.r ? p.b.r : worst);
+      });
+      pts.forEach(function (p, i) {
+        if (!labR(i)) return;
+        var here = sides.map(function (s) { return { k: s.k, d: p[s.k] }; })
+          .filter(function (o) { return o.d && o.d.r; });
+        here.sort(function (m, n) { return yR(m.d.r) - yR(n.d.r); });
+        here.forEach(function (o, idx) {
+          var up = idx === 0;
+          body += '<text class="dlR ' + o.k + '" x="' + x(i).toFixed(1) + '" y="' +
+            (yR(o.d.r) + (up ? -9 : 15)).toFixed(1) + '">' + esc(ord(o.d.r)) + '</text>';
+        });
       });
     }
 
