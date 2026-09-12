@@ -1614,9 +1614,23 @@
   /* ====================================================================== */
   /* CLASSIC                                                                */
   /* ====================================================================== */
+  // FPL's standings endpoint goes down now and then, usually around a
+  // deadline. The updater keeps publishing through it on the roster it already
+  // had, so the app never goes dark — but a table that quietly holds an old
+  // number is exactly the thing this league cannot have, so say it plainly.
+  function heldNote(ds) {
+    if (!ds || !ds.rosterAsOf) return '';
+    var age = Date.now() - Date.parse(ds.rosterAsOf);
+    return '<div class="callout warn-callout"><b>FPL\u2019s standings have not ' +
+      'answered for ' + esc(spanText(age)) + '.</b> Totals and positions here are ' +
+      'worked out from each manager\u2019s own gameweek history, which is still ' +
+      'updating \u2014 so they are current. The move column is from the last ' +
+      'standings we had, and catches up when FPL comes back.</div>';
+  }
+
   function renderClassic(host, ds) {
     var rows = K.classic(ds);
-    var h = '';
+    var h = heldNote(ds);
 
     h += '<label class="field" style="margin-bottom:12px">' +
       '<input class="in" id="classicSearch" placeholder="Search manager or team…"></label>';

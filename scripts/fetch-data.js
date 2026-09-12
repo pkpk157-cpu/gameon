@@ -18,7 +18,7 @@ const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)", "
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function getJSON(path, tries = 5) {
+async function getJSON(path, tries = 7) {
   let last;
   for (let i = 0; i < tries; i++) {
     try {
@@ -26,12 +26,21 @@ async function getJSON(path, tries = 5) {
       const t = setTimeout(() => ctrl.abort(), 30000);
       const res = await fetch(BASE + path, { headers: HEADERS, signal: ctrl.signal });
       clearTimeout(t);
-      if (res.status === 429 || res.status >= 500) { await sleep(1500 * (i + 1)); continue; }
+      // Busy or briefly down. FPL takes the game offline around a deadline and
+      // answers 503 for a few minutes, so this is a wait, not a failure — but
+      // record it, because a loop that only ever `continue`d used to leave
+      // `last` unset and then `throw undefined`, which says nothing at all.
+      if (res.status === 429 || res.status >= 500) {
+        last = new Error("HTTP " + res.status + " for " + path);
+        const after = Number(res.headers.get("retry-after"));
+        await sleep(after > 0 ? Math.min(after * 1000, 30000) : 1500 * (i + 1));
+        continue;
+      }
       if (!res.ok) throw new Error("HTTP " + res.status + " for " + path);
       return await res.json();
     } catch (e) { last = e; await sleep(700 * (i + 1)); }
   }
-  throw last;
+  throw last || new Error("gave up after " + tries + " tries for " + path);
 }
 
 async function pool(items, worker, concurrency = 6) {
@@ -133,8 +142,32 @@ async function h2hAll(id) {
     average: e.average_entry_score
   }));
 
+  // What we published last time: the h2h schedule and the price record are both
+  // carried forward from it rather than fetched again, and it is the standby
+  // roster if the standings endpoint is down.
+  let prev = {};
+  try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
+
   console.log("Fetching classic league…");
-  const { managers, name } = await classicAll();
+  let managers, name, rosterAsOf = null;
+  try {
+    const lg = await classicAll();
+    managers = lg.managers;
+    name = lg.name;
+  } catch (e) {
+    // The standings are the one call with no per-manager fallback, and FPL
+    // takes them offline around a deadline. Losing them used to lose the whole
+    // run — no live points, no bonus, no prices, for as long as the outage
+    // lasted. A private league's roster does not change mid-season, so carry
+    // the last one forward and keep going; every number on it is rebuilt from
+    // the histories fetched next, which come from a different endpoint.
+    if (!(prev.managers && prev.managers.length)) throw e;
+    managers = prev.managers.map((m) => Object.assign({}, m));
+    name = (prev.league && prev.league.name) || "";
+    rosterAsOf = prev.updatedAt || null;
+    console.log("  standings unavailable (" + (e && e.message) + ") — carrying " +
+      managers.length + " managers forward from " + rosterAsOf);
+  }
   console.log("  " + managers.length + " managers");
 
   console.log("Fetching manager histories…");
@@ -159,12 +192,32 @@ async function h2hAll(id) {
   }, 6);
   console.log("  histories done, failed " + hist.failed);
 
-  console.log("Fetching H2H group standings…");
-  // What we published last time: the h2h schedule and the price record are both
-  // carried forward from it rather than fetched again.
-  let prev = {};
-  try { prev = JSON.parse(fs.readFileSync("data.json", "utf8")).dataset || {}; } catch (e) {}
+  // A carried-forward roster still carries the totals and ranks the standings
+  // last reported. The histories above are current and come from elsewhere, so
+  // rebuild from those — but only with a complete set, since a roster ranked
+  // on a mix of fresh and stale totals would be wrong in a way nobody could
+  // see. Short of that the roster keeps the last figures the standings gave,
+  // which are at least consistent with each other.
+  if (rosterAsOf) {
+    let latest = 0;
+    managers.forEach((m) => {
+      Object.keys(history[m.id] || {}).forEach((g) => { if (+g > latest) latest = +g; });
+    });
+    const rows = latest ? managers.map((m) => (history[m.id] || {})[latest]) : [];
+    if (latest && rows.every((r) => r && typeof r.t === "number")) {
+      managers.forEach((m, i) => { m.total = rows[i].t; m.eventTotal = rows[i].p; });
+      // Ties keep the order the standings had, which is as close to FPL's own
+      // tiebreak as we can get without asking it.
+      managers.slice()
+        .sort((a, b) => (b.total - a.total) || ((a.rank || 1e9) - (b.rank || 1e9)))
+        .forEach((m, i) => { m.rank = i + 1; });
+      console.log("  roster totals and ranks rebuilt from GW" + latest + " histories");
+    } else {
+      console.log("  roster kept as published: histories incomplete for a rebuild");
+    }
+  }
 
+  console.log("Fetching H2H group standings…");
   const h2h = {};
   await pool(H2H, async (id) => { h2h[id] = await h2hAll(id); }, 4);
 
@@ -860,7 +913,7 @@ async function h2hAll(id) {
 
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
-    bootstrap: { events }, league: { id: CLASSIC, name: name },
+    bootstrap: { events }, league: { id: CLASSIC, name: name }, rosterAsOf,
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
