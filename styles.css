@@ -1749,7 +1749,6 @@ html.ovl, html.ovl body { overflow:hidden !important; }
 .volhead { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
 .volseg { flex:1 1 auto; min-width:0; margin:0; width:auto; max-width:none; }
 .volseg button { flex:1 1 0; min-width:0; padding:6px 4px; font-size:11.5px; }
-.volinfo { flex:none; margin-left:0; }
 table.t.voltbl th, table.t.voltbl td { padding:9px 5px; }
 table.t.voltbl th.num, table.t.voltbl td.num { text-align:center; white-space:nowrap; }
 table.t.voltbl td.num { font-variant-numeric:tabular-nums; }

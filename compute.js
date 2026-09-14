@@ -1837,6 +1837,16 @@
       });
     });
 
+    // A voluntary league is a season-long table like the classic one, and
+    // pays when it does.
+    C.voluntaryLeagues(ds).forEach(function (l) {
+      var v = C.voluntary(ds, l.key);
+      if (!v || !v.loaded) return;
+      v.rows.forEach(function (r) {
+        if (r.prize) add(r.id, "Voluntary", v.name + " \u00b7 #" + r.computedRank, r.prize, seasonDone);
+      });
+    });
+
     // Last Manager Standing pays when a champion exists.
     var lms = C.lms(ds);
     if (lms.champion) {
@@ -2015,6 +2025,20 @@
       entry("UCL", g.name + (t.dest ? " · " + t.dest : ""), t.pos, 0, false, state,
         against(g.table, t.pos, target, function (x) { return x.pts; }),
         (t.pos <= target ? "pts clear of " : "pts off ") + ordinalOf(target));
+    });
+
+    /* Voluntary leagues — only the ones this manager is in */
+    C.voluntaryLeagues(ds).forEach(function (l) {
+      var v = C.voluntary(ds, l.key);
+      if (!v || !v.loaded) return;
+      var vrow = v.rows.filter(function (x) { return +x.id === id; })[0];
+      if (!vrow) return;
+      var lastV = v.places.length ? v.places[v.places.length - 1] : 0;
+      var inV = lastV ? vrow.computedRank <= lastV : false;
+      entry("Voluntary", v.name, vrow.computedRank, vrow.prize, false,
+        inV ? "in" : "out",
+        lastV ? against(v.rows, vrow.computedRank, lastV, function (x) { return x.total; }) : null,
+        lastV ? (inV ? "pts clear of " + ordinalOf(lastV) : "pts off " + ordinalOf(lastV)) : "");
     });
 
     return out;

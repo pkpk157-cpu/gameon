@@ -1907,7 +1907,7 @@
     pl:      { t: "Premier League" },
     winnings:{ t: "Winnings" },
     gwstatus:{ t: "Gameweek status" },
-    vol:     { t: "Game On Voluntary" }
+    vol:     { t: "Game On Voluntary", topic: "voluntary" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
@@ -2130,6 +2130,22 @@
         '<td class="num">' + mv + '</td>' +
         '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
         '</tr>';
+    }).join("");
+  }
+
+  function voluntaryPrizeCard(cfg) {
+    var V = cfg.voluntaryPrizes || {};
+    var order = cfg.voluntaryOrder || Object.keys(V);
+    return order.filter(function (k) { return V[k]; }).map(function (k) {
+      var l = V[k];
+      var rows = Object.keys(l.prizes).map(Number).sort(function (a, b) { return a - b; })
+        .map(function (place) {
+          return '<tr><td>' + ordinal(place) + ' place</td><td class="num">' + xp(l.prizes[place]) + '</td></tr>';
+        }).join("");
+      return '<div class="card"><div class="hd"><h3>' + esc(l.name) + '</h3>' +
+        '<span class="sub">' + num(l.entries) + ' entries \u00b7 ' + xp(l.fee) + ' in \u00b7 ' +
+        xp(l.pot) + ' pot</span></div>' +
+        '<div class="bd"><table class="prizetable">' + rows + '</table></div></div>';
     }).join("");
   }
 
@@ -2762,6 +2778,20 @@
         '<span class="cc-go">Read the rules \u2192</span></button>';
     }).join("");
 
+    /* the side leagues: their own money, so not in the totals above */
+    var vp = cfg.voluntaryPrizes || {};
+    var vTotal = Object.keys(vp).reduce(function (t, k) { return t + (+vp[k].pot || 0); }, 0);
+    if (vTotal) {
+      h += '<div class="section-title"><h2>Voluntary leagues</h2><div class="rule"></div>' +
+        '<span class="chip">separate pots</span></div>';
+      h += '<button type="button" class="compcard" data-topic="voluntary">' +
+        '<span class="cc-h"><span class="cc-n">Game On Voluntary</span>' +
+        '<span class="cc-a">' + xp(vTotal) + '</span></span>' +
+        '<span class="cc-s">Five side leagues entered separately and played on the same team. ' +
+        'Not part of the total above.</span>' +
+        '<span class="cc-go">Read the rules \u2192</span></button>';
+    }
+
     /* the league's own wording, kept verbatim */
     h += '<div class="section-title"><h2>As written by the league</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd"><ol class="verbatim">' +
@@ -2926,6 +2956,26 @@
         ] }
       ] };
 
+    if (topic === "voluntary") return {
+      name: "Game On Voluntary", back: "vol",
+      lede: "Five side leagues, each entered separately and played on the same team you " +
+        "already have. Season-long tables, highest total wins, every pot given out in full.",
+      extra: prizesBlock(voluntaryPrizeCard(cfg)),
+      blocks: [
+        { h: "How you progress", list: [
+          "Each league is a league of its own on FPL. Its table is the game\u2019s own: ranked on " +
+            "your <b>total points across the season</b>, net of hits.",
+          "Nobody is eliminated \u2014 the table stands at GW\u00a0" + cfg.totalGameweeks + ".",
+          "A league\u2019s pot is its entry fee times its entries, and <b>every rupee of it is " +
+            "awarded</b> to the places below."
+        ] },
+        { h: "If two managers finish level", chain: [
+          { t: "Share the place and split the XP",
+            s: "They take the same joint position. The XP for all the tied places is pooled and " +
+               "divided evenly, with any remainder going to the higher places." }
+        ] }
+      ] };
+
     if (topic === "h2h") return {
       name: "Game On UCL", back: "h2h",
       lede: "A head-to-head competition run like the Champions League: " + cfg.h2h.groupCount +
@@ -3072,24 +3122,6 @@
      Five side leagues played on the same team a manager already has in the
      classic league. Tabs and a table; everything about the league itself is
      behind the information button beside them. */
-  function volHelp(v) {
-    var h = helpList("The table", [
-      ["Who is in it", "The league as published for the season."],
-      ["The order", "FPL\u2019s own: season points, highest first."],
-      ["Level on points", "They share the place, and the XP those places carry is split " +
-        "between them \u2014 whole rupees, the odd ones going to the higher places."],
-      ["GW", "What that manager scored in the gameweek on screen everywhere else."]
-    ]);
-    h += helpList("The league", [
-      ["Entries", num(v.entries) + "."],
-      ["Entry", xp(v.fee) + " each."],
-      ["Pot", xp(v.pot) + ", given out in full."],
-      ["Places that win", v.places.length + ": " +
-        v.places.map(function (p) { return ordinal(p) + " " + xp(v.prizes[p]); }).join(", ") + "."]
-    ]);
-    return h;
-  }
-
   function volRows(v) {
     return v.rows.map(function (r) {
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
@@ -3126,9 +3158,7 @@
         return '<button type="button" role="tab" data-vol="' + l.key + '"' +
           (l.key === state.volKey ? ' class="on" aria-selected="true"' : ' aria-selected="false"') +
           ' aria-label="' + esc(l.name) + '">' + esc(l.short) + '</button>';
-      }).join("") + '</div>' +
-      '<button type="button" class="hinfo volinfo" id="volWhat" aria-label="About this league">' +
-      svg("info", 17) + '</button></div>';
+      }).join("") + '</div></div>';
     host.innerHTML = head + '<div id="volPanel"></div>';
 
     var draw = function () {
@@ -3155,10 +3185,6 @@
       state.volKey = b.getAttribute("data-vol");
       try { history.replaceState(null, "", "#vol/" + state.volKey); } catch (e2) {}
       draw();
-    });
-    $("#volWhat", host).addEventListener("click", function () {
-      var v = ds ? K.voluntary(ds, state.volKey) : null;
-      if (v) modal(v.name, volHelp(v));
     });
     draw();
   }
