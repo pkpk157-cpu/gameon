@@ -1885,7 +1885,7 @@
     $all(".navitem").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === state.view); });
     $all(".view").forEach(function (v) { v.classList.toggle("active", v.getAttribute("data-view") === state.view); });
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
-    var fill = ["classic", "monthly", "lms", "pyramid", "h2h"].indexOf(state.view) !== -1 ||
+    var fill = ["classic", "monthly", "lms", "pyramid", "h2h", "vol"].indexOf(state.view) !== -1 ||
       (state.view === "prices" && state.prTab !== "stats");
     setFill(fill);
     updateBanner();
@@ -3069,39 +3069,24 @@
 
   // A little shirt: body + contrast sleeves, optional vertical stripes.
   /* ---- the voluntary leagues ---------------------------------------------
-     Five side leagues bought into separately and played on the same team a
-     manager already has in the classic league. The table is settled the way
-     the classic one is, and says so behind its information button. */
-  function volPrizeList(v) {
-    return v.places.map(function (pl) {
-      return '<div class="volpz"><span class="k">' + ordinal(pl) + '</span>' +
-        '<span class="v">' + xp(v.prizes[pl]) + '</span></div>';
-    }).join("");
-  }
-
+     Five side leagues played on the same team a manager already has in the
+     classic league. Tabs and a table; everything about the league itself is
+     behind the information button beside them. */
   function volHelp(v) {
-    var h = helpList("Where the table comes from", [
-      ["The league", "This is a league of its own on FPL, so who is in it and what they have " +
-        "scored is read from the game. Nobody is matched by name, so two spellings of one " +
-        "man cannot become two managers \u2014 and somebody who plays a side league without " +
-        "being in the main one is still counted."],
-      ["The order", "FPL's own: season points, highest first."],
-      ["Level on points", "They share the place and split what those places pay between them, " +
-        "whole rupees, the odd ones going to the higher places."]
+    var h = helpList("The table", [
+      ["Who is in it", "The league as published for the season."],
+      ["The order", "FPL\u2019s own: season points, highest first."],
+      ["Level on points", "They share the place, and the XP those places carry is split " +
+        "between them \u2014 whole rupees, the odd ones going to the higher places."],
+      ["GW", "What that manager scored in the gameweek on screen everywhere else."]
     ]);
-    h += helpList("The money", [
+    h += helpList("The league", [
+      ["Entries", num(v.entries) + "."],
       ["Entry", xp(v.fee) + " each."],
-      ["Pot", xp(v.pot) + ", paid out in full."],
-      ["Places paid", v.places.length + " of " + num(v.entries) + ": " +
+      ["Pot", xp(v.pot) + ", given out in full."],
+      ["Places that win", v.places.length + ": " +
         v.places.map(function (p) { return ordinal(p) + " " + xp(v.prizes[p]); }).join(", ") + "."]
     ]);
-    if (v.expected && v.entries !== v.expected) {
-      h += helpList("Entries", [
-        ["Now", num(v.entries) + " in the league on FPL today."],
-        ["When the prizes were set", num(v.expected) + " on the published sheet. The pot and " +
-          "the prizes here are that sheet's and have not been recalculated."]
-      ]);
-    }
     return h;
   }
 
@@ -3110,7 +3095,7 @@
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
       var eq = r.tiedWith > 1
         ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
-          (r.tiedWith > 2 ? 's' : '') + ' — the money is shared">=</span>' : '';
+          (r.tiedWith > 2 ? 's' : '') + ' \u2014 the XP is shared">=</span>' : '';
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + ' data-entry="' + r.id + '">' +
         '<td class="num"><span class="rankcell">' + eq +
         '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
@@ -3124,73 +3109,56 @@
   }
 
   function renderVoluntary(host, ds) {
-    var leagues = K.voluntaryLeagues();
+    var leagues = K.voluntaryLeagues(ds);
     if (!leagues.length) {
-      host.innerHTML = '<div class="callout">No voluntary leagues are configured.</div>';
+      host.innerHTML = '<div class="callout">No voluntary leagues are set up.</div>';
       return;
     }
     if (!state.volKey || !leagues.some(function (l) { return l.key === state.volKey; })) {
       state.volKey = leagues[0].key;
     }
-    var v = ds ? K.voluntary(ds, state.volKey) : null;
-
-    var h = '<div class="pickrow"><select class="in" id="volPick">' +
+    // The tabs and the table are both direct children of the view, because
+    // fill mode gives the table the rest of the screen and scrolls it inside
+    // itself — the same way the classic league's table works.
+    var head = '<div class="volhead">' +
+      '<div class="pseg sm volseg" role="tablist">' +
       leagues.map(function (l) {
-        return '<option value="' + l.key + '"' + (l.key === state.volKey ? ' selected' : '') + '>' +
-          esc(l.name) + ' · ' + num(l.entries) + ' entries</option>';
-      }).join("") + '</select></div><div id="volPanel"></div>';
-    host.innerHTML = h;
+        return '<button type="button" role="tab" data-vol="' + l.key + '"' +
+          (l.key === state.volKey ? ' class="on" aria-selected="true"' : ' aria-selected="false"') +
+          ' aria-label="' + esc(l.name) + '">' + esc(l.short) + '</button>';
+      }).join("") + '</div>' +
+      '<button type="button" class="hinfo volinfo" id="volWhat" aria-label="About this league">' +
+      svg("info", 17) + '</button></div>';
+    host.innerHTML = head + '<div id="volPanel"></div>';
 
     var draw = function () {
-      var vv = ds ? K.voluntary(ds, state.volKey) : null;
+      var v = ds ? K.voluntary(ds, state.volKey) : null;
+      $all("[data-vol]", host).forEach(function (b) {
+        var on = b.getAttribute("data-vol") === state.volKey;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
       var panel = $("#volPanel", host);
-      if (!vv) {
-        panel.innerHTML = '<div class="callout">The league table arrives with the next data sync.</div>';
+      if (!v || !v.loaded) {
+        panel.innerHTML = '<div class="callout">This table arrives with the next data sync.</div>';
         return;
       }
-      if (!vv.loaded) {
-        panel.innerHTML = '<div class="callout">' + esc(vv.name) + ' arrives with the next ' +
-          'data sync — its table is read from FPL, and this copy of the data was published ' +
-          'before that began.</div>';
-        return;
-      }
-      var b = '<div class="card"><div class="hd"><h3>' + esc(vv.name) + '</h3>' +
-        '<button type="button" class="hinfo" id="volWhat" aria-label="How this league works">' +
-        svg("info", 16) + '</button>' +
-        '<span class="sub">' + num(vv.entries) + ' entries</span></div>' +
-        '<div class="volmoney">' +
-        '<div class="volfact"><div class="k">Entry</div><div class="v">' + xp(vv.fee) + '</div></div>' +
-        '<div class="volfact"><div class="k">Pot</div><div class="v">' + xp(vv.pot) + '</div></div>' +
-        '<div class="volfact"><div class="k">Places paid</div><div class="v">' + vv.places.length + '</div></div>' +
-        '</div>' +
-        (vv.expected && vv.entries !== vv.expected
-          ? '<div class="note psnote">' + num(vv.entries) + ' in the league today; the sheet ' +
-            'that set these prizes had ' + num(vv.expected) + '. The pot and prizes below are ' +
-            'the published ones.</div>'
-          : '') +
-        '<div class="freeze"><table class="t voltbl"><thead><tr>' +
+      panel.innerHTML = '<div class="freeze"><table class="t voltbl"><thead><tr>' +
         '<th class="num">#</th><th>Team</th><th class="num">GW</th>' +
-        '<th class="num">Total</th><th class="num">Won</th>' +
-        '</tr></thead><tbody id="volBody">' + volRows(vv) + '</tbody></table></div></div>';
-
-      b += '<div class="section-title"><h2>Prizes</h2><div class="rule"></div></div>' +
-        '<div class="card"><div class="volpzs">' + volPrizeList(vv) + '</div>' +
-        '<div class="note psnote">' + xp(vv.pot) + ' in, ' + xp(vv.pot) +
-        ' out. Level managers share a place and split what the places between them pay.</div></div>';
-
-      panel.innerHTML = b;
-      var info = $("#volWhat", host);
-      if (info) {
-        info.addEventListener("click", function () {
-          modal(vv.name + " · how it works", volHelp(vv));
-        });
-      }
+        '<th class="num">Total</th><th class="num">XP</th>' +
+        '</tr></thead><tbody id="volBody">' + volRows(v) + '</tbody></table></div>';
     };
 
-    $("#volPick", host).addEventListener("change", function () {
-      state.volKey = this.value;
-      try { history.replaceState(null, "", "#vol/" + state.volKey); } catch (e) {}
+    $(".volseg", host).addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-vol]");
+      if (!b) return;
+      state.volKey = b.getAttribute("data-vol");
+      try { history.replaceState(null, "", "#vol/" + state.volKey); } catch (e2) {}
       draw();
+    });
+    $("#volWhat", host).addEventListener("click", function () {
+      var v = ds ? K.voluntary(ds, state.volKey) : null;
+      if (v) modal(v.name, volHelp(v));
     });
     draw();
   }

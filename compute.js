@@ -279,10 +279,13 @@
     var order = cfg().voluntaryOrder || Object.keys(money);
     return order.filter(function (k) { return money[k]; }).map(function (k) {
       var live = ((ds && ds.voluntary) || {})[k];
+      var paid = money[k].paid || null;
+      var n = live
+        ? (paid ? live.results.filter(function (r) { return paid.indexOf(r.id) !== -1; }).length
+                : live.results.length)
+        : money[k].entries;
       return { key: k, name: money[k].name, short: money[k].short,
-               fee: money[k].fee, pot: money[k].pot,
-               entries: live ? live.results.length : money[k].entries,
-               loaded: !!live };
+               fee: money[k].fee, pot: money[k].pot, entries: n, loaded: !!live };
     });
   };
 
@@ -294,11 +297,24 @@
       return { key: key, name: money.name, short: money.short, fee: money.fee,
                pot: money.pot, prizes: money.prizes, entries: money.entries,
                places: Object.keys(money.prizes).map(Number).sort(function (a, b) { return a - b; }),
-               rows: [], paid: 0, loaded: false, at: null, expected: money.entries };
+               rows: [], paid: 0, loaded: false, at: null, expected: money.entries,
+               awaiting: (money.awaiting || []).slice(), notPaid: [] };
     }
+    // FPL's league is open to anyone with the code, and carries people the
+    // prize sheet does not — its own creator among them, who sits in all five.
+    // The sheet is what says who bought in, so the table is FPL's league
+    // filtered to the entry ids the sheet resolved to.
+    var paid = money.paid || null;
+    var joined = paid
+      ? live.results.filter(function (r) { return paid.indexOf(r.id) !== -1; })
+      : live.results.slice();
+    var notOnSheet = paid
+      ? live.results.filter(function (r) { return paid.indexOf(r.id) === -1; })
+                    .map(function (r) { return r.playerName; })
+      : [];
     // FPL has already ordered the league and given joint ranks where managers
     // are level; its order is the one the game itself shows, so it is kept.
-    var rows = live.results.slice().sort(function (a, b) {
+    var rows = joined.slice().sort(function (a, b) {
       return (a.rank - b.rank) || (b.total - a.total);
     }).map(function (r) {
       return { id: r.id, name: r.playerName, entryName: r.entryName,
@@ -336,6 +352,11 @@
       key: key, name: money.name, short: money.short, fee: money.fee,
       pot: money.pot, prizes: money.prizes, entries: rows.length,
       expected: money.entries, at: live.at || null, loaded: true,
+      // on the sheet but not in the FPL league, so they cannot be scored
+      awaiting: (money.awaiting || []).slice(),
+      // in the FPL league but not on the sheet, so they are not playing for
+      // the money and are left out of the table
+      notPaid: notOnSheet,
       places: Object.keys(money.prizes).map(Number).sort(function (a, b) { return a - b; }),
       rows: rows, paid: paid
     };

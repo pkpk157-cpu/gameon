@@ -62,27 +62,72 @@
 
     /* ---- Classic league prizes (rank -> amount) -------------------------- */
     /* ---- Voluntary leagues -----------------------------------------------
-       Five side leagues anyone could buy into, played on the same FPL team a
-       manager already has. Each is an ordinary classic league of its own on
-       FPL, so who is in one and what they have scored is read from the game
-       rather than kept here — the ids live in scripts/fetch-data.js.
+       Five side leagues played on the same FPL team a manager already has.
+       Each is a classic league of its own on FPL, so the scores and the order
+       are read from the game (ids in scripts/fetch-data.js) and nothing here
+       has to match anybody by name.
 
-       What FPL does not know is the money, so that is what this holds. The
-       figures are the published "Voluntary Leagues" sheet; `entries` is what
-       that sheet said, kept so the app can say so if the league has since
-       grown or shrunk. Every pot is the entry fee times those entries, and
-       every prize list adds back up to its pot. */
+       What FPL cannot tell us is who has actually bought in. Its leagues are
+       open to anyone with the code, and they carry people the published prize
+       sheet does not: the leagues' own creator sits in all five, and a couple
+       of others have joined leagues they are not listed for. So `paid` is the
+       sheet's list, resolved once to FPL entry ids, and the table is FPL's
+       league filtered to it. Ids rather than names on purpose \u2014 an id cannot
+       be two spellings of one man.
+
+       `awaiting` names anybody on the sheet who has not joined the FPL league
+       at all, so the page can say they are missing rather than quietly having
+       one fewer entry than the sheet promised. */
     voluntaryPrizes: {
-      v1:  { name: "League 1",       short: "L1",    fee: 1500, pot: 22500,  entries: 15,
-             prizes: { 1: 9000, 2: 6000, 3: 4500, 4: 3000 } },
-      v2:  { name: "League 2",       short: "L2",    fee: 1000, pot: 16000,  entries: 16,
-             prizes: { 1: 6500, 2: 4500, 3: 3000, 4: 2000 } },
-      v3:  { name: "League 3",       short: "L3",    fee: 500,  pot: 4500,   entries: 9,
-             prizes: { 1: 3000, 2: 1500 } },
-      vpl: { name: "Premier League", short: "PL",    fee: 2000, pot: 66000,  entries: 33,
-             prizes: { 1: 17000, 2: 12000, 3: 10000, 4: 8000, 5: 6500, 6: 5000, 7: 4000, 8: 3500 } },
-      vel: { name: "Elite PL",       short: "Elite", fee: 5000, pot: 170000, entries: 34,
-             prizes: { 1: 43000, 2: 31000, 3: 26000, 4: 21000, 5: 17000, 6: 13500, 7: 10500, 8: 8000 } }
+      v1: {
+        name: "League 1", short: "L1", fee: 1500, pot: 22500, entries: 15,
+        prizes: { 1: 9000, 2: 6000, 3: 4500, 4: 3000 },
+        awaiting: [],
+        paid: [
+        317413, 27, 2116963, 235897, 4701953, 117864, 5101589, 56691, 224840,
+        573491, 3623076, 13092, 4865882, 4947303, 3476408
+        ]
+      },
+      v2: {
+        name: "League 2", short: "L2", fee: 1000, pot: 16000, entries: 16,
+        prizes: { 1: 6500, 2: 4500, 3: 3000, 4: 2000 },
+        awaiting: [],
+        paid: [
+        3961700, 3476408, 117864, 459104, 4865882, 3110819, 3623076, 584168,
+        573491, 4299459, 2175473, 4003667, 2182847, 3843290, 4947303, 1439164
+        ]
+      },
+      v3: {
+        name: "League 3", short: "L3", fee: 500, pot: 4500, entries: 9,
+        prizes: { 1: 3000, 2: 1500 },
+        awaiting: [],
+        paid: [
+        584168, 2182847, 3961700, 4003667, 4121471, 3828737, 2175473,
+        3265659, 1379307
+        ]
+      },
+      vpl: {
+        name: "Premier League", short: "PL", fee: 2000, pot: 66000, entries: 33,
+        prizes: { 1: 17000, 2: 12000, 3: 10000, 4: 8000, 5: 6500, 6: 5000, 7: 4000, 8: 3500 },
+        awaiting: ["Aman Arora"],
+        paid: [
+        4599191, 32831, 393940, 6658, 45510, 1273065, 4304326, 3476408,
+        1265313, 480904, 1196118, 224840, 196545, 56691, 4865882, 39818,
+        1443362, 2526562, 2922453, 174952, 573491, 184325, 27742, 3323782,
+        2397065, 2552693, 44525, 24976, 13092, 4394747, 2386, 235897
+        ]
+      },
+      vel: {
+        name: "Elite PL", short: "Elite", fee: 5000, pot: 170000, entries: 34,
+        prizes: { 1: 43000, 2: 31000, 3: 26000, 4: 21000, 5: 17000, 6: 13500, 7: 10500, 8: 8000 },
+        awaiting: ["Aman Arora", "Ismail Faizi"],
+        paid: [
+        6658, 32831, 393940, 1464224, 1297117, 1273065, 29925, 4193032, 6057,
+        23345, 710718, 4299459, 1541394, 3476408, 2397065, 2386, 480904,
+        4394747, 44525, 1196118, 224840, 3452200, 1265313, 110334, 926708,
+        119217, 317413, 573491, 675013, 2206903, 305234, 235897
+        ]
+      }
     },
     // the order they are offered in, cheapest first
     voluntaryOrder: ["v1", "v2", "v3", "vpl", "vel"],
