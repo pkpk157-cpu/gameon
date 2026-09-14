@@ -1140,10 +1140,20 @@
     var col = function (sd) {
       var c = '<div class="card mcol"><div class="mclub"><b>' + esc(sd.name) + '</b>' +
         (fx.started && metric === "pts" ? '<span class="mtot">' + num(sd.total) + ' pts</span>' : '') + '</div>';
+      // Before kick-off every score on the sheet is a dash, so a points order
+      // has nothing to stand on: whoever the sheet happened to list first read
+      // as though he were leading something. The squad goes in price order
+      // instead, as one list, which a reader can follow and which is what the
+      // rest of the sheet was already sorted by.
+      if (!fx.started) {
+        return c + sd.featured.concat(sd.rest).sort(function (a, b) {
+          return (b.price - a.price) ||
+                 (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+        }).map(function (p) { return rowOf(p, false); }).join("") + '</div>';
+      }
       c += sd.featured.map(function (p) { return rowOf(p, false); }).join("");
       if (sd.rest.length) {
-        if (!fx.started) c += sd.rest.map(function (p) { return rowOf(p, false); }).join("");
-        else c += '<details class="mrest"><summary>Did not feature · ' + sd.rest.length + '</summary>' +
+        c += '<details class="mrest"><summary>Did not feature · ' + sd.rest.length + '</summary>' +
           sd.rest.map(function (p) { return rowOf(p, true); }).join("") + '</details>';
       }
       return c + '</div>';
