@@ -262,7 +262,10 @@
         return esc(f.opp) + '<span class="bdha">' + (f.home ? "H" : "A") + '</span>';
       }).join(" ");
     };
-    var h = '<table class="t bdhist"><thead><tr><th class="num">GW</th><th>Opponent</th>' +
+    var anyGo = hist.rows.some(function (r) { return r.go != null; });
+    var h = '<table class="t bdhist' + (anyGo ? ' wgo' : '') + '"><thead><tr>' +
+      '<th class="num">GW</th><th>Opponent</th>' +
+      (anyGo ? '<th class="num" aria-label="Share of Game On squads">GO</th>' : '') +
       '<th class="num">Min</th><th class="num">Pts</th></tr></thead><tbody>';
     h += hist.rows.map(function (r) {
       var pts = r.ahead ? '<span class="bdblank">–</span>'
@@ -271,10 +274,13 @@
       return '<tr class="bdrow' + (r.gw === +cur ? ' on' : '') + '" data-bdgw="' + r.gw + '"' +
         ' role="button" tabindex="0">' +
         '<td class="num">' + r.gw + '</td><td>' + oppOf(r) + '</td>' +
+        (anyGo ? '<td class="num">' + (r.go == null ? '<span class="bdblank">–</span>'
+                                                    : r.go.toFixed(1) + '%') + '</td>' : '') +
         '<td class="num">' + (r.blank || r.ahead ? '<span class="bdblank">–</span>' : num(r.mins)) + '</td>' +
         '<td class="num">' + pts + '</td></tr>';
     }).join("");
     h += '<tr class="bdtotal"><td class="num"></td><td>Season</td>' +
+      (anyGo ? '<td class="num"></td>' : '') +
       '<td class="num">' + num(hist.mins) + '</td>' +
       '<td class="num"><b>' + num(hist.total) + '</b></td></tr>';
     h += '</tbody></table>';
@@ -283,8 +289,15 @@
     if (hist.assists) bits.push(num(hist.assists) + (hist.assists === 1 ? " assist" : " assists"));
     h += '<div class="note bdnote">' +
       (bits.length ? esc(bits.join(", ")) + " so far. " : "") +
+      (anyGo ? 'GO is the share of Game On squads that held him that week. ' : '') +
       'Tap a gameweek to see what it was made of.</div>';
     return h;
+  }
+
+  function bdFact(label, value, sub) {
+    return '<div class="bdfact"><div class="k">' + esc(label) + '</div>' +
+      '<div class="v">' + esc(value) + '</div>' +
+      '<div class="s">' + esc(sub) + '</div></div>';
   }
 
   function showBreakdown(el, gw, mult) {
@@ -301,6 +314,24 @@
     var head = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
       '<div class="bdname"><b>' + esc(name) + '</b><span>' + esc(club) +
       ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div></div>';
+    // What he costs and who holds him, as of now. These sit outside the tabs
+    // because they belong to today rather than to any one gameweek: FPL
+    // publishes only its current ownership figure, and a price column would be
+    // honest only back to the day we started recording changes.
+    if (hist) {
+      var rise = Math.round((hist.price - hist.start) * 10) / 10;
+      head += '<div class="bdfacts">' +
+        bdFact("Price", psMoney(hist.price),
+          rise ? (rise > 0 ? "▲" : "▼") + Math.abs(rise).toFixed(1) +
+                 " on " + psMoney(hist.start)
+               : "unchanged all season") +
+        // The label stays short enough not to be cut off on a narrow phone;
+        // the line underneath is what says what is being owned.
+        bdFact("FPL", hist.owned.toFixed(1) + "%", "of every squad in the game") +
+        bdFact("Game On", hist.goOwned == null ? "–" : hist.goOwned.toFixed(1) + "%",
+          "of the league’s 245 squads") +
+        '</div>';
+    }
     var many = hist && hist.rows.length > 1;
     var box = modal(meta[0] + ' · ' + club,
       head + (many ? '<div class="pseg sm bdtabs" role="tablist">' +

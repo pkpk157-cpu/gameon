@@ -963,6 +963,12 @@
       // about the same afternoon.
       var prov = (!bonus && live === g) ? ((bonusAt(ds, g) || {})[el] || 0) : 0;
       var pts = (lp[g] || {})[el];
+      // How much of the league held him that week. This one really is history:
+      // it is counted from that gameweek's own squads, so it says whether the
+      // league was on him before he scored or piled in afterwards. FPL's own
+      // ownership cannot be shown this way — only today's figure is published,
+      // and repeating it down the column would claim it held all season.
+      var own = C.leagueOwnership(ds, g);
       var fx = ((ds.gwFixtures || {})[g] || []).filter(function (f) {
         return f[0] === club || f[1] === club;
       }).map(function (f) {
@@ -970,6 +976,7 @@
                  started: !!f[2], done: !!(f[3] || f[8]) };
       });
       return { gw: g, pts: (pts == null ? null : pts + prov), mins: mins,
+               go: own ? (own.pct[el] == null ? null : own.pct[el]) : null,
                goals: goals, assists: assists, bonus: bonus + prov, prov: prov > 0,
                played: mins > 0, fixtures: fx, blank: !fx.length,
                // nothing to report yet is not the same as a blank: one is a
@@ -980,7 +987,16 @@
     rows.forEach(function (r) {
       total += r.pts || 0; mins += r.mins; goals += r.goals; assists += r.assists;
     });
-    return { rows: rows, total: total, mins: mins, goals: goals, assists: assists, club: club };
+    // What he is today, which is a different kind of fact from the rows above
+    // and is labelled as such wherever it is shown.
+    var meta = ds.elements[el], pr = ds.prices || {};
+    var nowOwn = C.leagueOwnership(ds, +ds.pitchGw);
+    return { rows: rows, total: total, mins: mins, goals: goals, assists: assists,
+             club: club,
+             price: ((pr.now && pr.now[el] != null) ? pr.now[el] : (meta[3] || 0)) / 10,
+             start: (meta[6] != null ? meta[6] : meta[3] || 0) / 10,
+             owned: (pr.owned && pr.owned[el] != null) ? pr.owned[el] : (meta[4] || 0),
+             goOwned: nowOwn ? (nowOwn.pct[el] || 0) : null };
   };
 
   // Everyone who played one chip in one gameweek, best gameweek score first.

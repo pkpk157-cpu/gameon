@@ -1702,3 +1702,15 @@ table.t.bdhist tbody tr.bdrow.on { background:var(--chip); }
 /* the star that says a figure still has provisional bonus in it */
 .bdprov { font-style:normal; color:var(--accent); font-weight:800; margin-left:2px; }
 .bdnote { margin-top:10px; }
+
+/* ---- what a player is today, above his gameweeks ----------------------- */
+.bdfacts { display:flex; gap:8px; margin:0 0 14px; }
+.bdfact { flex:1 1 0; min-width:0; background:var(--chip); border-radius:9px;
+  padding:8px 9px; text-align:center; }
+.bdfact .k { font-size:9px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--ink-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bdfact .v { font-size:16px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums; }
+.bdfact .s { font-size:9px; color:var(--ink-faint); margin-top:2px; line-height:1.25; }
+/* Five columns in a modal on a small phone: the padding is what gives way. */
+table.t.bdhist.wgo th, table.t.bdhist.wgo td { padding:9px 3px; }
+table.t.bdhist.wgo th:first-child, table.t.bdhist.wgo td:first-child { padding-left:0; }
