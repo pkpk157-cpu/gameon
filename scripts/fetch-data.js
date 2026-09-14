@@ -414,10 +414,15 @@ async function h2hAll(id) {
     const extra = full && full.toLowerCase() !== String(el.web_name || "").toLowerCase()
       ? full : "";
     // [name, position, club, price(tenths), owned% across all FPL, full name,
-    //  season-start price(tenths) — the purchase price of an original pick]
+    //  season-start price(tenths) — the purchase price of an original pick,
+    //  photo code]
+    // The photo code, not the element id: ids are reassigned between seasons
+    // and a picture filed under one would put another man's face on the card.
+    // The code follows the player for as long as he plays.
     elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
                        el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra,
-                       (el.now_cost || 0) - (el.cost_change_start || 0)];
+                       (el.now_cost || 0) - (el.cost_change_start || 0),
+                       el.code || 0];
   });
 
   /* ---- prices, and the transfer flow that moves them -------------------- */

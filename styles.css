@@ -1640,3 +1640,43 @@ table.t.psbtbl tbody tr { cursor:pointer; }
 table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:12.5px; padding:14px 12px; }
 /* the caption under each board, off the card wall like the bucket table's */
 .psnote { margin:8px 14px 12px; }
+
+/* ---- player faces -------------------------------------------------------
+   Our own copies of the league's cut-out portraits, 110x140 with a
+   transparent background. Every one of them is decoration over something that
+   already works: the pitch keeps its jersey underneath, a table row keeps its
+   initials. Nothing here sets a size that depends on the picture arriving, so
+   a face that never loads leaves the layout exactly where it was. */
+.pshirt { position:relative; }
+/* Cropped to the head and shoulders: the whole portrait at 40px tall is a
+   thumbnail of a man standing in a field. Sitting exactly where the jersey
+   sits means the card does not move when one replaces the other. */
+.pcard .facepic {
+  position:absolute; left:50%; top:10px; transform:translateX(-50%);
+  width:42px; height:40px; object-fit:cover; object-position:50% 6%;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));
+}
+.pcard.gone .facepic { opacity:.55; filter:grayscale(.65); }
+
+/* A row's face: initials underneath, photograph over them, one box either way. */
+.face { position:relative; display:inline-block; flex:none; overflow:hidden;
+  border-radius:50%; background:var(--chip); vertical-align:middle; }
+.face > i { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-style:normal; font-weight:800; color:var(--ink-faint); letter-spacing:-.02em; }
+.face > .facepic { position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; object-position:50% 4%; }
+.face.sm { width:28px; height:28px; }
+.face.sm > i { font-size:10.5px; }
+.face.lg { width:52px; height:52px; }
+.face.lg > i { font-size:17px; }
+
+/* The name cell that carries one. The text column can shrink; the face cannot,
+   so a long name ellipses instead of squeezing the picture. */
+.nwrap { display:flex; align-items:center; gap:9px; min-width:0; }
+.ntxt { min-width:0; display:block; }
+.ntxt .who, .ntxt .mgr { display:block; overflow:hidden; text-overflow:ellipsis; }
+
+/* Who the breakdown is about, before what he did. */
+.bdwho { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+.bdname b { display:block; font-size:15px; font-weight:700; }
+.bdname span { display:block; font-size:12px; color:var(--ink-faint); margin-top:2px; }

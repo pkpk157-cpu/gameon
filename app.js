@@ -228,12 +228,14 @@
     var meta = ds.elements[el];
     var name = meta[5] || meta[0], club = meta[2];
     var B = K.playerBreakdown(ds, el, gw);
-    var body;
+    var body = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
+      '<div class="bdname"><b>' + esc(name) + '</b><span>' + esc(meta[2]) +
+      ' \u00b7 ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div></div>';
     if (!B) {
-      body = '<div class="callout">No points breakdown is stored for ' + esc(meta[0]) +
+      body += '<div class="callout">No points breakdown is stored for ' + esc(meta[0]) +
         ' in Gameweek ' + gw + '.</div>';
     } else {
-      body = '<table class="t bdtbl"><thead><tr><th>Type</th>' +
+      body += '<table class="t bdtbl"><thead><tr><th>Type</th>' +
         '<th class="num">Value</th><th class="num">Points</th></tr></thead><tbody>' +
         B.rows.map(function (r) {
           return '<tr><td>' + esc(r.label) + '</td><td class="num">' + esc(String(r.value)) + '</td>' +
@@ -568,8 +570,9 @@
     } else {
       h += rows.map(function (r, i) {
         return '<tr data-el="' + r.id + '"><td class="pos">' + (i + 1) + '</td>' +
-          '<td class="name"><span class="who">' + esc(r.name) + '</span>' +
-          '<div class="mgr">' + esc(r.pos) + ' · ' + esc(r.team) + '</div></td>' +
+          '<td class="name"><span class="nwrap">' + faceBox(r.id, r.name, "sm") +
+          '<span class="ntxt"><span class="who">' + esc(r.name) + '</span>' +
+          '<span class="mgr">' + esc(r.pos) + ' · ' + esc(r.team) + '</span></span></span></td>' +
           b.c.map(function (c) { return '<td class="num">' + c[1](r) + '</td>'; }).join("") + '</tr>';
       }).join("");
     }
@@ -1593,6 +1596,18 @@
     // catches a restore from the back/forward cache, which is how iOS returns a
     // page it had frozen; focus covers a window regaining it without either.
     document.addEventListener("visibilitychange", onForeground);
+    // A photograph that does not arrive must leave no trace: no broken-image
+    // icon, no gap where a face should be. error does not bubble, so this
+    // listens in the capture phase; taking the img out uncovers the jersey or
+    // the initials that were behind it the whole time. One listener for every
+    // face in the app, whatever draws it.
+    document.addEventListener("error", function (e) {
+      var t = e.target;
+      if (t && t.tagName === "IMG" && t.classList && t.classList.contains("facepic")) {
+        if (t.parentNode) t.parentNode.removeChild(t);
+      }
+    }, true);
+
     window.addEventListener("pageshow", function (e) { if (e.persisted) onForeground(); });
     window.addEventListener("focus", onForeground);
 
@@ -2847,6 +2862,44 @@
   }
 
   // A little shirt: body + contrast sleeves, optional vertical stripes.
+  /* ---- faces -------------------------------------------------------------
+     A photograph where we have one, and something that looks deliberate where
+     we do not. Every face is drawn into a box that is already the right size
+     with its fallback already inside it, so a picture that never arrives -- a
+     new signing, a man the league never photographed, a first visit with no
+     signal -- changes nothing about the layout. The picture is decoration; the
+     thing underneath it is the page.
+
+     The photographs are our own copies under photos/, named by the league's
+     photo code, which follows a player between seasons where an element id
+     does not. A dataset published before this existed carries no code at all
+     and simply gets the fallback. */
+  var PPOS_LBL = { 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" };
+  function faceCode(el) {
+    var ds = S.dataset();
+    var m = ds && ds.elements && ds.elements[el];
+    var c = m && m[7];
+    return (typeof c === "number" && c > 0) ? c : 0;
+  }
+  function facePic(el, cls) {
+    var code = faceCode(el);
+    if (!code) return "";
+    return '<img class="facepic' + (cls ? " " + cls : "") + '" src="photos/p' + code +
+      '.webp" alt="" loading="lazy" decoding="async">';
+  }
+  // Two letters: one looks like a mistake and three do not fit.
+  function initialsOf(name) {
+    var p = String(name || "").split(/[\s.\-'\u2019]+/).filter(Boolean);
+    if (!p.length) return "?";
+    return (p.length > 1 ? p[0].charAt(0) + p[p.length - 1].charAt(0)
+                         : p[0].slice(0, 2)).toUpperCase();
+  }
+  // A face for a table row: initials underneath, photograph over them.
+  function faceBox(el, name, cls) {
+    return '<span class="face' + (cls ? " " + cls : "") + '" aria-hidden="true">' +
+      '<i>' + esc(initialsOf(name)) + '</i>' + facePic(el) + '</span>';
+  }
+
   function jersey(team, type) {
     var k = kitFor(team, type), body = k[0], sleeve = k[1], stripe = k[2];
     var id = "jk" + (++_jid);
@@ -2886,7 +2939,7 @@
         (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
         '<div class="pcard gone" data-el="' + out.el + '" data-mult="1" role="button" tabindex="0">' +
           '<i class="pb out">OUT</i>' +
-          '<div class="pshirt">' + jersey(out.team, out.type) + '</div>' +
+          '<div class="pshirt">' + jersey(out.team, out.type) + facePic(out.el) + '</div>' +
           '<div class="pname">' + esc(out.name) + '</div>' +
           '<div class="ppts">' + num(out.pts) + '</div>' +
           '<div class="psub">for ' + esc(p.name) + '</div>' +
@@ -2921,7 +2974,7 @@
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
       '<div class="pcard' + (p.inFor ? ' came' : '') + '" data-el="' + p.el + '" data-mult="' + (p.mult || 0) + '" role="button" tabindex="0">' + badge +
-        '<div class="pshirt">' + jersey(p.team, p.type) + '</div>' +
+        '<div class="pshirt">' + jersey(p.team, p.type) + facePic(p.el) + '</div>' +
         '<div class="pname">' + esc(p.name) + '</div>' +
         footer +
         // his selling price, when FPL would give back less than he now costs
