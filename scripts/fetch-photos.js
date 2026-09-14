@@ -22,6 +22,12 @@ const fs = require("fs");
 const path = require("path");
 
 const OUT = "photos";
+// The jersey behind a pitch card is 42 CSS pixels across, so this is already
+// generous on the sharpest phone going; every other place a face appears is
+// smaller still. The league serves these as PNGs of eighty kilobytes and up,
+// whatever size the path claims, which would be fifty megabytes of pictures
+// nobody can see at that resolution.
+const WIDE = 110, QUALITY = 80;
 const BASE = "https://fantasy.premierleague.com/api";
 const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)" };
 
@@ -97,7 +103,12 @@ async function main() {
     const avg = hits.length ? Math.round(hits.reduce((s, g) => s + g.bytes, 0) / hits.length) : 0;
     console.log("  " + cand.name.padEnd(16) + hits.length + "/" + sample.length +
       (hits.length ? "   avg " + (avg / 1024).toFixed(1) + " KB" : "   (" + got.map((g) => g.status).join(",") + ")"));
-    if (hits.length === sample.length && !chosen) chosen = { cand: cand, avg: avg };
+    // Smallest that works, not first that works: it is the same picture at the
+    // other end and we re-encode either way, so there is no reason to pull more
+    // of somebody else's bandwidth than the job needs.
+    if (hits.length === sample.length && (!chosen || avg < chosen.avg)) {
+      chosen = { cand: cand, avg: avg };
+    }
   }
   if (!chosen) {
     console.error("\nNone of the known URLs answered. The league has moved them again.");
@@ -110,9 +121,20 @@ async function main() {
     " MB for all " + players.length + ".");
   if (probeOnly) { console.log("\n--probe: stopping here, nothing written."); return; }
 
+  // Re-encoding is the whole point; without it this commits fifty megabytes.
+  // If the tool is missing, stop before writing anything rather than quietly
+  // filling the repository with full-size PNGs.
+  var sharp;
+  try { sharp = require("sharp"); }
+  catch (e) {
+    console.error("sharp is not installed, so the pictures cannot be re-encoded.");
+    console.error("Nothing written. Install it first: npm install sharp");
+    process.exit(1);
+  }
+
   fs.mkdirSync(OUT, { recursive: true });
-  const have = new Set(fs.readdirSync(OUT).filter((f) => f.endsWith(".png")));
-  let missing = players.filter((p) => !have.has("p" + p.code + ".png"));
+  const have = new Set(fs.readdirSync(OUT).filter((f) => f.endsWith(".webp")));
+  let missing = players.filter((p) => !have.has("p" + p.code + ".webp"));
   console.log("\n" + have.size + " already here, " + missing.length + " to fetch.");
   if (limit && missing.length > limit) {
     console.log("  --limit " + limit + ": taking the first " + limit + " this run.");
@@ -123,22 +145,38 @@ async function main() {
   // Gently: this is somebody else's CDN and there is no hurry. A picture that
   // does not arrive is skipped, never retried to death and never fatal — the
   // next run picks it up, and until then that player wears his initials.
-  let got = 0, gone = 0, bytes = 0;
+  let got = 0, gone = 0, raw = 0, kept = 0;
   for (let i = 0; i < missing.length; i += 8) {
     const batch = missing.slice(i, i + 8);
     await Promise.all(batch.map(async (p) => {
       const r = await get(chosen.cand.url(p.code), true);
       if (!r.ok || !isPng(r.body)) { gone++; return; }
       try {
-        fs.writeFileSync(path.join(OUT, "p" + p.code + ".png"), r.body);
-        got++; bytes += r.body.length;
+        const small = await sharp(r.body)
+          .resize({ width: WIDE, fit: "inside", withoutEnlargement: true })
+          .webp({ quality: QUALITY, alphaQuality: 80, effort: 6 })
+          .toBuffer();
+        // Never write something a browser would refuse to draw: an empty or
+        // absurd file is a broken face for the rest of the season.
+        if (!small || small.length < 200) { gone++; return; }
+        fs.writeFileSync(path.join(OUT, "p" + p.code + ".webp"), small);
+        got++; raw += r.body.length; kept += small.length;
       } catch (e) { gone++; }
     }));
-    if (i && i % 200 === 0) { console.log("  " + got + " fetched…"); await sleep(400); }
+    if (i && i % 200 === 0) { console.log("  " + got + " fetched..."); await sleep(400); }
   }
-  console.log("\nFetched " + got + " (" + (bytes / 1024 / 1024).toFixed(1) + " MB), " +
-    gone + " had no picture and will show initials.");
-  console.log(fs.readdirSync(OUT).filter((f) => f.endsWith(".png")).length + " photographs in " + OUT + "/ now.");
+  const all = fs.readdirSync(OUT).filter((f) => f.endsWith(".webp"));
+  const total = all.reduce((s, f) => s + fs.statSync(path.join(OUT, f)).size, 0);
+  console.log("");
+  console.log("Fetched " + got + ", " + gone + " had no picture and will show initials.");
+  if (got) {
+    console.log("  " + (raw / 1024 / 1024).toFixed(1) + " MB of PNG became " +
+      (kept / 1024 / 1024).toFixed(2) + " MB of WebP, " +
+      (kept / got / 1024).toFixed(1) + " KB each, " +
+      Math.round((1 - kept / raw) * 100) + "% smaller.");
+  }
+  console.log("  " + all.length + " photographs in " + OUT + "/, " +
+    (total / 1024 / 1024).toFixed(2) + " MB in total.");
 }
 
 main().catch((e) => {

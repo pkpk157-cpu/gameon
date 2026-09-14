@@ -35,7 +35,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # Installed outside the working tree on purpose: nothing about the image
+      # tooling should ever end up in the repository or in what Pages serves.
+      - name: Image tooling
+        run: npm install --no-save --prefix /tmp/imgtools sharp
       - name: Fetch missing photos
+        env:
+          NODE_PATH: /tmp/imgtools/node_modules
         run: |
           node scripts/fetch-photos.js \
             ${{ (github.event_name == 'workflow_dispatch' && inputs.probe == true) && '--probe' || '' }} \
