@@ -2610,6 +2610,107 @@
     return res;
   };
 
+  /* Every player's season in one table.
+
+     The gameweek points are already published, the breakdowns behind them say
+     how long each man was on the pitch, and the league's own squads say who
+     owns and captains him here rather than in FPL at large. Ten leaderboards
+     read off this one pass, so none of them can disagree with another about
+     what a player scored. */
+  C.playerStats = function (ds) {
+    if (!ds || !ds.elements) return null;
+    if (ds._pst) return ds._pst;
+    var els = ds.elements;
+    var lp = ds.livePoints || {};
+    var bd = ds.breakdown || {};
+    var pr = ds.prices || {};
+    var own = C.leagueOwnership(ds);
+    var gws = Object.keys(lp).map(Number).filter(function (g) { return g > 0; })
+      .sort(function (a, b) { return a - b; });
+    if (!gws.length) return null;
+    // Form is the last three gameweeks that exist, so it means something from
+    // the third week rather than waiting for a full window.
+    var recent = gws.slice(-3);
+
+    // Who captained whom, gameweek by gameweek. A captaincy is worth reporting
+    // by what it actually returned, and that differs per gameweek, so the
+    // count is kept per gameweek and folded in at the end.
+    var capBy = {};
+    gws.forEach(function (g) {
+      var pk = (ds.picks || {})[g];
+      if (!pk) return;
+      Object.keys(pk).forEach(function (mid) {
+        var sq = pk[mid] && pk[mid].p;
+        if (!sq) return;
+        for (var i = 0; i < sq.length; i++) {
+          if (sq[i][2]) {
+            var el = sq[i][0];
+            (capBy[el] = capBy[el] || {})[g] = (capBy[el][g] || 0) + 1;
+            break;
+          }
+        }
+      });
+    });
+
+    var hasNow = !!pr.now;
+    var rows = Object.keys(els).map(function (key) {
+      var id = +key, meta = els[key] || [];
+      var pts = 0, form = 0, mins = 0, bonus = 0, starts = 0, goals = 0, assists = 0;
+      var best = null;
+      gws.forEach(function (g) {
+        var p = (lp[g] || {})[id];
+        if (p == null) return;
+        pts += p;
+        if (recent.indexOf(g) !== -1) form += p;
+        if (best == null || p > best.pts) best = { gw: g, pts: p };
+        var lines = (bd[g] || {})[id];
+        if (!lines) return;
+        // A double gameweek gives a man two of every line, so minutes add up
+        // but the gameweek itself is still one gameweek played.
+        var on = 0;
+        lines.forEach(function (ln) {
+          if (ln[0] === "minutes") { mins += ln[1] || 0; on += ln[1] || 0; }
+          else if (ln[0] === "bonus") bonus += ln[2] || 0;
+          else if (ln[0] === "goals_scored") goals += ln[1] || 0;
+          else if (ln[0] === "assists") assists += ln[1] || 0;
+        });
+        if (on > 0) starts++;
+      });
+      var price = ((hasNow && pr.now[id] != null) ? pr.now[id] : (meta[3] || 0)) / 10;
+      var start = (meta[6] != null ? meta[6] : meta[3] || 0) / 10;
+      var caps = 0, capReturn = 0;
+      var mine = capBy[id];
+      if (mine) {
+        Object.keys(mine).forEach(function (g) {
+          var n = mine[g];
+          caps += n;
+          capReturn += n * (((lp[g] || {})[id]) || 0);
+        });
+      }
+      return {
+        id: id, name: meta[0] || "?", full: meta[5] || "",
+        type: meta[1] || 0, pos: PPOS[meta[1]] || "", team: meta[2] || "",
+        price: price, start: start, rise: Math.round((price - start) * 10) / 10,
+        owned: (pr.owned && pr.owned[id] != null) ? pr.owned[id] : (meta[4] || 0),
+        goOwned: own ? (own.pct[id] || 0) : null,
+        goCount: own ? (own.count[id] || 0) : null,
+        pts: pts, form: form, mins: mins, bonus: bonus, starts: starts,
+        goals: goals, assists: assists, ga: goals + assists,
+        best: best,
+        // Points per million is what he costs you now, not what he cost
+        // whoever bought him early — that is the number a transfer turns on.
+        ppm: price > 0 ? Math.round((pts / price) * 10) / 10 : null,
+        caps: caps,
+        capAvg: caps ? Math.round((capReturn / caps) * 10) / 10 : null
+      };
+    });
+
+    var res = { rows: rows, gws: gws, recent: recent,
+                managers: own ? own.managers : 0 };
+    try { Object.defineProperty(ds, "_pst", { value: res, enumerable: false }); } catch (e) {}
+    return res;
+  };
+
   C.priceTable = function (ds) {
     var els = (ds && ds.elements) || null;
     if (!els) return null;

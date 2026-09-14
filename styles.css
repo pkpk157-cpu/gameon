@@ -1617,3 +1617,26 @@ button.chipgo { cursor:pointer; font:inherit; font-size:12px; border:1px solid v
   .pdt { display:none; }
   .pdp { min-width:46px; font-size:12px; }
 }
+
+/* ---- the season's player leaderboards ----------------------------------
+   Ten small tables, each a rank, a name and three numbers. The name takes
+   whatever the numbers leave, so a long one ellipses rather than pushing a
+   column off a narrow screen. */
+table.t.psbtbl { width:100%; table-layout:auto; }
+table.t.psbtbl th, table.t.psbtbl td { padding:8px 4px; }
+table.t.psbtbl th:first-child, table.t.psbtbl td:first-child { padding-left:12px; }
+table.t.psbtbl th:last-child, table.t.psbtbl td:last-child { padding-right:12px; }
+table.t.psbtbl th { font-size:9.5px; letter-spacing:.2px; }
+table.t.psbtbl th.num, table.t.psbtbl td.num { text-align:center; white-space:nowrap; }
+table.t.psbtbl td.num { font-size:12.5px; font-variant-numeric:tabular-nums; }
+table.t.psbtbl td.pos { width:1%; font-size:12px; font-weight:700; color:var(--ink-faint); }
+table.t.psbtbl td.name { min-width:0; max-width:120px; white-space:nowrap; }
+table.t.psbtbl td.name .who,
+table.t.psbtbl td.name .mgr { display:block; overflow:hidden; text-overflow:ellipsis; }
+table.t.psbtbl td.name .who { font-size:13px; font-weight:600; }
+table.t.psbtbl td.name .mgr { font-size:10px; }
+table.t.psbtbl .move { font-size:11.5px; white-space:nowrap; }
+table.t.psbtbl tbody tr { cursor:pointer; }
+table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:12.5px; padding:14px 12px; }
+/* the caption under each board, off the card wall like the bucket table's */
+.psnote { margin:8px 14px 12px; }

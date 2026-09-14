@@ -538,10 +538,205 @@
     }).join("");
   }
 
+  /* ---- the season's leaderboards ---------------------------------------
+     Ten small tables off one pass of C.playerStats, all obeying the same
+     position filter, so "most points" and "most points in each position" are
+     the same page rather than two. Each board says its own rule underneath:
+     the ones that filter — differentials, the ones not paying off — are only
+     honest if the threshold they used is on screen with them. */
+  var PS_TOP = 8, PS_OWNED = 10, PS_DIFF = 5, PS_DEAR = 6.5;
+
+  function psMoney(v) { return "£" + Number(v).toFixed(1); }
+  function psGo(r) { return r.goOwned == null ? "–" : r.goOwned.toFixed(1) + "%"; }
+  function psSigned(v) {
+    if (!v) return '<span class="move flat">–</span>';
+    return '<span class="move ' + (v > 0 ? "up" : "down") + '">' +
+      (v > 0 ? "▲" : "▼") + Math.abs(v).toFixed(1) + '</span>';
+  }
+  function psTop(list, cmp) { return list.slice().sort(cmp).slice(0, PS_TOP); }
+
+  function psCard(b, list) {
+    var rows = b.f(list);
+    var h = '<div class="section-title"><h2>' + esc(b.t) + '</h2><div class="rule"></div></div>' +
+      '<div class="card"><div class="tablewrap"><table class="t psbtbl"><thead><tr>' +
+      '<th class="pos" aria-label="Position in this list">#</th><th class="name">Player</th>' +
+      b.c.map(function (c) { return '<th class="num">' + esc(c[0]) + '</th>'; }).join("") +
+      '</tr></thead><tbody>';
+    if (!rows.length) {
+      h += '<tr><td class="psnone" colspan="' + (b.c.length + 2) + '">' +
+        'Nobody here meets this yet.</td></tr>';
+    } else {
+      h += rows.map(function (r, i) {
+        return '<tr data-el="' + r.id + '"><td class="pos">' + (i + 1) + '</td>' +
+          '<td class="name"><span class="who">' + esc(r.name) + '</span>' +
+          '<div class="mgr">' + esc(r.pos) + ' · ' + esc(r.team) + '</div></td>' +
+          b.c.map(function (c) { return '<td class="num">' + c[1](r) + '</td>'; }).join("") + '</tr>';
+      }).join("");
+    }
+    return h + '</tbody></table></div><div class="note psnote">' + b.n + '</div></div>';
+  }
+
+  function psBoards(st) {
+    var n = st.recent.length;
+    var span = n > 1 ? "GW" + st.recent[0] + "–" + st.recent[n - 1] : "GW" + st.recent[0];
+    return [
+      { t: "Most points", n: "Everything scored so far, bonus included.",
+        c: [["Pts", function (r) { return "<b>" + num(r.pts) + "</b>"; }],
+            ["£", function (r) { return psMoney(r.price); }],
+            ["GO", psGo]],
+        f: function (l) { return psTop(l, function (a, b) { return b.pts - a.pts || b.ga - a.ga; }); } },
+
+      { t: "Points per £m", n: "Points divided by what he costs today. What a place in your squad " +
+          "is returning, rather than what it returned to whoever bought him early.",
+        c: [["Per £m", function (r) { return "<b>" + r.ppm.toFixed(1) + "</b>"; }],
+            ["Pts", function (r) { return num(r.pts); }],
+            ["£", function (r) { return psMoney(r.price); }]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.mins > 0 && r.ppm != null; }),
+            function (a, b) { return b.ppm - a.ppm || b.pts - a.pts; });
+        } },
+
+      { t: "Goals and assists", n: "Goal involvements, however they were shared out.",
+        c: [["G+A", function (r) { return "<b>" + num(r.ga) + "</b>"; }],
+            ["G", function (r) { return num(r.goals); }],
+            ["A", function (r) { return num(r.assists); }]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.ga > 0; }),
+            function (a, b) { return b.ga - a.ga || b.goals - a.goals || b.pts - a.pts; });
+        } },
+
+      { t: "Biggest haul", n: "The best single gameweek anyone has put together.",
+        c: [["Pts", function (r) { return "<b>" + num(r.best.pts) + "</b>"; }],
+            ["When", function (r) { return "GW" + r.best.gw; }],
+            ["£", function (r) { return psMoney(r.price); }]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.best && r.best.pts > 0; }),
+            function (a, b) { return b.best.pts - a.best.pts || b.pts - a.pts; });
+        } },
+
+      { t: "In form", n: "The last " + n + " gameweek" + (n === 1 ? "" : "s") + " — " + span + ".",
+        c: [["Last " + n, function (r) { return "<b>" + num(r.form) + "</b>"; }],
+            ["Season", function (r) { return num(r.pts); }],
+            ["£", function (r) { return psMoney(r.price); }]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.form > 0; }),
+            function (a, b) { return b.form - a.form || b.pts - a.pts; });
+        } },
+
+      { t: "Not paying off", n: "In at least " + PS_OWNED + "% of Game On squads and costing " +
+          psMoney(PS_DEAR) + " or more, fewest points first. Cheap players left out on purpose: " +
+          "a bench defender on two points has not let anyone down.",
+        c: [["Pts", function (r) { return "<b>" + num(r.pts) + "</b>"; }],
+            ["GO", psGo],
+            ["£", function (r) { return psMoney(r.price); }]],
+        f: function (l) {
+          return psTop(l.filter(function (r) {
+            return r.goOwned != null && r.goOwned >= PS_OWNED && r.price >= PS_DEAR;
+          }), function (a, b) { return a.pts - b.pts || b.goOwned - a.goOwned; });
+        } },
+
+      { t: "Differentials", n: "In no more than " + PS_DIFF + "% of Game On squads, most points first " +
+          "— what the rest of the league has been missing.",
+        c: [["Pts", function (r) { return "<b>" + num(r.pts) + "</b>"; }],
+            ["GO", psGo],
+            ["£", function (r) { return psMoney(r.price); }]],
+        f: function (l) {
+          return psTop(l.filter(function (r) {
+            return r.goOwned != null && r.goOwned <= PS_DIFF && r.pts > 0;
+          }), function (a, b) { return b.pts - a.pts || a.goOwned - b.goOwned; });
+        } },
+
+      { t: "Most captained", n: "Armbands handed out across the league all season, and what the " +
+          "average one of them came back with.",
+        c: [["Armbands", function (r) { return "<b>" + num(r.caps) + "</b>"; }],
+            ["Each", function (r) { return r.capAvg == null ? "–" : r.capAvg.toFixed(1); }],
+            ["GO", psGo]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.caps > 0; }),
+            function (a, b) { return b.caps - a.caps || (b.capAvg || 0) - (a.capAvg || 0); });
+        } },
+
+      { t: "Biggest risers", n: "How far a price has climbed since the season began.",
+        c: [["Change", function (r) { return psSigned(r.rise); }],
+            ["Now", function (r) { return psMoney(r.price); }],
+            ["GO", psGo]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.rise > 0; }),
+            function (a, b) { return b.rise - a.rise || (b.goOwned || 0) - (a.goOwned || 0); });
+        } },
+
+      { t: "Biggest fallers", n: "And how far one has dropped. A player you hold at a price below " +
+          "what you paid sells back for less than he cost.",
+        c: [["Change", function (r) { return psSigned(r.rise); }],
+            ["Now", function (r) { return psMoney(r.price); }],
+            ["GO", psGo]],
+        f: function (l) {
+          return psTop(l.filter(function (r) { return r.rise < 0; }),
+            function (a, b) { return a.rise - b.rise || (b.goOwned || 0) - (a.goOwned || 0); });
+        } }
+    ];
+  }
+
+  function renderPlayerBoards(host, ds) {
+    var st = ds ? K.playerStats(ds) : null;
+    if (!st || !st.rows.length) {
+      host.innerHTML = prHead("stats") +
+        '<div class="callout">The season’s player numbers arrive with the next data sync.</div>';
+      prWire(host);
+      return;
+    }
+    if (!state.psPos) state.psPos = "all";
+    var poss = { all: "All positions", 1: "Goalkeepers", 2: "Defenders", 3: "Midfielders", 4: "Forwards" };
+    host.innerHTML = prHead("stats") +
+      '<div class="pickrow"><select class="in narrow" id="psPos">' +
+      Object.keys(poss).map(function (k) {
+        return '<option value="' + k + '"' + (k === state.psPos ? " selected" : "") + '>' +
+          esc(poss[k]) + '</option>';
+      }).join("") + '</select></div>' +
+      '<div class="statlead">' + num(st.gws.length) + ' gameweek' + (st.gws.length === 1 ? '' : 's') +
+      ' played · GO is his share of Game On’s ' + num(st.managers) + ' squads</div>' +
+      '<div id="psPanel"></div>';
+    prWire(host);
+
+    var boards = psBoards(st);
+    var draw = function () {
+      var list = state.psPos === "all" ? st.rows
+        : st.rows.filter(function (r) { return String(r.type) === state.psPos; });
+      $("#psPanel", host).innerHTML = boards.map(function (b) { return psCard(b, list); }).join("");
+    };
+    $("#psPos", host).addEventListener("change", function () { state.psPos = this.value; draw(); });
+    // Tap a player for the same points breakdown the pitch cards open.
+    $("#psPanel", host).addEventListener("click", function (e) {
+      var tr = e.target.closest && e.target.closest("tr[data-el]");
+      if (tr) showBreakdown(+tr.getAttribute("data-el"), ds.pitchGw, 1);
+    });
+    draw();
+  }
+
+  // Prices or the season's leaderboards: one head for both, so the toggle does
+  // not jump when you cross between them.
+  function prHead(tab) {
+    return '<div class="pseg psegwide" role="tablist">' +
+      '<button type="button" role="tab" data-pr="prices"' +
+        (tab === "prices" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Prices</button>' +
+      '<button type="button" role="tab" data-pr="stats"' +
+        (tab === "stats" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Stats</button>' +
+      '</div>';
+  }
+  function prWire(host) {
+    $all('[data-pr]', host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        location.hash = b.getAttribute("data-pr") === "stats" ? "prices/stats" : "prices";
+      });
+    });
+  }
+
   function renderPrices(host, ds) {
     var rows = ds ? K.priceTable(ds) : null;
     if (!rows || !rows.length) {
-      host.innerHTML = '<div class="callout">No player list in this data yet.</div>';
+      host.innerHTML = prHead("prices") +
+        '<div class="callout">No player list in this data yet.</div>';
+      prWire(host);
       return;
     }
     // Prices and both ownerships are published already; which way a price is
@@ -607,13 +802,14 @@
     if (!state.priceDir) state.priceDir = colOf(state.priceSort).first;
 
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
-    var h = '<div class="pickrow">' +
+    var h = prHead("prices") + '<div class="pickrow">' +
       '<select class="in narrow" id="prPos">' + Object.keys(poss).map(function (k) {
         return '<option value="' + k + '"' + (k === state.pricePos ? ' selected' : '') + '>' + esc(poss[k]) + '</option>';
       }).join("") + '</select>' +
       searchBox("prSearch") + '</div>';
     h += '<div id="prPanel"></div>';
     host.innerHTML = h;
+    prWire(host);
 
     // Every player is in the table, so nobody is unreachable by scrolling. But
     // laying out 600 rows before the first paint cost more than two seconds on a
@@ -1186,7 +1382,7 @@
         i: tile("mpl", "#9d5bd2", "#43146e", G_FOOT) },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: tile("mgo", "#ffd76a", "#e6a417", G_TROPHY) },
-      { k: "prices", go: "prices", t: "Player prices", s: "Price, ownership and which way it is moving",
+      { k: "prices", go: "prices", t: "Player stats", s: "Prices, ownership and how the season is going",
         i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
     ];
     var inLeague = here !== "prices" && here !== "pl";
@@ -1443,6 +1639,7 @@
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
     if (view === "profile") state.profileId = parts[1] || null;
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
+    if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
       state.plGw = +parts[1] || null;
@@ -1469,7 +1666,8 @@
     $all(".navitem").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === state.view); });
     $all(".view").forEach(function (v) { v.classList.toggle("active", v.getAttribute("data-view") === state.view); });
     window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
-    var fill = ["classic", "monthly", "lms", "pyramid", "h2h", "prices"].indexOf(state.view) !== -1;
+    var fill = ["classic", "monthly", "lms", "pyramid", "h2h"].indexOf(state.view) !== -1 ||
+      (state.view === "prices" && state.prTab !== "stats");
     setFill(fill);
     updateBanner();
   }
@@ -1486,7 +1684,7 @@
     profile: { t: "Profile" },
     compare: { t: "Head to head" },
     stats:   { t: "Stats & highlights" },
-    prices:  { t: "Player prices" },
+    prices:  { t: "Player stats" },
     pl:      { t: "Premier League" },
     winnings:{ t: "Winnings" },
     gwstatus:{ t: "Gameweek status" }
@@ -1580,7 +1778,10 @@
     if (state.view === "compare") return renderCompare(host, S.dataset());
     if (state.view === "chips") return renderChips(host, S.dataset());
     if (state.view === "stats") return renderStats(host, S.dataset());
-    if (state.view === "prices") return renderPrices(host, S.dataset());
+    if (state.view === "prices") {
+      return state.prTab === "stats" ? renderPlayerBoards(host, S.dataset())
+                                     : renderPrices(host, S.dataset());
+    }
     if (state.view === "pl") return renderPl(host, S.dataset());
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
     if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
@@ -2797,7 +2998,7 @@
       // league. Comparing the two without this line has already confused one
       // reader, and 245 will read it.
       (metric === "eo" ? '<div class="note" style="margin:2px 2px 8px">Ownership here is within ' +
-        'Game On\u2019s 245 managers. FPL-wide ownership is in Player prices.</div>' : '');
+        'Game On\u2019s 245 managers. FPL-wide ownership is in Player stats.</div>' : '');
   }
 
   /* The squad a manager will own next gameweek, rebuilt from the transfers he
