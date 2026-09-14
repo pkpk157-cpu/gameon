@@ -1108,7 +1108,11 @@
       b.addEventListener("click", function () {
         if (b.getAttribute("data-pl") === "table") { location.hash = "pl/table"; return; }
         var gws = Object.keys(all).map(Number).sort(function (x, y) { return x - y; });
-        var gw = (ds.pitchGw && all[ds.pitchGw]) ? +ds.pitchGw : gws[gws.length - 1];
+        // ds is read defensively a line above because this wiring is also put
+        // on the "no fixtures yet" page, which is what a device with no data
+        // at all gets. The handler has to be as careful as the line above it:
+        // tapping Fixtures there used to throw rather than do nothing.
+        var gw = (ds && ds.pitchGw && all[ds.pitchGw]) ? +ds.pitchGw : gws[gws.length - 1];
         location.hash = gw ? "pl/" + gw : "pl";
       });
     });

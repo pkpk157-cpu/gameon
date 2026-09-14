@@ -85,6 +85,17 @@ if (fin.length) (ds.managers || []).forEach((m) => {
     flag("classic " + m.playerName + ": FPL total " + last.t + ", gw sum " + sum);
 });
 
+// A history that did not answer is carried forward rather than published as a
+// zero (see fetch-data.js). That is the right answer, but it is still stale
+// data standing in for fresh, so it is said out loud here: every competition
+// but the classic table is built on these rows.
+if (ds.historyCarried && (ds.historyCarried.ids || []).length) {
+  const names = ds.historyCarried.ids
+    .map((id) => ((ds.managers || []).find((m) => +m.id === +id) || {}).playerName || id);
+  flag(names.length + " history(s) carried forward from " +
+    (ds.historyCarried.from || "an earlier publish") + ": " + names.join(", "));
+}
+
 played.forEach((g) => {
   const ev = (ds.bootstrap.events || []).find((e) => e.id === g);
   if (!ev || !(ev.average > 0)) flag("no average_entry_score for finished GW" + g);
@@ -93,10 +104,18 @@ played.forEach((g) => {
 // Purchase prices, which the realisable squad value is built from. There is
 // no FPL figure to check them against — the history row's "value" is the
 // market value plus bank, not a selling value — so the test is the budget
-// itself: a manager who has never transferred still holds the fifteen he
-// bought out of £100.0m, so his purchase prices plus his bank must come to
-// exactly that. It catches a wrong season-start price immediately, which is
-// the only part of the purchase price we derive rather than read.
+// itself: a manager who still holds his opening fifteen bought them out of
+// £100.0m, so his purchase prices plus his bank must come to exactly that. It
+// catches a wrong season-start price immediately, which is the only part of
+// the purchase price we derive rather than read.
+//
+// "Still holds his opening fifteen" is not the same as "has made no
+// transfers". FPL reports event_transfers as 0 for a wildcard and a free hit,
+// so a manager can replace all fifteen and still look untouched here; his
+// squad was then bought at that week's prices and owes nothing to the opening
+// budget. Counting those made the check disagree with FPL on 18 squads every
+// single run, which is worse than not running it: a warning nobody can act on
+// is a warning nobody reads.
 if (ds.buys && ds.buysGw && (ds.picks || {})[ds.buysGw]) {
   let budgetOk = 0, budgetOff = 0, priced = 0, missing = 0;
   const pk = ds.picks[ds.buysGw];
@@ -113,10 +132,12 @@ if (ds.buys && ds.buysGw && (ds.picks || {})[ds.buysGw]) {
     priced++;
     const everTransferred = Object.keys(ds.history[id] || {})
       .some((g) => ((ds.history[id][g] || {}).tr || 0) > 0);
-    if (everTransferred || h.bk == null) return;
+    const rebuiltSquad = ((ds.chips || {})[id] || [])
+      .some((c) => c.n === "wildcard" || c.n === "freehit");
+    if (everTransferred || rebuiltSquad || h.bk == null) return;
     if (sum + h.bk === 1000) budgetOk++; else budgetOff++;
   });
-  if (budgetOff) flag("purchase prices: " + budgetOff + " never-transferred squad(s) " +
+  if (budgetOff) flag("purchase prices: " + budgetOff + " untouched squad(s) " +
     "do not add up to the £100.0m budget");
   if (missing > priced) flag("purchase prices missing for " + missing + " squad(s)");
   console.log("purchase prices: " + priced + " squads priced, " + budgetOk +

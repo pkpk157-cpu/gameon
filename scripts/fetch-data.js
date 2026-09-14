@@ -205,6 +205,43 @@ async function h2hAll(id) {
   }, 6);
   console.log("  histories done, failed " + hist.failed);
 
+  // A history that did not answer must not be published as a blank. Every
+  // competition except the classic table is built from these rows, so a
+  // manager missing from here does not read as "unknown" — he reads as a man
+  // who scored nothing: bottom of his month, bottom of his division, and
+  // eliminated from Last Manager Standing in the first gameweek. The classic
+  // table, which comes from the standings endpoint, would still show him
+  // leading the league, so nothing on screen would look broken enough to
+  // doubt.
+  //
+  // Carry his last published history forward instead, the same answer the
+  // standings outage above gets. It is short by the live gameweek and no more,
+  // which is a small and honest error next to a zero. Anyone still blank after
+  // this has never been fetched at all.
+  const carried = [];
+  const blank = [];
+  managers.forEach((m) => {
+    if (history[m.id]) return;
+    const old = (prev.history || {})[m.id];
+    if (old && Object.keys(old).length) {
+      history[m.id] = old;
+      const oldChips = (prev.chips || {})[m.id];
+      if (oldChips && !chips[m.id]) chips[m.id] = oldChips;
+      const oldPast = (prev.pastSeasons || {})[m.id];
+      if (oldPast && !pastSeasons[m.id]) pastSeasons[m.id] = oldPast;
+      carried.push(m.id);
+    } else {
+      blank.push(m.id);
+    }
+  });
+  if (carried.length) {
+    console.log("  " + carried.length + " history(s) did not answer — carried forward from " +
+      (prev.updatedAt || "the last publish"));
+  }
+  if (blank.length) {
+    console.log("  " + blank.length + " manager(s) have no history at all: " + blank.join(", "));
+  }
+
   // A carried-forward roster still carries the totals and ranks the standings
   // last reported. The histories above are current and come from elsewhere, so
   // rebuild from those — but only with a complete set, since a roster ranked
@@ -217,7 +254,11 @@ async function h2hAll(id) {
       Object.keys(history[m.id] || {}).forEach((g) => { if (+g > latest) latest = +g; });
     });
     const rows = latest ? managers.map((m) => (history[m.id] || {})[latest]) : [];
-    if (latest && rows.every((r) => r && typeof r.t === "number")) {
+    // A carried-forward history is a gameweek behind, and a table ranked on a
+    // mix of fresh and stale totals is exactly the invisible wrongness this
+    // guard exists to refuse. Both outages at once is rare; publishing the
+    // last consistent figures through it is cheap.
+    if (latest && !carried.length && rows.every((r) => r && typeof r.t === "number")) {
       managers.forEach((m, i) => { m.total = rows[i].t; m.eventTotal = rows[i].p; });
       // Ties keep the order the standings had, which is as close to FPL's own
       // tiebreak as we can get without asking it.
@@ -226,7 +267,8 @@ async function h2hAll(id) {
         .forEach((m, i) => { m.rank = i + 1; });
       console.log("  roster totals and ranks rebuilt from GW" + latest + " histories");
     } else {
-      console.log("  roster kept as published: histories incomplete for a rebuild");
+      console.log("  roster kept as published: histories " +
+        (carried.length ? "carried forward" : "incomplete") + ", not safe to rebuild from");
     }
   }
 
@@ -956,6 +998,9 @@ async function h2hAll(id) {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name }, rosterAsOf, voluntary,
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
+    // Which managers are carrying a stale history, and how stale. Written so
+    // the verifier can shout about it rather than it passing unnoticed.
+    historyCarried: carried.length ? { ids: carried, from: prev.updatedAt || null } : null,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps,

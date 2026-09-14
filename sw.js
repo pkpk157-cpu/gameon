@@ -1,5 +1,7 @@
 /* FPL Game On V12 — service worker (network-first for app + data, cache fallback) */
-const CACHE = "gameon-v12-2";
+// Bumped so devices that already stored a failed response under the old name
+// drop it on activate rather than serving that miss for the rest of the season.
+const CACHE = "gameon-v12-3";
 const ASSETS = [
   "./", "./index.html", "./styles.css",
   "./config.js", "./api.js", "./data.js", "./compute.js", "./app.js",
@@ -34,7 +36,7 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(req).then((res) => {
         const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put("./index.html", copy)).catch(() => {});
+        if (res.ok) caches.open(CACHE).then((c) => c.put("./index.html", copy)).catch(() => {});
         return res;
       }).catch(() => caches.match("./index.html").then((c) => c || caches.match("./")))
     );
@@ -49,7 +51,12 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     fetch(fresh).then((res) => {
       const copy = res.clone();
-      if (!url.pathname.endsWith("data.json")) {
+      // Only a good answer is worth keeping. A 404 or a 500 stored here is
+      // served back for as long as the cache lives: a player with no
+      // photograph would keep its miss, and a file that 404s for the seconds
+      // a deploy is swapping the site over would outlive the deploy on that
+      // device with nothing to correct it.
+      if (res.ok && !url.pathname.endsWith("data.json")) {
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
       }
       return res;

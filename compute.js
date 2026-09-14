@@ -630,7 +630,17 @@
                  (b.lastBench - a.lastBench) ||
                  (lastGw ? lmsTieBreak(ds, b.id, a.id, [lastGw]) : 0);
         });
-        rows.forEach(function (r, i) { r.pos = i + 1; r.prize = div.prizes[i + 1] || 0; });
+        // A mini-season nobody has played yet awards nothing. Everyone sits
+        // level on nothing, so the order is the roster's and means nothing —
+        // and the man it happens to put first is not on his way to a prize.
+        // The page already refuses to draw that table; the XP has to refuse it
+        // too, or the winnings page pays out on a standing that does not exist.
+        // Positions stay: the next season's divisions are derived from them,
+        // provisionally, which is a different claim from money.
+        rows.forEach(function (r, i) {
+          r.pos = i + 1;
+          r.prize = playedGws.length ? (div.prizes[i + 1] || 0) : 0;
+        });
         return { key: div.key, name: div.name, prizes: div.prizes, rows: rows,
                  size: ids.length, played: playedGws.length, total: season.gws.length,
                  complete: complete };
