@@ -758,7 +758,13 @@
       ["gf", "Goals for", "GF"], ["ga", "Goals against", "GA"],
       ["gd", "Goal difference", "GD"], ["pts", "Points", "Pts"]
     ];
-    var h = plHead("table") + '<div class="card"><div class="freeze"><table class="t pltbl">' +
+    var h = plHead("table") + '<div class="card">' +
+      '<div class="hd"><h3>Standings</h3>' +
+      '<button type="button" class="hinfo" id="plWhat" aria-label="How this table is worked out">' +
+      svg("info", 16) + '</button>' +
+      '<span class="sub">' + num(t.played) + ' match' + (t.played === 1 ? '' : 'es') +
+      ' counted</span></div>' +
+      '<div class="freeze"><table class="t pltbl">' +
       '<thead><tr><th class="pos" aria-label="Position">#</th><th class="name">Club</th>' +
       COLS.map(function (c) {
         return '<th class="num c-' + c[0] + '" aria-label="' + esc(c[1]) + '">' + esc(c[2]) + '</th>';
@@ -777,13 +783,42 @@
         }).join("") +
         '<td class="num c-l5">' + plForm(r.last5) + '</td></tr>';
     });
-    h += '</tbody></table></div>' +
-      '<div class="koline">Ordered on points, then goal difference, then goals scored; clubs level on all ' +
-      'three share a place. Built from the results on the fixtures page, so a match counts from the final ' +
-      'whistle. The top four and the bottom three are marked — the bottom three are the ones relegated.' +
-      '</div></div>';
+    h += '</tbody></table></div></div>';
     host.innerHTML = h;
     plWire(host, ds);
+    $("#plWhat", host).addEventListener("click", function () {
+      modal("How this table works", plHelp(t));
+    });
+  }
+
+  /* What used to sit in small print under the table, with room to say it
+     properly: how the order is settled, where the numbers come from, and what
+     the marked rows at either end do and do not claim. */
+  function plHelp(t) {
+    var h = helpList("How the order is settled", [
+      ["Points", "Three for a win, one for a draw. The column the table is sorted on."],
+      ["Goal difference", "Goals scored less goals conceded. It separates clubs level on points."],
+      ["Goals scored", "It separates clubs still level after goal difference."],
+      ["Still level on all three", "They share the place rather than being split by an order the " +
+        "rules do not set, so two clubs can both be 4th and the next club is 6th."]
+    ]);
+    h += helpList("Where the numbers come from", [
+      ["The results themselves", "Every column is worked out here from the matches on the Fixtures " +
+        "page — the same ones this app publishes — rather than copied from a table somewhere else."],
+      ["When a match counts", "From the final whistle. A match being played is not in these numbers " +
+        "yet, however far into it we are." +
+        (t && t.played != null ? " " + num(t.played) + " match" + (t.played === 1 ? " has" : "es have") +
+          " counted so far." : "")],
+      ["Last 5", "The last five matches a club has actually played, oldest on the left: " +
+        "\u2713 won, \u2013 drew, \u2715 lost."]
+    ]);
+    h += helpList("The marked rows", [
+      ["The top four", "Four is the smallest number of places that has gone to European competition, " +
+        "and how many there really are changes from season to season. The mark shows where a club " +
+        "sits; it does not promise what that place wins."],
+      ["The bottom three", "The relegation places. That number is fixed, so these are the three going down."]
+    ]);
+    return h;
   }
 
   function renderPl(host, ds) {
@@ -1031,13 +1066,17 @@
      the six steps in the order they happen, what a match day's badge means,
      and — the part people ask about — which times are FPL's, which we watched,
      and which are worked out from what we watched. */
+  // A titled run of term-and-meaning pairs: how every help sheet in the app is
+  // laid out, so they all read the same way.
+  function helpList(title, rows) {
+    return '<h4 class="gwh4">' + esc(title) + '</h4><dl class="gwdl">' +
+      rows.map(function (r) {
+        return '<dt>' + esc(r[0]) + '</dt><dd>' + r[1] + '</dd>';
+      }).join("") + '</dl>';
+  }
+
   function gwHelp(basis) {
-    var list = function (title, rows) {
-      return '<h4 class="gwh4">' + esc(title) + '</h4><dl class="gwdl">' +
-        rows.map(function (r) {
-          return '<dt>' + esc(r[0]) + '</dt><dd>' + r[1] + '</dd>';
-        }).join("") + '</dl>';
-    };
+    var list = helpList;
     var h = list("The gameweek, step by step", [
       ["Deadline passed", "Squads are set. Nobody can transfer or change a captain for this gameweek any more."],
       ["First match kicked off", "The gameweek is under way and points have started moving."],
