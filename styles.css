@@ -685,7 +685,9 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 /* The shirt gets the room to be the thing you see first — the card reads as a
    portrait rather than a squat tile. */
 .pshirt { display:block; padding:10px 0 6px; }
-.jsy { display:block; width:42px; height:40px; margin:0 auto; filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+.pshirt { --shirt-w:42px; --shirt-h:40px; }
+.jsy { display:block; width:var(--shirt-w); height:var(--shirt-h); margin:0 auto;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
 /* Tight, because the name bar is the width of the card and some surnames are
    not: every point of padding is a character of "Calvert-Lewin". */
 .pname { background:#fff; color:#2b0b34; font-size:10px; font-weight:700; line-height:1.3;
@@ -751,7 +753,7 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .cmppitch .pitch { --pgap:4px; }
 .cmppitch .pitch .prow { gap:4px; }
 .cmppitch .pcell { min-width:0; max-width:52px; }
-.cmppitch .jsy { width:24px; height:23px; }
+.cmppitch .pshirt { --shirt-w:24px; --shirt-h:23px; }
 .cmppitch .pname { font-size:8px; padding:2px 1px; }
 .cmppitch .ppts { font-size:9px; padding:2px 1px; }
 .cmppitch .pb { width:12px; height:12px; font-size:7.5px; line-height:12px; }
@@ -1659,7 +1661,11 @@ table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:
    sits means the card does not move when one replaces the other. */
 .pcard .facepic {
   position:absolute; left:50%; top:10px; transform:translateX(-50%);
-  width:42px; height:40px; object-fit:cover; object-position:50% 6%;
+  /* The slot is narrower than the shirt on the tightest compare card, where
+     five cards share a 320px screen. The card clips the overflow either way,
+     but a face that fits is better than a face that is trimmed. */
+  width:var(--shirt-w); max-width:100%; height:var(--shirt-h);
+  object-fit:cover; object-position:50% 6%;
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));
 }
 .pcard.gone .facepic { opacity:.55; filter:grayscale(.65); }
