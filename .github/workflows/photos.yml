@@ -1,0 +1,63 @@
+# Player photographs, mirrored into the repo.
+#
+# Deliberately a workflow of its own. The data updater runs every ten minutes
+# and is what the league actually depends on; nothing about pictures is allowed
+# to slow it down or fail it. If this never runs again the app carries on and
+# every face falls back to initials.
+name: Player photos
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: 'Only work out which URL the league serves, write nothing'
+        type: boolean
+        default: false
+      limit:
+        description: 'Fetch at most this many missing photos (0 = all)'
+        type: string
+        default: '0'
+  schedule:
+    # Once a day, well away from a deadline. New signings pick up their picture
+    # within a day of arriving; until then they wear initials.
+    - cron: '40 3 * * *'
+permissions:
+  contents: write
+concurrency:
+  # Its own group. The data updater and the Pages deploy share "pages" and must
+  # never queue behind a few megabytes of photographs.
+  group: photos
+  cancel-in-progress: false
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch missing photos
+        run: |
+          node scripts/fetch-photos.js \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.probe == true) && '--probe' || '' }} \
+            --limit "${{ (github.event_name == 'workflow_dispatch' && inputs.limit) || '0' }}"
+      - name: Commit anything new
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.probe == true) }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A photos
+          if git diff --cached --quiet; then
+            echo "No new photographs."
+            exit 0
+          fi
+          n=$(git diff --cached --name-only | wc -l)
+          git commit -m "Add $n player photo(s)"
+          # The data updater commits every ten minutes, so a push can lose a
+          # race through no fault of its own. Rebase and try again rather than
+          # failing a job whose work is already done.
+          for i in 1 2 3 4; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((2 ** i))
+          done
+          echo "Could not push; the next run will pick these up again."
+          exit 1
