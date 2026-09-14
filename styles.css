@@ -1657,6 +1657,12 @@ table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));
 }
 .pcard.gone .facepic { opacity:.55; filter:grayscale(.65); }
+/* Once the photograph is really there the jersey has nothing left to do, and
+   a cut-out on a transparent background would otherwise wear it as a backdrop.
+   Hidden, not removed: the jersey is what gives the slot its height, and a
+   card that resized when a picture arrived would be worse than the backdrop. */
+.pshirt.hasface .jsy { visibility:hidden; }
+.face.hasface > i { visibility:hidden; }
 
 /* A row's face: initials underneath, photograph over them, one box either way. */
 .face { position:relative; display:inline-block; flex:none; overflow:hidden;

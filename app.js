@@ -1614,7 +1614,24 @@
     document.addEventListener("error", function (e) {
       var t = e.target;
       if (t && t.tagName === "IMG" && t.classList && t.classList.contains("facepic")) {
-        if (t.parentNode) t.parentNode.removeChild(t);
+        if (t.parentNode) {
+          t.parentNode.classList.remove("hasface");
+          t.parentNode.removeChild(t);
+        }
+      }
+    }, true);
+    // And one that has arrived should be the only thing there. These are
+    // cut-outs on a transparent background, so the jersey behind a man showed
+    // through around his head; the fallback only earns its place when there is
+    // nothing in front of it. Hidden rather than removed, because the jersey
+    // is what gives the slot its height and the card must not move. Marked on
+    // load rather than up front: until the picture is really on screen the
+    // jersey is still the thing being looked at.
+    document.addEventListener("load", function (e) {
+      var t = e.target;
+      if (t && t.tagName === "IMG" && t.classList && t.classList.contains("facepic") &&
+          t.naturalWidth > 0 && t.parentNode) {
+        t.parentNode.classList.add("hasface");
       }
     }, true);
 
