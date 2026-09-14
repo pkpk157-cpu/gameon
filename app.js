@@ -215,11 +215,31 @@
     }
     location.hash = hash;
   }
+  /* Nothing behind an overlay should move. Holding the page by overflow alone
+     sends some browsers back to the top the moment the hold is released, so
+     where it was is remembered and put back. One function decides, called from
+     every open and every close, so two overlays closing in either order cannot
+     leave the page locked. */
+  var lockedAt = 0;
+  function syncLock() {
+    var root = document.documentElement;
+    var want = sheetOpen(), on = root.classList.contains("ovl");
+    if (want === on) return;
+    if (want) {
+      lockedAt = window.pageYOffset || root.scrollTop || 0;
+      root.classList.add("ovl");
+    } else {
+      root.classList.remove("ovl");
+      try { window.scrollTo(0, lockedAt); } catch (e) {}
+    }
+  }
+
   function modal(title, bodyHtml) {
     var was = $("#modalBack").classList.contains("show");
     $("#modalTitle").textContent = title; $("#modalBody").innerHTML = bodyHtml;
     $("#modalBack").classList.add("show");
     if (!was) pushOverlay();
+    syncLock();
     return $("#modalBody");
   }
   // What one gameweek was made of: FPL's own lines, in FPL's own order.
@@ -283,14 +303,33 @@
       (anyGo ? '<td class="num"></td>' : '') +
       '<td class="num">' + num(hist.mins) + '</td>' +
       '<td class="num"><b>' + num(hist.total) + '</b></td></tr>';
-    h += '</tbody></table>';
-    var bits = [];
-    if (hist.goals) bits.push(num(hist.goals) + (hist.goals === 1 ? " goal" : " goals"));
-    if (hist.assists) bits.push(num(hist.assists) + (hist.assists === 1 ? " assist" : " assists"));
-    h += '<div class="note bdnote">' +
-      (bits.length ? esc(bits.join(", ")) + " so far. " : "") +
-      (anyGo ? 'GO is the share of Game On squads that held him that week. ' : '') +
-      'Tap a gameweek to see what it was made of.</div>';
+    return h + '</tbody></table>';
+  }
+
+  /* The figures on this card come from three different places and mean three
+     different things. Worth reading once, which is what an information button
+     is for — rather than a line of small print under every table. */
+  function bdHelp() {
+    var h = helpList("What he is today", [
+      ["Price", "What he costs to buy now, and how far that has moved since the season " +
+        "began. Prices only change overnight."],
+      ["FPL", "The share of every squad in the game that holds him — the game's own " +
+        "figure, as it stands today. FPL publishes no history of it, so it cannot be " +
+        "shown week by week."],
+      ["Game On", "The share of this league's squads that holds him now."]
+    ]);
+    h += helpList("The season, week by week", [
+      ["GO", "The share of Game On squads that held him <b>that week</b>, counted from that " +
+        "week's own squads. This one is real history: it says whether the league was on him " +
+        "before he scored or piled in afterwards."],
+      ["Opponent", "Who his club met, <b>H</b> at home and <b>A</b> away. A dash means he " +
+        "had no fixture that gameweek."],
+      ["Min", "Minutes on the pitch. A dash means he did not feature, or the gameweek has " +
+        "not been played yet."],
+      ["Pts", "What he scored. A <b>*</b> means provisional bonus is still part of it, " +
+        "because FPL has not confirmed the bonus for that fixture."],
+      ["Any row", "Tap it to see what that gameweek was made of."]
+    ]);
     return h;
   }
 
@@ -313,7 +352,9 @@
 
     var head = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
       '<div class="bdname"><b>' + esc(name) + '</b><span>' + esc(club) +
-      ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div></div>';
+      ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div>' +
+      '<button type="button" class="hinfo bdinfo" id="bdWhat" aria-label="What these figures mean">' +
+      svg("info", 17) + '</button></div>';
     // What he costs and who holds him, as of now. These sit outside the tabs
     // because they belong to today rather than to any one gameweek: FPL
     // publishes only its current ownership figure, and a price column would be
@@ -348,10 +389,21 @@
         b.classList.toggle("on", on);
         b.setAttribute("aria-selected", on ? "true" : "false");
       });
-      $("#bdPanel", box).innerHTML = tab === "all"
-        ? bdSeasonPanel(hist, at)
+      var info = $("#bdWhat", box);
+      if (info) info.classList.toggle("on", tab === "help");
+      $("#bdPanel", box).innerHTML = tab === "help" ? bdHelp()
+        : tab === "all" ? bdSeasonPanel(hist, at)
         : bdGwPanel(ds, el, at, at === openedAt ? mult : 1);
     };
+    // A sheet cannot open another over itself without throwing this one away,
+    // so the explanation is a third panel and either tab brings you back.
+    var infoBtn = $("#bdWhat", box);
+    if (infoBtn) {
+      infoBtn.addEventListener("click", function () {
+        tab = tab === "help" ? "gw" : "help";
+        draw();
+      });
+    }
 
     $all("[data-bdtab]", box).forEach(function (b) {
       b.addEventListener("click", function () { tab = b.getAttribute("data-bdtab"); draw(); });
@@ -372,6 +424,7 @@
     var was = $("#modalBack").classList.contains("show");
     $("#modalBack").classList.remove("show");
     if (was && fromPop !== true) popOverlay();
+    syncLock();
   }
 
   /* ---- profile sheet --------------------------------------------------- */
@@ -489,6 +542,7 @@
     });
     if (!$("#menuBack").classList.contains("show")) pushOverlay();
     $("#menuBack").classList.add("show");
+    syncLock();
 
     $all("#pfTheme button").forEach(function (b) {
       b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile({ edit: editing }); });
@@ -534,6 +588,7 @@
     var was = $("#menuBack").classList.contains("show");
     $("#menuBack").classList.remove("show");
     if (was && fromPop !== true) popOverlay();
+    syncLock();
   }
   function segBtn(val, icon, label, cur) {
     return '<button data-th="' + val + '" class="' + (cur === val ? "on" : "") + '">' + svg(icon, 16) + label + '</button>';

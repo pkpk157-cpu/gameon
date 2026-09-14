@@ -37,7 +37,7 @@
      .freeze already owns the backdrop, so a nested backdrop-filter has nothing
      left to work on and the rows read straight through — this carries the
      opacity itself instead. */
-  --head-solid:#fbf8fc;
+  --head-solid:#fbf8fc; --sheet-bg:#fbf8fc;
   --prog-up:#9fe6c4; --prog-up-ink:#0d5136;
   --prog-down:#ffc0b0; --prog-down-ink:#7a2413;
   --prog-go:#25c274; --prog-go-ink:#05301e;
@@ -75,7 +75,7 @@
     --chart-a:#ff2882; --chart-b:#2b9ed6; --card-bg:#20202c;
     --glass:rgba(38,38,52,.46); --glass-2:rgba(30,30,44,.4);
     --glass-bar:rgba(24,24,36,.55); --glass-border:rgba(255,255,255,.14);
-  --head-solid:#171724;
+  --head-solid:#171724; --sheet-bg:#171724;
   --prog-up:#1d6347; --prog-up-ink:#b7f4d8;
   --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
   --prog-go:#25c274; --prog-go-ink:#042416;
@@ -109,7 +109,7 @@
   --chart-a:#ff2882; --chart-b:#2b9ed6; --card-bg:#20202c;
   --glass:rgba(38,38,52,.46); --glass-2:rgba(30,30,44,.4);
   --glass-bar:rgba(24,24,36,.55); --glass-border:rgba(255,255,255,.14);
-  --head-solid:#171724;
+  --head-solid:#171724; --sheet-bg:#171724;
   --prog-up:#1d6347; --prog-up-ink:#b7f4d8;
   --prog-down:#7a2f22; --prog-down-ink:#ffd0c4;
   --prog-go:#25c274; --prog-go-ink:#042416;
@@ -558,11 +558,17 @@ select.in { appearance:none; }
 .modal-back { position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(10,8,20,.4); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   display:none; align-items:center; justify-content:center; z-index:70; padding:16px; }
 .modal-back.show { display:flex; }
-.modal { background:var(--glass-bar); -webkit-backdrop-filter:blur(30px) saturate(190%); backdrop-filter:blur(30px) saturate(190%);
+/* Opaque, not glass. The backdrop behind it is still blurred and dimmed, but
+   a sheet you can read the table through is a sheet you have to work to read,
+   and these carry small numbers. It also drops two backdrop-filters that were
+   compositing the whole page on every scroll of the sheet. */
+.modal { background:var(--sheet-bg);
   border:1px solid var(--glass-border); border-radius:20px; width:min(560px,100%); max-height:86vh; overflow:auto;
-  box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hi); }
+  box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+  /* reaching the end of the sheet must not start scrolling the page behind it */
+  overscroll-behavior:contain; }
 .modal .hd { padding:15px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; position:sticky; top:0;
-  background:var(--glass-bar); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
+  background:var(--sheet-bg); }
 .modal .hd h3 { font-size:16px; font-weight:700; } .modal .hd .x { margin-left:auto; cursor:pointer; color:var(--ink-faint); font-size:22px; line-height:1; }
 .modal .bd { padding:18px; }
 
@@ -1701,7 +1707,6 @@ table.t.bdhist tbody tr.bdrow.on { background:var(--chip); }
 .bdblank { color:var(--dash); }
 /* the star that says a figure still has provisional bonus in it */
 .bdprov { font-style:normal; color:var(--accent); font-weight:800; margin-left:2px; }
-.bdnote { margin-top:10px; }
 
 /* ---- what a player is today, above his gameweeks ----------------------- */
 .bdfacts { display:flex; gap:8px; margin:0 0 14px; }
@@ -1714,3 +1719,20 @@ table.t.bdhist tbody tr.bdrow.on { background:var(--chip); }
 /* Five columns in a modal on a small phone: the padding is what gives way. */
 table.t.bdhist.wgo th, table.t.bdhist.wgo td { padding:9px 3px; }
 table.t.bdhist.wgo th:first-child, table.t.bdhist.wgo td:first-child { padding-left:0; }
+
+/* ---- the page holds still under an overlay ------------------------------
+   A table scrolling away behind a player's card is disorienting, and on a
+   phone it is what happens whenever a thumb lands outside the card. Held on
+   the root element as well as the body, because body alone is not enough on
+   iOS. The scroll position is restored in script when the last overlay goes. */
+html.ovl, html.ovl body { overflow:hidden !important; }
+/* overflow alone stops a wheel but has never reliably stopped a thumb on iOS,
+   and a thumb landing outside the card is exactly how this goes wrong. The
+   backdrop refuses gestures outright; the card itself still takes a vertical
+   one, because a sheet you cannot scroll is no better than one that lets the
+   page slide away behind it. */
+.modal-back { touch-action:none; }
+.modal-back .modal { touch-action:pan-y; }
+/* the information button on a player's card, out at the end of his name row */
+.bdinfo { margin-left:auto; align-self:flex-start; }
+.bdinfo.on { color:var(--accent); }
