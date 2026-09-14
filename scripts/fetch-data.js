@@ -14,6 +14,17 @@ const H2H = [
   831308, 831309, 831313, 831338, 831344, 831346, 831350, 831351,
   831357, 831362, 831367, 831369, 831370, 831372, 831383, 831385
 ];
+// The five voluntary side leagues. They are ordinary classic leagues of their
+// own on FPL, so their standings are read the same way the main one is and
+// nobody has to be matched by name — which is the only way to be sure a
+// Darayus Bathena and a Darayus Bhathena are the same man.
+const VOLUNTARY = [
+  { key: "v1",  id: 1021712 },
+  { key: "v2",  id: 1021716 },
+  { key: "v3",  id: 1021717 },
+  { key: "vpl", id: 503430  },
+  { key: "vel", id: 503428  }
+];
 const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)", "Accept": "application/json" };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -61,10 +72,12 @@ async function pool(items, worker, concurrency = 6) {
   });
 }
 
-async function classicAll() {
+async function classicAll() { return classicOf(CLASSIC); }
+
+async function classicOf(leagueId) {
   let all = [], name = "";
   for (let page = 1; ; page++) {
-    const d = await getJSON("/leagues-classic/" + CLASSIC + "/standings/?page_standings=" + page);
+    const d = await getJSON("/leagues-classic/" + leagueId + "/standings/?page_standings=" + page);
     if (!name) name = (d.league && d.league.name) || "";
     const res = (d.standings && d.standings.results) || [];
     res.forEach((r) => all.push({
@@ -214,6 +227,29 @@ async function h2hAll(id) {
       console.log("  roster totals and ranks rebuilt from GW" + latest + " histories");
     } else {
       console.log("  roster kept as published: histories incomplete for a rebuild");
+    }
+  }
+
+  // The voluntary leagues. Nothing here is allowed to fail the run: they are a
+  // side attraction and the classic league is not. A league that does not
+  // answer keeps whatever it published last, and says how old that is.
+  console.log("Fetching voluntary leagues…");
+  const voluntary = {};
+  for (const v of VOLUNTARY) {
+    try {
+      const got = await classicOf(v.id);
+      voluntary[v.key] = { id: v.id, name: got.name, at: new Date().toISOString(),
+                           results: got.managers };
+      console.log("  " + v.key + " " + got.name + ": " + got.managers.length + " entries");
+    } catch (e) {
+      const before = (prev.voluntary || {})[v.key];
+      if (before) {
+        voluntary[v.key] = before;
+        console.log("  " + v.key + " unavailable (" + (e && e.message) + ") — keeping " +
+          before.results.length + " entries from " + before.at);
+      } else {
+        console.log("  " + v.key + " unavailable (" + (e && e.message) + ") and nothing to keep");
+      }
     }
   }
 
@@ -918,7 +954,7 @@ async function h2hAll(id) {
 
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
-    bootstrap: { events }, league: { id: CLASSIC, name: name }, rosterAsOf,
+    bootstrap: { events }, league: { id: CLASSIC, name: name }, rosterAsOf, voluntary,
     managers, history, h2h, h2hFixtures: h2hFx, pastSeasons: pastSeasons, _failed: hist.failed || 0,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},

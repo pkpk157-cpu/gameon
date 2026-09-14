@@ -263,6 +263,84 @@
     return rows;
   };
 
+  /* ---- Voluntary leagues -------------------------------------------------
+     Five side leagues played on the same team a manager already has. Each is a
+     classic league of its own on FPL, so the entries and the totals are read
+     straight from the game: nobody is matched by name, which is the only way
+     to be sure that a Darayus Bathena and a Darayus Bhathena are one man, and
+     the only way to include somebody who is in a side league but not in the
+     main one.
+
+     FPL settles the order and the ties; what it knows nothing about is the
+     money, which is here. Managers level on points share the place and split
+     what those places pay between them, as the classic league does. */
+  C.voluntaryLeagues = function (ds) {
+    var money = cfg().voluntaryPrizes || {};
+    var order = cfg().voluntaryOrder || Object.keys(money);
+    return order.filter(function (k) { return money[k]; }).map(function (k) {
+      var live = ((ds && ds.voluntary) || {})[k];
+      return { key: k, name: money[k].name, short: money[k].short,
+               fee: money[k].fee, pot: money[k].pot,
+               entries: live ? live.results.length : money[k].entries,
+               loaded: !!live };
+    });
+  };
+
+  C.voluntary = function (ds, key) {
+    var money = (cfg().voluntaryPrizes || {})[key];
+    if (!money) return null;
+    var live = ((ds && ds.voluntary) || {})[key];
+    if (!live || !live.results) {
+      return { key: key, name: money.name, short: money.short, fee: money.fee,
+               pot: money.pot, prizes: money.prizes, entries: money.entries,
+               places: Object.keys(money.prizes).map(Number).sort(function (a, b) { return a - b; }),
+               rows: [], paid: 0, loaded: false, at: null, expected: money.entries };
+    }
+    // FPL has already ordered the league and given joint ranks where managers
+    // are level; its order is the one the game itself shows, so it is kept.
+    var rows = live.results.slice().sort(function (a, b) {
+      return (a.rank - b.rank) || (b.total - a.total);
+    }).map(function (r) {
+      return { id: r.id, name: r.playerName, entryName: r.entryName,
+               total: r.total, eventTotal: r.eventTotal,
+               fplRank: r.rank, lastRank: r.lastRank };
+    });
+
+    var prizeAt = function (place) { return (money.prizes && money.prizes[place]) || 0; };
+    rows.forEach(function (r, i) {
+      r.order = i + 1;
+      r.computedRank = i + 1;
+      r.prize = prizeAt(i + 1);
+      r.tiedWith = 0;
+    });
+    // Level on points: one place between them, and the money those places pay
+    // split evenly, whole rupees, the odd ones to the higher places.
+    for (var i = 0; i < rows.length; ) {
+      var j = i;
+      while (j + 1 < rows.length && rows[j + 1].total === rows[i].total) j++;
+      if (j > i) {
+        var pot = 0, n = j - i + 1;
+        for (var k = i; k <= j; k++) pot += prizeAt(k + 1);
+        var base = Math.floor(pot / n), extra = pot - base * n;
+        for (var k2 = i; k2 <= j; k2++) {
+          rows[k2].computedRank = i + 1;
+          rows[k2].prize = base + ((k2 - i) < extra ? 1 : 0);
+          rows[k2].tiedWith = n;
+        }
+      }
+      i = j + 1;
+    }
+    var paid = 0;
+    rows.forEach(function (r) { paid += r.prize; });
+    return {
+      key: key, name: money.name, short: money.short, fee: money.fee,
+      pot: money.pot, prizes: money.prizes, entries: rows.length,
+      expected: money.entries, at: live.at || null, loaded: true,
+      places: Object.keys(money.prizes).map(Number).sort(function (a, b) { return a - b; }),
+      rows: rows, paid: paid
+    };
+  };
+
   /* ---- 2. Monthly winners ---------------------------------------------- */
   C.monthly = function (ds) {
     var mm = managerMap(ds);

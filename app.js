@@ -124,6 +124,9 @@
   var G_FOOT = '<circle cx="15" cy="15" r="7.4" fill="#fff"/>' +
     '<path d="M15 12.3l2.6 1.9-1 3h-3.2l-1-3Z" fill="rgba(0,0,0,.3)"/>' +
     '<path d="M15 12.3V7.7M17.6 14.2l4.3-1.5M16.6 17.2l2.7 3.7M13.4 17.2l-2.7 3.7M12.4 14.2 8.1 12.7" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.2"/>';
+  var G_COINS = '<ellipse cx="15" cy="10.4" rx="7.2" ry="2.8" fill="#fff"/>' +
+    '<path d="M7.8 10.4v3c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>' +
+    '<path d="M7.8 15.6v3c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>';
   var G_CHART = '<path d="M8.3 20.6l4.3-4.5 3 2.4 5.8-6.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
     '<path d="M17.7 11.9h3.7v3.7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
   var TILE = {
@@ -1566,10 +1569,12 @@
         i: tile("mpl", "#9d5bd2", "#43146e", G_FOOT) },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: tile("mgo", "#ffd76a", "#e6a417", G_TROPHY) },
-      { k: "prices", go: "prices", t: "Player stats", s: "Prices, ownership and how the season is going",
+      { k: "vol", go: "vol", t: "Game On Voluntary", s: "Five side leagues and prizes",
+        i: tile("mvo", "#ff9f4a", "#d1521c", G_COINS) },
+      { k: "prices", go: "prices", t: "Player stats", s: "Prices, ownership and form",
         i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
     ];
-    var inLeague = here !== "prices" && here !== "pl";
+    var inLeague = here !== "prices" && here !== "pl" && here !== "vol";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
         var on = (it.k === "league") ? inLeague : (here === it.k);
@@ -1835,7 +1840,7 @@
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
       .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
-               "winnings", "gwstatus"]);
+               "winnings", "gwstatus", "vol"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -1853,6 +1858,7 @@
     if (view === "profile") state.profileId = parts[1] || null;
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
     if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
+    if (view === "vol" && parts[1]) state.volKey = parts[1];
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
       state.plGw = +parts[1] || null;
@@ -1900,12 +1906,13 @@
     prices:  { t: "Player stats" },
     pl:      { t: "Premier League" },
     winnings:{ t: "Winnings" },
-    gwstatus:{ t: "Gameweek status" }
+    gwstatus:{ t: "Gameweek status" },
+    vol:     { t: "Game On Voluntary" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
   var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
-                   "winnings", "gwstatus"];
+                   "winnings", "gwstatus", "vol"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -1998,6 +2005,7 @@
     if (state.view === "pl") return renderPl(host, S.dataset());
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
     if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
+    if (state.view === "vol") return renderVoluntary(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();
@@ -3060,6 +3068,133 @@
   }
 
   // A little shirt: body + contrast sleeves, optional vertical stripes.
+  /* ---- the voluntary leagues ---------------------------------------------
+     Five side leagues bought into separately and played on the same team a
+     manager already has in the classic league. The table is settled the way
+     the classic one is, and says so behind its information button. */
+  function volPrizeList(v) {
+    return v.places.map(function (pl) {
+      return '<div class="volpz"><span class="k">' + ordinal(pl) + '</span>' +
+        '<span class="v">' + xp(v.prizes[pl]) + '</span></div>';
+    }).join("");
+  }
+
+  function volHelp(v) {
+    var h = helpList("Where the table comes from", [
+      ["The league", "This is a league of its own on FPL, so who is in it and what they have " +
+        "scored is read from the game. Nobody is matched by name, so two spellings of one " +
+        "man cannot become two managers \u2014 and somebody who plays a side league without " +
+        "being in the main one is still counted."],
+      ["The order", "FPL's own: season points, highest first."],
+      ["Level on points", "They share the place and split what those places pay between them, " +
+        "whole rupees, the odd ones going to the higher places."]
+    ]);
+    h += helpList("The money", [
+      ["Entry", xp(v.fee) + " each."],
+      ["Pot", xp(v.pot) + ", paid out in full."],
+      ["Places paid", v.places.length + " of " + num(v.entries) + ": " +
+        v.places.map(function (p) { return ordinal(p) + " " + xp(v.prizes[p]); }).join(", ") + "."]
+    ]);
+    if (v.expected && v.entries !== v.expected) {
+      h += helpList("Entries", [
+        ["Now", num(v.entries) + " in the league on FPL today."],
+        ["When the prizes were set", num(v.expected) + " on the published sheet. The pot and " +
+          "the prizes here are that sheet's and have not been recalculated."]
+      ]);
+    }
+    return h;
+  }
+
+  function volRows(v) {
+    return v.rows.map(function (r) {
+      var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
+      var eq = r.tiedWith > 1
+        ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
+          (r.tiedWith > 2 ? 's' : '') + ' — the money is shared">=</span>' : '';
+      return '<tr' + (isMe(r.id) ? ' class="me"' : '') + ' data-entry="' + r.id + '">' +
+        '<td class="num"><span class="rankcell">' + eq +
+        '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
+        '<td class="name"><span class="who">' + esc(r.entryName || r.name) + '</span>' +
+        '<div class="mgr">' + esc(r.name) + '</div></td>' +
+        '<td class="num">' + num(r.eventTotal) + '</td>' +
+        '<td class="num"><b>' + num(r.total) + '</b></td>' +
+        '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
+        '</tr>';
+    }).join("");
+  }
+
+  function renderVoluntary(host, ds) {
+    var leagues = K.voluntaryLeagues();
+    if (!leagues.length) {
+      host.innerHTML = '<div class="callout">No voluntary leagues are configured.</div>';
+      return;
+    }
+    if (!state.volKey || !leagues.some(function (l) { return l.key === state.volKey; })) {
+      state.volKey = leagues[0].key;
+    }
+    var v = ds ? K.voluntary(ds, state.volKey) : null;
+
+    var h = '<div class="pickrow"><select class="in" id="volPick">' +
+      leagues.map(function (l) {
+        return '<option value="' + l.key + '"' + (l.key === state.volKey ? ' selected' : '') + '>' +
+          esc(l.name) + ' · ' + num(l.entries) + ' entries</option>';
+      }).join("") + '</select></div><div id="volPanel"></div>';
+    host.innerHTML = h;
+
+    var draw = function () {
+      var vv = ds ? K.voluntary(ds, state.volKey) : null;
+      var panel = $("#volPanel", host);
+      if (!vv) {
+        panel.innerHTML = '<div class="callout">The league table arrives with the next data sync.</div>';
+        return;
+      }
+      if (!vv.loaded) {
+        panel.innerHTML = '<div class="callout">' + esc(vv.name) + ' arrives with the next ' +
+          'data sync — its table is read from FPL, and this copy of the data was published ' +
+          'before that began.</div>';
+        return;
+      }
+      var b = '<div class="card"><div class="hd"><h3>' + esc(vv.name) + '</h3>' +
+        '<button type="button" class="hinfo" id="volWhat" aria-label="How this league works">' +
+        svg("info", 16) + '</button>' +
+        '<span class="sub">' + num(vv.entries) + ' entries</span></div>' +
+        '<div class="volmoney">' +
+        '<div class="volfact"><div class="k">Entry</div><div class="v">' + xp(vv.fee) + '</div></div>' +
+        '<div class="volfact"><div class="k">Pot</div><div class="v">' + xp(vv.pot) + '</div></div>' +
+        '<div class="volfact"><div class="k">Places paid</div><div class="v">' + vv.places.length + '</div></div>' +
+        '</div>' +
+        (vv.expected && vv.entries !== vv.expected
+          ? '<div class="note psnote">' + num(vv.entries) + ' in the league today; the sheet ' +
+            'that set these prizes had ' + num(vv.expected) + '. The pot and prizes below are ' +
+            'the published ones.</div>'
+          : '') +
+        '<div class="freeze"><table class="t voltbl"><thead><tr>' +
+        '<th class="num">#</th><th>Team</th><th class="num">GW</th>' +
+        '<th class="num">Total</th><th class="num">Won</th>' +
+        '</tr></thead><tbody id="volBody">' + volRows(vv) + '</tbody></table></div></div>';
+
+      b += '<div class="section-title"><h2>Prizes</h2><div class="rule"></div></div>' +
+        '<div class="card"><div class="volpzs">' + volPrizeList(vv) + '</div>' +
+        '<div class="note psnote">' + xp(vv.pot) + ' in, ' + xp(vv.pot) +
+        ' out. Level managers share a place and split what the places between them pay.</div></div>';
+
+      panel.innerHTML = b;
+      var info = $("#volWhat", host);
+      if (info) {
+        info.addEventListener("click", function () {
+          modal(vv.name + " · how it works", volHelp(vv));
+        });
+      }
+    };
+
+    $("#volPick", host).addEventListener("change", function () {
+      state.volKey = this.value;
+      try { history.replaceState(null, "", "#vol/" + state.volKey); } catch (e) {}
+      draw();
+    });
+    draw();
+  }
+
   /* ---- faces -------------------------------------------------------------
      A photograph where we have one, and something that looks deliberate where
      we do not. Every face is drawn into a box that is already the right size

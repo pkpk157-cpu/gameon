@@ -61,6 +61,32 @@
     autoMonths: true,
 
     /* ---- Classic league prizes (rank -> amount) -------------------------- */
+    /* ---- Voluntary leagues -----------------------------------------------
+       Five side leagues anyone could buy into, played on the same FPL team a
+       manager already has. Each is an ordinary classic league of its own on
+       FPL, so who is in one and what they have scored is read from the game
+       rather than kept here — the ids live in scripts/fetch-data.js.
+
+       What FPL does not know is the money, so that is what this holds. The
+       figures are the published "Voluntary Leagues" sheet; `entries` is what
+       that sheet said, kept so the app can say so if the league has since
+       grown or shrunk. Every pot is the entry fee times those entries, and
+       every prize list adds back up to its pot. */
+    voluntaryPrizes: {
+      v1:  { name: "League 1",       short: "L1",    fee: 1500, pot: 22500,  entries: 15,
+             prizes: { 1: 9000, 2: 6000, 3: 4500, 4: 3000 } },
+      v2:  { name: "League 2",       short: "L2",    fee: 1000, pot: 16000,  entries: 16,
+             prizes: { 1: 6500, 2: 4500, 3: 3000, 4: 2000 } },
+      v3:  { name: "League 3",       short: "L3",    fee: 500,  pot: 4500,   entries: 9,
+             prizes: { 1: 3000, 2: 1500 } },
+      vpl: { name: "Premier League", short: "PL",    fee: 2000, pot: 66000,  entries: 33,
+             prizes: { 1: 17000, 2: 12000, 3: 10000, 4: 8000, 5: 6500, 6: 5000, 7: 4000, 8: 3500 } },
+      vel: { name: "Elite PL",       short: "Elite", fee: 5000, pot: 170000, entries: 34,
+             prizes: { 1: 43000, 2: 31000, 3: 26000, 4: 21000, 5: 17000, 6: 13500, 7: 10500, 8: 8000 } }
+    },
+    // the order they are offered in, cheapest first
+    voluntaryOrder: ["v1", "v2", "v3", "vpl", "vel"],
+
     classicPrizes: {
       exact: {
         1: 40000, 2: 33000, 3: 26000, 4: 21000, 5: 17000,

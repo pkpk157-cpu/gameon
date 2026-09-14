@@ -1742,3 +1742,28 @@ html.ovl, html.ovl body { overflow:hidden !important; }
 /* the information button on a player's card, out at the end of his name row */
 .bdinfo { margin-left:auto; align-self:flex-start; }
 .bdinfo.on { color:var(--accent); }
+
+/* ---- the voluntary leagues ---------------------------------------------- */
+.volmoney { display:flex; gap:8px; padding:12px 14px 2px; }
+.volfact { flex:1 1 0; min-width:0; background:var(--chip); border-radius:9px; padding:8px 9px; text-align:center; }
+.volfact .k { font-size:9px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--ink-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.volfact .v { font-size:15px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums; }
+table.t.voltbl th, table.t.voltbl td { padding:9px 5px; }
+table.t.voltbl th.num, table.t.voltbl td.num { text-align:center; white-space:nowrap; }
+table.t.voltbl td.num { font-variant-numeric:tabular-nums; }
+table.t.voltbl td.name { min-width:0; }
+table.t.voltbl td.name .who, table.t.voltbl td.name .mgr {
+  display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* the mark on a manager the sheet spells differently from FPL */
+.volalias { font-size:10px; color:var(--ink-faint); }
+/* what each place pays, as a row of small facts */
+.volpzs { display:flex; flex-wrap:wrap; gap:8px; padding:14px; }
+.volpz { flex:1 1 72px; background:var(--chip); border-radius:9px; padding:8px 6px; text-align:center; }
+.volpz .k { display:block; font-size:9.5px; font-weight:800; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--ink-faint); }
+.volpz .v { display:block; font-size:14px; font-weight:800; margin-top:2px;
+  font-variant-numeric:tabular-nums; color:var(--good); }
+/* names the classic league has never heard of */
+.volnone { display:flex; flex-wrap:wrap; gap:8px; padding:14px 14px 2px; }
+.volnone span { background:var(--chip); border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:600; }
