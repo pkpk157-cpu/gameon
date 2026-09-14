@@ -935,6 +935,54 @@
     return { rows: rows, total: total, provisional: prov > 0 };
   };
 
+  /* A player's season, gameweek by gameweek: what he scored, how long he was
+     on the pitch, and who his club played. The breakdown reads this for its
+     second tab, so the one gameweek in front of you always has the rest of the
+     season behind it. */
+  C.playerHistory = function (ds, el) {
+    if (!ds || !ds.elements || !ds.elements[el]) return null;
+    var club = ds.elements[el][2];
+    var lp = ds.livePoints || {}, bd = ds.breakdown || {};
+    var gws = Object.keys(lp).map(Number).filter(function (g) { return g > 0; })
+      .sort(function (a, b) { return a - b; });
+    if (!gws.length) return null;
+    var live = C.liveGwId(ds);
+    var rows = gws.map(function (g) {
+      var lines = (bd[g] || {})[el] || null;
+      var mins = 0, goals = 0, assists = 0, bonus = 0;
+      if (lines) {
+        lines.forEach(function (r) {
+          if (r[0] === "minutes") mins += r[1] || 0;
+          else if (r[0] === "goals_scored") goals += r[1] || 0;
+          else if (r[0] === "assists") assists += r[1] || 0;
+          else if (r[0] === "bonus") bonus += r[2] || 0;
+        });
+      }
+      // Provisional bonus is part of what he is on right now, and the gameweek
+      // tab counts it, so the season tab has to agree or the two disagree
+      // about the same afternoon.
+      var prov = (!bonus && live === g) ? ((bonusAt(ds, g) || {})[el] || 0) : 0;
+      var pts = (lp[g] || {})[el];
+      var fx = ((ds.gwFixtures || {})[g] || []).filter(function (f) {
+        return f[0] === club || f[1] === club;
+      }).map(function (f) {
+        return { opp: f[0] === club ? f[1] : f[0], home: f[0] === club,
+                 started: !!f[2], done: !!(f[3] || f[8]) };
+      });
+      return { gw: g, pts: (pts == null ? null : pts + prov), mins: mins,
+               goals: goals, assists: assists, bonus: bonus + prov, prov: prov > 0,
+               played: mins > 0, fixtures: fx, blank: !fx.length,
+               // nothing to report yet is not the same as a blank: one is a
+               // gameweek he has no fixture in, the other has not been played
+               ahead: fx.length > 0 && !fx.some(function (x) { return x.started; }) };
+    });
+    var total = 0, mins = 0, goals = 0, assists = 0;
+    rows.forEach(function (r) {
+      total += r.pts || 0; mins += r.mins; goals += r.goals; assists += r.assists;
+    });
+    return { rows: rows, total: total, mins: mins, goals: goals, assists: assists, club: club };
+  };
+
   // Everyone who played one chip in one gameweek, best gameweek score first.
   C.chipPlayers = function (ds, gw, chip) {
     var pk = (ds && ds.picks || {})[gw] || {};

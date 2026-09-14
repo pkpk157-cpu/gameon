@@ -222,34 +222,119 @@
     if (!was) pushOverlay();
     return $("#modalBody");
   }
+  // What one gameweek was made of: FPL's own lines, in FPL's own order.
+  function bdGwPanel(ds, el, gw, mult) {
+    var B = K.playerBreakdown(ds, el, gw);
+    if (!B) {
+      var h = K.playerHistory(ds, el);
+      var row = h && h.rows.filter(function (r) { return r.gw === +gw; })[0];
+      // Nothing stored is three different things, and saying which is the
+      // difference between an app that looks broken and one that is waiting.
+      var why = !row ? "No points breakdown is stored for Gameweek " + gw + "."
+        : row.blank ? esc(ds.elements[el][2]) + " had no fixture in Gameweek " + gw + "."
+        : row.ahead ? "Gameweek " + gw + " has not kicked off yet."
+        : "He did not feature in Gameweek " + gw + ".";
+      return '<div class="callout">' + why + '</div>';
+    }
+    return '<table class="t bdtbl"><thead><tr><th>Type</th>' +
+      '<th class="num">Value</th><th class="num">Points</th></tr></thead><tbody>' +
+      B.rows.map(function (r) {
+        return '<tr><td>' + esc(r.label) + '</td><td class="num">' + esc(String(r.value)) + '</td>' +
+          '<td class="num"><b>' + r.points + ' pt' + (Math.abs(r.points) === 1 ? '' : 's') + '</b></td></tr>';
+      }).join("") +
+      '<tr class="bdtotal"><td>Total Points</td><td></td><td class="num"><b>' + B.total +
+      ' pts</b></td></tr>' +
+      (mult > 1 ? '<tr class="bdtotal"><td>' + (mult === 3 ? 'Triple Captain (×3)' : 'Captain (×2)') +
+        '</td><td></td><td class="num"><b>' + (B.total * mult) + ' pts</b></td></tr>' : '') +
+      '</tbody></table>' +
+      (B.provisional ? '<div class="note" style="margin-top:10px">Bonus is provisional until FPL finalises the fixture.</div>' : '');
+  }
+
+  // The season behind it. Every gameweek, what he played and what it returned,
+  // and each row opens that gameweek on the other tab.
+  function bdSeasonPanel(hist, cur) {
+    if (!hist || !hist.rows.length) {
+      return '<div class="callout">No gameweeks have been published yet.</div>';
+    }
+    var oppOf = function (r) {
+      if (r.blank) return '<span class="bdblank">no fixture</span>';
+      return r.fixtures.map(function (f) {
+        return esc(f.opp) + '<span class="bdha">' + (f.home ? "H" : "A") + '</span>';
+      }).join(" ");
+    };
+    var h = '<table class="t bdhist"><thead><tr><th class="num">GW</th><th>Opponent</th>' +
+      '<th class="num">Min</th><th class="num">Pts</th></tr></thead><tbody>';
+    h += hist.rows.map(function (r) {
+      var pts = r.ahead ? '<span class="bdblank">–</span>'
+        : (r.pts == null ? '<span class="bdblank">–</span>'
+          : '<b>' + num(r.pts) + '</b>' + (r.prov ? '<i class="bdprov" title="includes provisional bonus">*</i>' : ''));
+      return '<tr class="bdrow' + (r.gw === +cur ? ' on' : '') + '" data-bdgw="' + r.gw + '"' +
+        ' role="button" tabindex="0">' +
+        '<td class="num">' + r.gw + '</td><td>' + oppOf(r) + '</td>' +
+        '<td class="num">' + (r.blank || r.ahead ? '<span class="bdblank">–</span>' : num(r.mins)) + '</td>' +
+        '<td class="num">' + pts + '</td></tr>';
+    }).join("");
+    h += '<tr class="bdtotal"><td class="num"></td><td>Season</td>' +
+      '<td class="num">' + num(hist.mins) + '</td>' +
+      '<td class="num"><b>' + num(hist.total) + '</b></td></tr>';
+    h += '</tbody></table>';
+    var bits = [];
+    if (hist.goals) bits.push(num(hist.goals) + (hist.goals === 1 ? " goal" : " goals"));
+    if (hist.assists) bits.push(num(hist.assists) + (hist.assists === 1 ? " assist" : " assists"));
+    h += '<div class="note bdnote">' +
+      (bits.length ? esc(bits.join(", ")) + " so far. " : "") +
+      'Tap a gameweek to see what it was made of.</div>';
+    return h;
+  }
+
   function showBreakdown(el, gw, mult) {
     var ds = S.dataset();
     if (!ds || !ds.elements || !ds.elements[el]) return;
     var meta = ds.elements[el];
     var name = meta[5] || meta[0], club = meta[2];
-    var B = K.playerBreakdown(ds, el, gw);
-    var body = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
-      '<div class="bdname"><b>' + esc(name) + '</b><span>' + esc(meta[2]) +
-      ' \u00b7 ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div></div>';
-    if (!B) {
-      body += '<div class="callout">No points breakdown is stored for ' + esc(meta[0]) +
-        ' in Gameweek ' + gw + '.</div>';
-    } else {
-      body += '<table class="t bdtbl"><thead><tr><th>Type</th>' +
-        '<th class="num">Value</th><th class="num">Points</th></tr></thead><tbody>' +
-        B.rows.map(function (r) {
-          return '<tr><td>' + esc(r.label) + '</td><td class="num">' + esc(String(r.value)) + '</td>' +
-            '<td class="num"><b>' + r.points + ' pt' + (Math.abs(r.points) === 1 ? '' : 's') + '</b></td></tr>';
-        }).join("") +
-        '<tr class="bdtotal"><td>Total Points</td><td></td><td class="num"><b>' + B.total +
-        ' pts</b></td></tr>' +
-        (mult > 1 ? '<tr class="bdtotal"><td>' + (mult === 3 ? 'Triple Captain (×3)' : 'Captain (×2)') +
-          '</td><td></td><td class="num"><b>' + (B.total * mult) + ' pts</b></td></tr>' : '') +
-        '</tbody></table>' +
-        (B.provisional ? '<div class="note" style="margin-top:10px">Bonus is provisional until FPL finalises the fixture.</div>' : '');
-    }
-    // the title is set with textContent, so it takes the raw name
-    modal(meta[0] + ' \u00b7 ' + club + ' \u00b7 GW' + gw, body);
+    var hist = K.playerHistory(ds, el);
+    // Which gameweek the breakdown is showing, and whether the multiplier the
+    // card was tapped with still applies. Walk to another gameweek and it does
+    // not: he was not captained that week just because he is captained now.
+    var at = +gw, openedAt = +gw;
+
+    var head = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
+      '<div class="bdname"><b>' + esc(name) + '</b><span>' + esc(club) +
+      ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div></div>';
+    var many = hist && hist.rows.length > 1;
+    var box = modal(meta[0] + ' · ' + club,
+      head + (many ? '<div class="pseg sm bdtabs" role="tablist">' +
+        '<button type="button" role="tab" data-bdtab="gw" class="on" aria-selected="true"></button>' +
+        '<button type="button" role="tab" data-bdtab="all" aria-selected="false">Season</button>' +
+        '</div>' : '') + '<div id="bdPanel"></div>');
+
+    var tab = "gw";
+    var draw = function () {
+      var gwBtn = $('[data-bdtab="gw"]', box);
+      if (gwBtn) gwBtn.textContent = "Gameweek " + at;
+      $all("[data-bdtab]", box).forEach(function (b) {
+        var on = b.getAttribute("data-bdtab") === tab;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      $("#bdPanel", box).innerHTML = tab === "all"
+        ? bdSeasonPanel(hist, at)
+        : bdGwPanel(ds, el, at, at === openedAt ? mult : 1);
+    };
+
+    $all("[data-bdtab]", box).forEach(function (b) {
+      b.addEventListener("click", function () { tab = b.getAttribute("data-bdtab"); draw(); });
+    });
+    // A gameweek on the season tab opens that gameweek on the other one, which
+    // is the question anybody reading the list is about to ask anyway.
+    $("#bdPanel", box).addEventListener("click", function (e) {
+      var tr = e.target.closest && e.target.closest("tr[data-bdgw]");
+      if (!tr) return;
+      at = +tr.getAttribute("data-bdgw");
+      tab = "gw";
+      draw();
+    });
+    draw();
   }
 
   function closeModal(fromPop) {

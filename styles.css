@@ -1686,3 +1686,19 @@ table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:
 .bdwho { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
 .bdname b { display:block; font-size:15px; font-weight:700; }
 .bdname span { display:block; font-size:12px; color:var(--ink-faint); margin-top:2px; }
+
+/* ---- the breakdown's two tabs ------------------------------------------ */
+.bdtabs { width:100%; max-width:none; margin:0 0 14px; }
+.bdtabs button { flex:1 1 0; }
+table.t.bdhist th, table.t.bdhist td { padding:9px 6px; }
+table.t.bdhist th:first-child, table.t.bdhist td:first-child { padding-left:2px; }
+table.t.bdhist td.num { font-variant-numeric:tabular-nums; }
+table.t.bdhist tbody tr.bdrow { cursor:pointer; }
+table.t.bdhist tbody tr.bdrow.on { background:var(--chip); }
+/* Home or away, small enough to ride beside the club without taking a column */
+.bdha { font-size:9px; font-weight:800; color:var(--ink-faint); margin-left:4px;
+  border:1px solid var(--line); border-radius:4px; padding:0 3px; vertical-align:1px; }
+.bdblank { color:var(--dash); }
+/* the star that says a figure still has provisional bonus in it */
+.bdprov { font-style:normal; color:var(--accent); font-weight:800; margin-left:2px; }
+.bdnote { margin-top:10px; }
