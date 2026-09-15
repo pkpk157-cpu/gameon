@@ -184,6 +184,8 @@ async function main() {
     }));
     if (i && i % 200 === 0) { console.log("  " + got + " fetched..."); await sleep(400); }
   }
+  await fetchBadges(bs.body.teams || [], sharp);
+
   const all = fs.readdirSync(OUT).filter((f) => f.endsWith(".webp"));
   const total = all.reduce((s, f) => s + fs.statSync(path.join(OUT, f)).size, 0);
   console.log("");
@@ -199,6 +201,68 @@ async function main() {
   }
   console.log("  " + all.length + " photographs in " + OUT + "/, " +
     (total / 1024 / 1024).toFixed(2) + " MB in total.");
+}
+
+// Club crests, mirrored the same way and for the same reasons, named by the
+// club's short code (badge-ARS.webp) because that is what the data carries.
+// Twenty small files; a club that cannot be fetched simply has no crest and
+// its name stands alone, which is how the app looked before crests existed.
+const BADGE_WIDE = 56;
+const BADGE_CANDIDATES = [
+  { name: "badges/70", url: (c) => "https://resources.premierleague.com/premierleague/badges/70/t" + c + ".png" },
+  { name: "badges/70@x2", url: (c) => "https://resources.premierleague.com/premierleague/badges/70/t" + c + "@x2.png" },
+  { name: "badges/50", url: (c) => "https://resources.premierleague.com/premierleague/badges/50/t" + c + ".png" },
+  { name: "pl25/badges/70", url: (c) => "https://resources.premierleague.com/premierleague25/badges/70/t" + c + ".png" },
+  { name: "pl26/badges/70", url: (c) => "https://resources.premierleague.com/premierleague26/badges/70/t" + c + ".png" },
+  { name: "badges/rb", url: (c) => "https://resources.premierleague.com/premierleague/badges/rb/t" + c + ".svg" }
+];
+function isSvg(buf) { return buf && buf.length > 5 && /^\s*<(\?xml|svg)/i.test(buf.slice(0, 200).toString("utf8")); }
+async function fetchBadges(teams, sharp) {
+  const clubs = teams.filter((t) => t && t.code && t.short_name)
+    .map((t) => ({ code: String(t.code), short: String(t.short_name).toUpperCase() }));
+  if (!clubs.length) { console.log("\nNo clubs in the player list; no crests."); return; }
+  const have = new Set(fs.readdirSync(OUT).filter((f) => f.startsWith("badge-") && f.endsWith(".webp")));
+  const missing = clubs.filter((c) => !have.has("badge-" + c.short + ".webp"));
+  console.log("\nCrests: " + (clubs.length - missing.length) + " of " + clubs.length + " here, " + missing.length + " to fetch.");
+  if (!missing.length) return;
+
+  console.log("Which crest URL is the league serving today?");
+  const sample = clubs.slice(0, 3);
+  const working = [];
+  for (const cand of BADGE_CANDIDATES) {
+    let hits = 0, bytes = 0, codes = [];
+    for (const c of sample) {
+      const r = await get(cand.url(c.code), true);
+      const ok = r.ok && (isPng(r.body) || isSvg(r.body));
+      if (ok) { hits++; bytes += r.body.length; }
+      codes.push(r.status);
+    }
+    console.log("  " + cand.name.padEnd(16) + hits + "/" + sample.length +
+      (hits ? "   avg " + (bytes / hits / 1024).toFixed(1) + " KB" : "   (" + codes.join(",") + ")"));
+    if (hits === sample.length) working.push({ cand: cand, avg: bytes / hits });
+  }
+  if (!working.length) { console.log("  None answered; crests wait for another day."); return; }
+  working.sort((a, b) => a.avg - b.avg);
+
+  let got = 0, gone = 0;
+  for (const c of missing) {
+    let r = null;
+    for (const w of working) {
+      const t = await get(w.cand.url(c.code), true);
+      if (t.ok && (isPng(t.body) || isSvg(t.body))) { r = t; break; }
+    }
+    if (!r) { gone++; continue; }
+    try {
+      const small = await sharp(r.body, { density: 300 })
+        .resize({ width: BADGE_WIDE, height: BADGE_WIDE, fit: "inside", withoutEnlargement: !isSvg(r.body) })
+        .webp({ quality: 85, alphaQuality: 90, effort: 6 })
+        .toBuffer();
+      if (!small || small.length < 120) { gone++; continue; }
+      fs.writeFileSync(path.join(OUT, "badge-" + c.short + ".webp"), small);
+      got++;
+    } catch (e) { gone++; }
+  }
+  console.log("Crests fetched " + got + ", " + gone + " not served; those clubs show their name alone.");
 }
 
 main().catch((e) => {

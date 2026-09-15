@@ -1617,6 +1617,49 @@
         };
       });
 
+      // The team of the week: the highest-scoring legal eleven from players
+      // anyone in the league holds this gameweek, on the same points the
+      // pitches show. One goalkeeper, then whichever of the seven legal
+      // shapes (three to five at the back, two to five in midfield, one to
+      // three up front) sums highest from the best in each line. A tie on
+      // points goes to the more-owned player, so the side is the same on
+      // every phone.
+      var teamOfWeek = null;
+      (function () {
+        var byT = { 1: [], 2: [], 3: [], 4: [] };
+        ownedList.forEach(function (x) { if (byT[x.type]) byT[x.type].push(x); });
+        [1, 2, 3, 4].forEach(function (t) {
+          byT[t].sort(function (a, b) {
+            return (b.pts - a.pts) || (b.owners - a.owners) || String(a.name).localeCompare(String(b.name));
+          });
+        });
+        if (!byT[1].length) return;
+        var sumTop = function (arr, n) { var s = 0; for (var i = 0; i < n; i++) s += arr[i].pts; return s; };
+        var bestSum = -1, shape = null;
+        for (var d = 3; d <= 5; d++) {
+          for (var m = 2; m <= 5; m++) {
+            var f = 10 - d - m;
+            if (f < 1 || f > 3) continue;
+            if (byT[2].length < d || byT[3].length < m || byT[4].length < f) continue;
+            var sum = sumTop(byT[2], d) + sumTop(byT[3], m) + sumTop(byT[4], f);
+            if (sum > bestSum) { bestSum = sum; shape = { 2: d, 3: m, 4: f }; }
+          }
+        }
+        if (!shape) return;
+        var card = function (x, t) {
+          return { el: x.el, name: x.name, team: x.team, type: x.type, pos: POSNAME[t],
+                   pts: x.pts, price: x.price, eo: x.ownedPct, owners: x.owners,
+                   cap: false, vice: false, mult: 1, benched: false };
+        };
+        var lines = [1, 2, 3, 4].map(function (t) {
+          var n = t === 1 ? 1 : shape[t];
+          return { pos: POSNAME[t], players: byT[t].slice(0, n).map(function (x) { return card(x, t); }) };
+        });
+        teamOfWeek = { lines: lines, total: bestSum + byT[1][0].pts,
+                       shape: shape[2] + "-" + shape[3] + "-" + shape[4],
+                       els: lines.reduce(function (a, ln) { return a.concat(ln.players.map(function (x) { return x.el; })); }, []) };
+      })();
+
       // What the league moved in and out since last gameweek. Comparing
       // squads means chip weeks (wildcard, free hit) show up as churn too,
       // which is what actually changed hands.
@@ -1655,6 +1698,7 @@
         mostVice: ownedList.slice().filter(function (x) { return x.vices > 0; })
           .sort(function (a, b) { return b.vices - a.vices; }).slice(0, 5),
         templateXi: templateXi,
+        teamOfWeek: teamOfWeek,
         distinctCaptains: capList.length,
         ownershipLeaders: ownedList.slice().sort(function (a, b) { return b.eo - a.eo; }).slice(0, 5),
         mostOwned: ownedList.slice().sort(function (a, b) { return b.owners - a.owners; }).slice(0, 5),

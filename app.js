@@ -156,6 +156,14 @@
   // nothing about these figures should read as a currency.
   function xp(n) { return num(n); }
   function xpa(n) { return n == null || isNaN(n) ? "\u2014" : num(n) + " XP"; }
+  // A club's crest from the mirrored set that sits beside the photographs.
+  // One that has not been fetched takes itself out through the same listener
+  // as a missing face, and the name beside it stands alone.
+  function crest(short) {
+    if (!short) return "";
+    return '<img class="crest" src="photos/badge-' + esc(short) + '.webp" alt="" width="18" height="18" ' +
+      'loading="lazy" decoding="async">';
+  }
   function lsGet(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   // Rivals: up to three managers pinned from their profiles, kept on this
@@ -367,7 +375,7 @@
     var at = +gw, openedAt = +gw;
 
     var head = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
-      '<div class="bdname"><b>' + esc(name) + '</b><span>' + esc(club) +
+      '<div class="bdname"><b>' + esc(name) + '</b><span>' + crest(club) + esc(club) +
       ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div>' +
       '<button type="button" class="hinfo bdinfo" id="bdWhat" aria-label="What these figures mean">' +
       svg("info", 17) + '</button></div>';
@@ -1188,7 +1196,7 @@
       // the prize to the caption.
       var band = r.pos <= 4 ? " top" : (r.pos > t.teams - 3 ? " drop" : "");
       h += '<tr class="plrow' + band + '"><td class="pos">' + r.pos + '</td>' +
-        '<td class="name"><span class="who">' + esc(r.name) + '</span></td>' +
+        '<td class="name"><span class="who">' + crest(r.team) + esc(r.name) + '</span></td>' +
         COLS.map(function (c) {
           var v = r[c[0]];
           if (c[0] === "gd" && v > 0) v = "+" + v;
@@ -1317,8 +1325,8 @@
     var tap = tapGw ? ' tap" data-plfx="' + tapGw + "/" + esc(f[0]) + "-" + esc(f[1]) +
       '" role="link" tabindex="0" aria-label="' + esc(full(f[0])) + ' v ' + esc(full(f[1])) + ', open the match' : '';
     return '<div class="fx' + (started ? "" : " ahead") + tap + '">' +
-      '<div class="fxs l"><span class="fxm">' + esc(full(f[0])) + '</span></div>' + pill +
-      '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + '</span></div>' +
+      '<div class="fxs l"><span class="fxm">' + crest(f[0]) + esc(full(f[0])) + '</span></div>' + pill +
+      '<div class="fxs r"><span class="fxm">' + esc(full(f[1])) + crest(f[1]) + '</span></div>' +
       (cap ? '<div class="fxw">' + cap + '</div>' : "") + '</div>';
   }
 
@@ -1931,6 +1939,9 @@
           t.parentNode.classList.remove("hasface");
           t.parentNode.removeChild(t);
         }
+      }
+      if (t && t.tagName === "IMG" && t.classList && t.classList.contains("crest")) {
+        if (t.parentNode) t.parentNode.removeChild(t);
       }
     }, true);
     // And one that has arrived should be the only thing there. These are
@@ -4165,6 +4176,23 @@
       h += '<div class="note" style="margin:-4px 2px 10px">The most-owned player in each position, with how much of the league has them.</div>';
       h += '<div class="card pitchcard"><div class="bd">' +
         pitchHtml({ lines: sq.templateXi, bench: [] }, "eo") + '</div></div>';
+    }
+
+    // The best eleven the league held, and how many of them were yours.
+    if (sq.teamOfWeek) {
+      var tw = sq.teamOfWeek, mine = null, ds = S.dataset();
+      var mySq = state.me && ds && ds.picks && ds.picks[H.gw] && ds.picks[H.gw][state.me];
+      if (mySq && mySq.p) {
+        var held = {};
+        mySq.p.forEach(function (t) { held[+t[0]] = 1; });
+        mine = tw.els.filter(function (el) { return held[+el]; }).length;
+      }
+      h += '<div class="section-title"><h2>Team of the week</h2><div class="rule"></div></div>';
+      h += '<div class="note" style="margin:-4px 2px 10px">The highest-scoring legal eleven from players anyone in the league held, a ' +
+        esc(tw.shape) + ' worth ' + num(tw.total) + ' points' +
+        (mine !== null ? ' \u00b7 ' + mine + ' of them in your squad' : '') + '.</div>';
+      h += '<div class="card pitchcard"><div class="bd">' +
+        pitchHtml({ lines: tw.lines, bench: [] }, "pts") + '</div></div>';
     }
 
     h += '<div class="card"><div class="bd hcols">';

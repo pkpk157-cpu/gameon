@@ -862,6 +862,15 @@ table.t.cmptable .cmid .note { font-size:10px; margin-top:1px; }
 
 table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600; color:var(--ink-soft); line-height:1.35; }
 
+/* ---- club crests --------------------------------------------------------
+   Small, beside the club's name, never in place of it. */
+.crest { width:18px; height:18px; object-fit:contain; vertical-align:-4px; flex:none; }
+.fx .fxs.l .crest { margin-right:6px; }
+.fx .fxs.r .crest { margin-left:6px; }
+table.t.pltbl td.name .crest { margin-right:7px; }
+.bdname .crest { width:16px; height:16px; margin-right:5px; vertical-align:-3px; }
+@media (max-width:359px) { .fx .crest { width:16px; height:16px; margin-left:4px; margin-right:4px; } }
+
 /* ---- live movement ------------------------------------------------------
    A row that changed place slides from where it was; a number that changed
    rolls and pops, and its row glows for a moment. */
