@@ -31,8 +31,7 @@
     coin: '<ellipse cx="12" cy="7.4" rx="7" ry="3"/>' +
       '<path d="M5 7.4v4.3c0 1.66 3.13 3 7 3s7-1.34 7-3V7.4"/>' +
       '<path d="M5 11.7v4.3c0 1.66 3.13 3 7 3s7-1.34 7-3v-4.3"/>',
-    person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
-    sync: '<path d="M20 11a8 8 0 0 0-14.3-4.4M4 13a8 8 0 0 0 14.3 4.4"/><path d="M5 3v4h4M19 21v-4h-4"/>'
+    person: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>'
   };
   /* Icons for the stat cards. Same 24x24 stroke language as the bar's, drawn
      to be read at 14px: one idea per glyph, no interior detail that closes up
@@ -1738,29 +1737,18 @@
     window.addEventListener("orientationchange", remeasure);
     if (window.visualViewport) window.visualViewport.addEventListener("resize", remeasure);
     isAdmin(); // persist ?admin flag on first visit
-    $("#btnSync").innerHTML = svg("sync", 19);
-    $("#btnSync").addEventListener("click", function () {
-      var btn = this;
-      if (btn.classList.contains("spin")) return;
-      track("sync-tap", true);
-      btn.classList.add("spin");
-      var before = (S.dataset() || {}).updatedAt;
-      // The fetch can finish in tens of milliseconds, which would flash the
-      // spinner too briefly to register as anything. Hold it for one full turn
-      // so the tap visibly does something.
-      var spun = new Promise(function (r) { setTimeout(r, 600); });
-      var work = S.reload().then(
-        function (ds) { return { ok: true, changed: ds && ds.updatedAt !== before }; },
-        function () { return { ok: false }; }
-      );
-      Promise.all([work, spun]).then(function (res) {
-        var out = res[0];
-        btn.classList.remove("spin");
-        if (!out.ok) { toast("Could not reach the league data"); return; }
-        render();
-        toast(out.changed ? "Updated" : "Already up to date");
-      });
-    });
+    // There was a refresh button here. It re-fetched data.json and said either
+    // "Updated" or "Already up to date" — but the app already re-checks every
+    // two minutes while a gameweek is live, every fifteen otherwise, and again
+    // every single time it comes back to the foreground, which is what a phone
+    // does on every unlock and every app switch. That left it useful only to
+    // someone sitting on an open screen who wanted to shave under two minutes
+    // off a wait.
+    //
+    // And it was worst where it looked most useful: when the bar says "not
+    // synced for 9h" the staleness is the updater's, not the device's, so the
+    // button re-fetched the same old file and answered "Already up to date",
+    // which reads as a contradiction of the warning beside it.
     $("#barBack").addEventListener("click", function () {
       if (state.view === "rules" && state.rulesBack) { location.hash = state.rulesBack; return; }
       goBack();

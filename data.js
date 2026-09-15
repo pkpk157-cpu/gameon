@@ -248,19 +248,29 @@
         var b = B.provisionalBonus(bpsByFixture[f.id] || {});
         Object.keys(b).forEach(function (el) { bonus[el] = (bonus[el] || 0) + b[el]; });
       });
+      // This poll started against a dataset that may no longer be the one the
+      // app is holding: the ten-minute publish is fetched on its own timer and
+      // again on every return to the foreground, which on a phone is every
+      // unlock and every app switch — and onForeground starts both within a
+      // line of each other. Writing the layer onto the snapshot this poll
+      // opened with would throw away a publish that landed in the meantime,
+      // taking the standings back to the previous one and walking updatedAt
+      // backwards, which also makes the "not synced for" line lie. Build onto
+      // whatever is current at this moment instead.
+      var cur = _dataset || ds;
       // nothing new to say: identical points and bonus leave the app alone
-      var oldP = (ds.livePoints || {})[gw] || {}, oldB = (ds.liveBonus || {})[gw] || {};
+      var oldP = (cur.livePoints || {})[gw] || {}, oldB = (cur.liveBonus || {})[gw] || {};
       // Same nine-slot tuple the updater publishes, so the Premier League
       // page's scores and minutes tick between full syncs as well.
       var fxTuple = function (f) {
-        return [ds.teams[f.team_h] || "?", ds.teams[f.team_a] || "?",
+        return [cur.teams[f.team_h] || "?", cur.teams[f.team_a] || "?",
                 f.started ? 1 : 0, f.finished ? 1 : 0,
                 f.team_h_score == null ? null : +f.team_h_score,
                 f.team_a_score == null ? null : +f.team_a_score,
                 +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0];
       };
-      var oldFx = JSON.stringify((ds.gwFixtures || {})[gw] || null);
-      var newFx = ds.teams ? JSON.stringify((fixtures || []).map(fxTuple)) : oldFx;
+      var oldFx = JSON.stringify((cur.gwFixtures || {})[gw] || null);
+      var newFx = cur.teams ? JSON.stringify((fixtures || []).map(fxTuple)) : oldFx;
       var same = oldFx === newFx &&
         Object.keys(pts).length === Object.keys(oldP).length &&
         Object.keys(pts).every(function (k) { return oldP[k] === pts[k]; }) &&
@@ -271,18 +281,18 @@
       // every view recomputes, and the manager rows are copied because the
       // live adjustment writes into them.
       var nd = {};
-      Object.keys(ds).forEach(function (k) { nd[k] = ds[k]; });
-      nd.managers = (ds.managers || []).map(function (m) {
+      Object.keys(cur).forEach(function (k) { nd[k] = cur[k]; });
+      nd.managers = (cur.managers || []).map(function (m) {
         var c = {}; Object.keys(m).forEach(function (k) { c[k] = m[k]; }); return c;
       });
-      nd.livePoints = merge1(ds.livePoints, gw, pts);
-      nd.liveBonus = merge1(ds.liveBonus, gw, bonus);
-      nd.liveStats = merge1(ds.liveStats, gw, { g: goals, c: cs, a: assists });
-      nd.breakdown = merge1(ds.breakdown, gw, expl);
+      nd.livePoints = merge1(cur.livePoints, gw, pts);
+      nd.liveBonus = merge1(cur.liveBonus, gw, bonus);
+      nd.liveStats = merge1(cur.liveStats, gw, { g: goals, c: cs, a: assists });
+      nd.breakdown = merge1(cur.breakdown, gw, expl);
       // the started/finished flags on the real fixtures move with the
       // afternoon, and the pitch cards flip from opponent to points on them
-      if (ds.teams) {
-        nd.gwFixtures = merge1(ds.gwFixtures, gw, (fixtures || []).map(fxTuple));
+      if (cur.teams) {
+        nd.gwFixtures = merge1(cur.gwFixtures, gw, (fixtures || []).map(fxTuple));
       }
       _dataset = nd;
       return true;
