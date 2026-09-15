@@ -436,13 +436,15 @@
     return !!lsGet("go12.admin");
   }
 
-  // The drawer opens *you*: who you are first, then your things, then the
-  // league's, then anything administrative, and the theme last — it is set
-  // once and then wants to be out of the way.
+  // Two sheets, split by what you came for. This one is *you*: who you are
+  // first, then your things, then the league's, then anything administrative,
+  // and last where the numbers came from. It hangs off its own control on the
+  // right of the bar, beside the refresh button, because it is the one people
+  // reach for with a name in mind. The burger keeps navigation and the two
+  // settings — see openMenu.
   function openProfile(opts) {
     var ds = S.dataset();
     var admin = isAdmin();
-    var theme = getTheme();
     var me = state.me && ds ? K.managerMap(ds)[+state.me] : null;
     var editing = (opts && opts.edit) || !me;
     var roster = ds && ds.managers ? ds.managers.slice().sort(function (x, y) {
@@ -503,21 +505,7 @@
         '</div>';
     }
 
-    // 5 — preferences, kept at the bottom: set once, then out of the way
-    h += '<div class="menu"><div class="lab-sm">Appearance</div>' +
-      '<div class="seg" id="pfTheme">' +
-      segBtn("system", "auto", "System", theme) +
-      segBtn("light", "sun", "Light", theme) +
-      segBtn("dark", "moon", "Dark", theme) +
-      '</div></div>';
-
-    // 6 — how far along each gameweek is. Kept under the theme because it is
-    // something you look up when a score seems wrong, not every visit.
-    h += '<div class="menu"><div class="lab-sm">Gameweek status</div>' +
-      menuItem("pfGwStatus", "steps", "Gameweek status") +
-      '</div>';
-
-    // 6 — where the numbers came from
+    // 5 — where the numbers came from
     // During a live gameweek, say plainly whether the two-minute feed is
     // answering. Without this a dead proxy looks exactly like a quiet
     // afternoon — both simply show the last publish, growing older.
@@ -536,23 +524,13 @@
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
       '</div>';
 
-    $("#menuBody").innerHTML = sectionList() + h;
-    $all(".menuitem", $("#menuBody")).forEach(function (b) {
-      b.addEventListener("click", function () {
-        closeProfile(true);
-        navFromOverlay(b.getAttribute("data-go"));
-      });
-    });
-    if (!$("#menuBack").classList.contains("show")) pushOverlay();
-    $("#menuBack").classList.add("show");
+    $("#youBody").innerHTML = h;
+    if (!$("#youBack").classList.contains("show")) pushOverlay();
+    $("#youBack").classList.add("show");
     syncLock();
 
-    $all("#pfTheme button").forEach(function (b) {
-      b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openProfile({ edit: editing }); });
-    });
     function go(hash) { closeProfile(true); navFromOverlay(hash); }
     $("#pfStats").addEventListener("click", function () { go("stats"); });
-    $("#pfGwStatus").addEventListener("click", function () { go("gwstatus"); });
     $("#pfWinnings").addEventListener("click", function () { go("winnings"); });
     $("#pfCompare").addEventListener("click", function () { go("compare"); });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
@@ -588,6 +566,50 @@
     }
   }
   function closeProfile(fromPop) {
+    var was = $("#youBack").classList.contains("show");
+    $("#youBack").classList.remove("show");
+    if (was && fromPop !== true) popOverlay();
+    syncLock();
+  }
+
+  // The burger: where you are going, and the two things you set and forget.
+  // Everything about you or the league lives under the control on the right.
+  function openMenu() {
+    var theme = getTheme();
+    var h = sectionList();
+
+    h += '<div class="menu"><div class="lab-sm">Appearance</div>' +
+      '<div class="seg" id="pfTheme">' +
+      segBtn("system", "auto", "System", theme) +
+      segBtn("light", "sun", "Light", theme) +
+      segBtn("dark", "moon", "Dark", theme) +
+      '</div></div>';
+
+    // Under the theme because it is something you look up when a score seems
+    // wrong, not every visit.
+    h += '<div class="menu"><div class="lab-sm">Gameweek status</div>' +
+      menuItem("pfGwStatus", "steps", "Gameweek status") +
+      '</div>';
+
+    $("#menuBody").innerHTML = h;
+    $all(".menuitem", $("#menuBody")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        closeMenu(true);
+        navFromOverlay(b.getAttribute("data-go"));
+      });
+    });
+    if (!$("#menuBack").classList.contains("show")) pushOverlay();
+    $("#menuBack").classList.add("show");
+    syncLock();
+
+    $all("#pfTheme button").forEach(function (b) {
+      b.addEventListener("click", function () { applyTheme(b.getAttribute("data-th")); openMenu(); });
+    });
+    $("#pfGwStatus").addEventListener("click", function () {
+      closeMenu(true); navFromOverlay("gwstatus");
+    });
+  }
+  function closeMenu(fromPop) {
     var was = $("#menuBack").classList.contains("show");
     $("#menuBack").classList.remove("show");
     if (was && fromPop !== true) popOverlay();
@@ -1598,7 +1620,9 @@
   var autoTimer = null, autoBusy = false, autoLast = 0;
 
   function sheetOpen() {
-    return $("#modalBack").classList.contains("show") || $("#menuBack").classList.contains("show");
+    return $("#modalBack").classList.contains("show") ||
+           $("#menuBack").classList.contains("show") ||
+           $("#youBack").classList.contains("show");
   }
 
   // Swapping the data re-renders the view, which must not interrupt someone
@@ -1743,7 +1767,9 @@
     });
     $("#barInfo").innerHTML = svg("info", 18);
     $("#barMenu").innerHTML = svg("menu", 19);
-    $("#barMenu").addEventListener("click", function () { openProfile(); });
+    $("#barMenu").addEventListener("click", function () { openMenu(); });
+    $("#barYou").innerHTML = svg("person", 19);
+    $("#barYou").addEventListener("click", function () { openProfile(); });
     // Tap a player anywhere a pitch is drawn: the FPL-style points breakdown.
     document.addEventListener("click", function (e) {
       var card = e.target.closest && e.target.closest(".pcard[data-el], .mrow[data-el]");
@@ -1757,10 +1783,12 @@
     window.addEventListener("popstate", function () {
       if (swallowPop) { swallowPop = false; return; }
       if ($("#modalBack").classList.contains("show")) { closeModal(true); return; }
-      if ($("#menuBack").classList.contains("show")) { closeProfile(true); }
+      if ($("#youBack").classList.contains("show")) { closeProfile(true); return; }
+      if ($("#menuBack").classList.contains("show")) { closeMenu(true); }
     });
     $("#modalBack").addEventListener("click", function (e) { if (e.target === $("#modalBack")) closeModal(); });
-    $("#menuBack").addEventListener("click", function (e) { if (e.target === $("#menuBack")) closeProfile(); });
+    $("#menuBack").addEventListener("click", function (e) { if (e.target === $("#menuBack")) closeMenu(); });
+    $("#youBack").addEventListener("click", function (e) { if (e.target === $("#youBack")) closeProfile(); });
     document.addEventListener("click", function (e) {
       if (!e.target.closest) return;
       var b = e.target.closest("[data-rules]");

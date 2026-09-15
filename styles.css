@@ -381,6 +381,16 @@ tr.me:nth-child(even) td { background:var(--accent-wash); }
 }
 @media (prefers-reduced-motion: reduce) { .modal-back.drawer .modal { transition:none; } }
 
+/* ...and the same drawer from the right, for the button that opens it. You and
+   the league sit under a control on the right of the bar, so the sheet comes
+   from the side it was asked for rather than crossing the screen to arrive. */
+.modal-back.drawer.right { justify-content:flex-end; }
+.modal-back.drawer.right .modal {
+  border-radius:20px 0 0 20px; border-left:1px solid var(--glass-border); border-right:0;
+  transform:translateX(100%);
+}
+.modal-back.drawer.right.show .modal { transform:translateX(0); }
+
 /* the section burger, sitting where the back arrow does in a sub-view */
 .menubtn { flex:none; width:32px; height:32px; padding:0; border-radius:50%; cursor:pointer;
   border:1px solid var(--bar-line); background:var(--bar-fill); color:var(--bar-ink);
