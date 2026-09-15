@@ -763,7 +763,13 @@
                    w: r.matches_won, d: r.matches_drawn, l: r.matches_lost,
                    pts: r.total, gwPts: r.points_for, pos: i + 1, dest: dest(i) };
         });
-        var gname = (d.league && d.league.name) ? d.league.name : ("Group " + String.fromCharCode(65 + gi));
+        // FPL names every one of these "UCL Group N (Game On R1)". The bracket
+        // is the site's own bookkeeping and nobody in the league needs it; it
+        // was widening the dropdown and wrapping the profile's UCL row to three
+        // lines. Take it off here so every page reads the same.
+        var gname = (d.league && d.league.name)
+          ? d.league.name.replace(/\s*\(Game On[^)]*\)\s*$/i, "")
+          : ("Group " + String.fromCharCode(65 + gi));
         return { name: gname, table: table, played: groupGws.length,
                  total: h.groupStageGws.length, complete: complete };
       });

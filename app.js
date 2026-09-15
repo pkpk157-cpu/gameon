@@ -174,17 +174,14 @@
   }
   // Colored GW chips + a compact legend/summary of done/live/upcoming counts.
   function gwChips(gws, statusFn) {
-    var n = { done: 0, live: 0, upcoming: 0 };
     var chips = gws.map(function (g) {
-      var s = statusFn(g); n[s]++;
+      var s = statusFn(g);
       return '<span class="gwchip ' + s + '" title="' + s + '">' + g + '</span>';
     }).join("");
-    var parts = [];
-    if (n.done) parts.push('<span class="lg done"></span>' + n.done + ' done');
-    if (n.live) parts.push('<span class="lg live"></span>' + n.live + ' live');
-    if (n.upcoming) parts.push('<span class="lg upcoming"></span>' + n.upcoming + ' upcoming');
-    return '<div class="gwchips">' + chips + '</div>' +
-      '<div class="gwlegend">' + gws.length + ' GWs · ' + parts.join(" · ") + '</div>';
+    // No legend: a green chip is a played gameweek, a grey one is to come,
+    // and counting them up in a line beneath said nothing the row above had
+    // not. The chips keep their titles for anyone who hovers.
+    return '<div class="gwchips">' + chips + '</div>';
   }
 
   function toast(msg) {
@@ -1250,15 +1247,21 @@
       if (!cur || cur.label !== label) { cur = { label: label, fx: [] }; groups.push(cur); }
       cur.fx.push(f);
     });
-    var row = function (f) { return plFixtureRow(f, full, gw); };
+    // A day on which every match has finished does not need "Full time"
+    // under each of them — the scores are final and the caption was saying
+    // so ten times over. The caption stays while a day is still mixed, where
+    // it tells the finished matches from the live and the unplayed.
+    var isDone = function (f) { return !!f[3] || !!f[8]; };
     var h = plHead("fixtures") + '<div class="plnav">' +
       '<button type="button" class="gwarr" id="plPrev" aria-label="Earlier gameweek"' + (at > 0 ? '' : ' disabled') + '>‹</button>' +
       '<h2>Gameweek ' + gw + '</h2>' +
       '<button type="button" class="gwarr" id="plNext" aria-label="Later gameweek"' + (at < gws.length - 1 ? '' : ' disabled') + '>›</button>' +
       '</div>';
     groups.forEach(function (g) {
+      var quiet = g.fx.length > 0 && g.fx.every(isDone);
       h += '<div class="card"><div class="plday">' + esc(g.label) + '</div>' +
-        '<div class="fxwrap"><div class="fxgrp">' + g.fx.map(row).join("") + '</div></div></div>';
+        '<div class="fxwrap"><div class="fxgrp">' +
+        g.fx.map(function (f) { return plFixtureRow(f, full, gw, quiet); }).join("") + '</div></div></div>';
     });
     host.innerHTML = h;
     var flip = function (step) { return function () {
@@ -1278,7 +1281,7 @@
   // with the minute, then the final score. finished_provisional is full time on
   // the pitch — the whistle has gone even while FPL still folds the bonus in —
   // so it reads Full time. Given a gameweek the row is a link to its match.
-  function plFixtureRow(f, full, tapGw) {
+  function plFixtureRow(f, full, tapGw, quiet) {
     var started = !!f[2], done = !!f[3] || !!f[8];
     var hs = f[4], as = f[5], mins = f[6] || 0, ko = f[7] ? new Date(f[7]) : null;
     var pill, cap = "";
@@ -1288,10 +1291,10 @@
     } else if (hs == null || as == null) {
       // a dataset cached before scores were published: the next sync fills them
       pill = '<div class="fxsc ahead"><span class="fxv">–</span></div>';
-      cap = done ? "Full time" : "In play";
+      cap = done ? (quiet ? "" : "Full time") : "In play";
     } else {
       pill = '<div class="fxsc"><span class="fxp">' + hs + '</span><span class="fxp">' + as + '</span></div>';
-      cap = done ? "Full time" : '<span class="golive">' + (mins ? mins + "′ · " : "") + 'live</span>';
+      cap = done ? (quiet ? "" : "Full time") : '<span class="golive">' + (mins ? mins + "′ · " : "") + 'live</span>';
     }
     var tap = tapGw ? ' tap" data-plfx="' + tapGw + "/" + esc(f[0]) + "-" + esc(f[1]) +
       '" role="link" tabindex="0" aria-label="' + esc(full(f[0])) + ' v ' + esc(full(f[1])) + ', open the match' : '';
@@ -2116,8 +2119,8 @@
     h += '<label class="field" style="margin-bottom:12px">' +
       '<input class="in" id="classicSearch" placeholder="Search manager or team…"></label>';
 
-    h += '<div class="freeze"><table class="t"><thead><tr>' +
-      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num">Move</th><th class="num">XP</th>' +
+    h += '<div class="freeze"><table class="t classictbl"><thead><tr>' +
+      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num c-xp">XP</th>' +
       '</tr></thead><tbody id="classicBody">' + classicRows(rows) + '</tbody></table></div>';
 
     host.innerHTML = h;
@@ -2133,9 +2136,13 @@
 
   function classicRows(rows) {
     return rows.map(function (r) {
-      var mv = r.move > 0 ? '<span class="move up">▲' + r.move + '</span>'
-             : r.move < 0 ? '<span class="move down">▼' + Math.abs(r.move) + '</span>'
-             : '<span class="move flat">–</span>';
+      // The move sits under the rank rather than in a column of its own:
+      // that column was the fifth of six and never made it onto a phone
+      // screen, so the table scrolled sideways to reach a number that fits
+      // in ten points under the one it describes. No line at all for no move.
+      var mv = r.move > 0 ? '<div class="mvu up">▲' + r.move + '</div>'
+             : r.move < 0 ? '<div class="mvu down">▼' + Math.abs(r.move) + '</div>'
+             : '';
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
       // Managers still level after months won share the place and the XP,
       // so say so rather than showing an order the table cannot justify.
@@ -2143,12 +2150,11 @@
         ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
           (r.tiedWith > 2 ? 's' : '') + ' — XP shared">=</span>' : '';
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
-        '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
+        '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span>' + mv + '</td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="num">' + num(r.eventTotal) + '</td>' +
         '<td class="num"><b>' + num(r.total) + '</b></td>' +
-        '<td class="num">' + mv + '</td>' +
-        '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
+        '<td class="num c-xp">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
         '</tr>';
     }).join("");
   }
@@ -2222,12 +2228,12 @@
     if (!M.rows.length) { return '<div class="callout">No gameweeks scored yet for this month.</div>'; }
     var h = '';
 
-    h += '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num">Bench</th><th class="num">XP</th></tr></thead><tbody>';
+    h += '<div class="freeze"><table class="t monthtbl"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Points</th><th class="num c-bench">Bench</th><th class="num">XP</th></tr></thead><tbody>';
     h += M.rows.map(function (r) {
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
-        '<td class="num"><b>' + num(r.score) + '</b></td><td class="num">' + num(r.bench) + '</td>' +
+        '<td class="num"><b>' + num(r.score) + '</b></td><td class="num c-bench">' + num(r.bench) + '</td>' +
         '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
     h += '</tbody></table></div>';
@@ -2331,10 +2337,10 @@
         '<td class="name" data-entry="' + r.id + '"><span class="' + nameCls + '">' + esc(r.name) + '</span><div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td>' +
         '<td class="num">' + played + '</td>' +
-        '<td class="num">' + (r.hit ? '−' + r.hit : '0') + '</td>' +
-        '<td class="num">' + num(r.bench) + '</td></tr>';
+        '<td class="num c-hits">' + (r.hit ? '−' + r.hit : '0') + '</td>' +
+        '<td class="num c-bench">' + num(r.bench) + '</td></tr>';
     }).join("");
-    return '<div class="freeze"><table class="t"><thead><tr><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num">Hits</th><th class="num">Bench</th></tr></thead><tbody>' +
+    return '<div class="freeze"><table class="t lmstbl"><thead><tr><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num c-hits">Hits</th><th class="num c-bench">Bench</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>';
   }
 
@@ -2599,12 +2605,15 @@
     var rows = g.table.map(function (t) {
       var pill = t.dest === "UCL" ? '<span class="pill ucl">UCL</span>' : t.dest === "UEL" ? '<span class="pill uel">UEL</span>' : '';
       var zone = t.dest === "UCL" ? "zone-top" : "";
+      // The UCL/UEL tag rides on the manager's line rather than the team's,
+      // where it wrapped every row to three lines and made this the tallest
+      // table in the app for a word the row tint was already saying.
       return '<tr class="' + zone + (isMe(t.id) ? ' me' : '') + '"><td class="num">' + t.pos + '</td>' +
-        '<td class="name" data-entry="' + t.id + '"><span class="who">' + esc(t.name) + '</span> ' + pill + '<div class="mgr">' + esc(t.player) + '</div></td>' +
-        '<td class="num">' + t.w + '</td><td class="num">' + t.d + '</td><td class="num">' + t.l + '</td>' +
+        '<td class="name" data-entry="' + t.id + '"><span class="who">' + esc(t.name) + '</span><div class="mgr">' + esc(t.player) + (pill ? ' ' + pill : '') + '</div></td>' +
+        '<td class="num c-w">' + t.w + '</td><td class="num c-d">' + t.d + '</td><td class="num c-l">' + t.l + '</td>' +
         '<td class="num"><b>' + t.pts + '</b></td><td class="num">' + num(t.gwPts) + '</td></tr>';
     }).join("");
-    return '<div class="freeze"><table class="t"><thead><tr><th class="num">#</th><th>Team</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th><th class="num">GW pts</th></tr></thead><tbody>' +
+    return '<div class="freeze"><table class="t grptbl"><thead><tr><th class="num">#</th><th>Team</th><th class="num c-w">W</th><th class="num c-d">D</th><th class="num c-l">L</th><th class="num">Pts</th><th class="num">GW pts</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>';
   }
 
@@ -2633,11 +2642,11 @@
     state.pyrDiv = curDiv;
 
     h += '<div class="selrow">' +
-      '<label class="field"><span class="lab">Mini season</span><select class="in" id="pyrSeason">' +
+      '<label class="field"><select class="in" id="pyrSeason" aria-label="Mini season">' +
         pyr.seasons.map(function (s) {
           return '<option value="' + s.key + '"' + (s.key === cur ? ' selected' : '') + '>' + esc(s.name) + '</option>';
         }).join("") + '</select></label>' +
-      '<label class="field"><span class="lab">Division</span><select class="in" id="pyrDiv">' +
+      '<label class="field"><select class="in" id="pyrDiv" aria-label="Division">' +
         pyr.divisions.map(function (d) {
           return '<option value="' + d.key + '"' + (d.key === curDiv ? ' selected' : '') + '>' + esc(d.name) + '</option>';
         }).join("") + '</select></label>' +
@@ -2684,11 +2693,13 @@
       var top = canRise && r.pos <= pcfg.promoteCount;
       var bot = canFall && r.pos > div.rows.length - pcfg.relegateCount;
       var zone = top ? "zone-top" : (bot ? "zone-bot" : "");
-      var badge = top ? '<span class="pill up">▲</span>'
-        : (bot ? '<span class="pill down">▼</span>' : '');
+      // Promotion and relegation are said by the row's tint and a bar at its
+      // edge, the way "you" is; the arrow pill that used to follow the name
+      // said the same thing a second time and pushed long names into an
+      // ellipsis to do it.
       var rc = r.pos <= 3 ? "rk" + r.pos : "";
       return '<tr class="' + zone + (isMe(r.id) ? ' me' : '') + '"><td class="num"><span class="r ' + rc + '">' + r.pos + '</span></td>' +
-        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.name) + '</span> ' + badge + '<div class="mgr">' + esc(r.player) + '</div></td>' +
+        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.name) + '</span><div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td><td class="num">' +
         (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td></tr>';
     }).join("");
@@ -2761,7 +2772,7 @@
     h += '<div class="rulelede">Five competitions running off one Fantasy Premier League team. ' +
       'This is how each of them decides who progresses and where you finish.</div>';
 
-    h += '<div class="grid cols-4">' +
+    h += '<div class="grid cols-4 ovstats">' +
       '<div class="stat"><div class="k">' + num(n) + '</div><div class="l">Managers</div></div>' +
       '<div class="stat"><div class="k">' + cfg.totalGameweeks + '</div><div class="l">Gameweeks</div></div>' +
       '<div class="stat"><div class="k">' + comps.length + '</div><div class="l">Competitions</div></div>' +
@@ -3153,7 +3164,7 @@
         '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
         '<td class="name"><span class="who">' + esc(r.entryName || r.name) + '</span>' +
         '<div class="mgr">' + esc(r.name) + '</div></td>' +
-        '<td class="num">' + num(r.eventTotal) + '</td>' +
+        '<td class="num c-gw">' + num(r.eventTotal) + '</td>' +
         '<td class="num"><b>' + num(r.total) + '</b></td>' +
         '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
         '</tr>';
@@ -3194,7 +3205,7 @@
         return;
       }
       panel.innerHTML = '<div class="freeze"><table class="t voltbl"><thead><tr>' +
-        '<th class="num">#</th><th>Team</th><th class="num">GW</th>' +
+        '<th class="num">#</th><th>Team</th><th class="num c-gw">GW</th>' +
         '<th class="num">Total</th><th class="num">XP</th>' +
         '</tr></thead><tbody id="volBody">' + volRows(v) + '</tbody></table></div>';
     };
@@ -3798,8 +3809,9 @@
   function statsGw(H) {
     var g = H.gwStats;
     if (!g) return '<div class="callout">No scores recorded for this gameweek yet.</div>';
-    var h = '<div class="statlead">' + esc(H.gwName) +
-      (H.live ? ' <span class="pill live">Live</span>' : '') + '</div>';
+    // The dropdown above already names the gameweek; repeating it here was
+    // the same words twice, a line apart. Only "Live" earns the space.
+    var h = H.live ? '<div class="statlead"><span class="pill live">Live</span></div>' : '';
 
     h += statGroup("Scores", [
       hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy"),
@@ -4281,8 +4293,8 @@
     var h = '<datalist id="mgrOpts">' + mgrs.map(function (m) {
       return '<option value="' + esc(mgrLabel(m)) + '"></option>';
     }).join("") + '</datalist>';
-    h += '<div class="card"><div class="bd cmppick">' + field("cmpA", state.cmpA) +
-      '<div class="vs">vs</div>' + field("cmpB", state.cmpB) + '</div></div>';
+    h += '<div class="cmppick">' + field("cmpA", state.cmpA) +
+      '<div class="vs">vs</div>' + field("cmpB", state.cmpB) + '</div>';
     h += '<div id="cmpBox"></div>';
     host.innerHTML = h;
 

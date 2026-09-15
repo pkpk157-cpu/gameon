@@ -292,6 +292,13 @@ tr.gone td { background:var(--bad-wash); }
 }
 .stat .k { font-size:27px; font-weight:800; line-height:1; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
 .stat .l { font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.8px; margin-top:8px; }
+/* The overview's four numbers on one line at every width. Two rows of two
+   made four figures the tallest thing on the page. */
+.grid.cols-4.ovstats { grid-template-columns:repeat(4,1fr); gap:8px; }
+.ovstats .stat { padding:12px 6px; }
+.ovstats .stat .k { font-size:19px; }
+.ovstats .stat .l { font-size:9px; letter-spacing:.5px; margin-top:5px; }
+@media (max-width:359px) { .ovstats .stat .k { font-size:16px; } }
 
 /* ---------- tables ---------- */
 .tablewrap { overflow-x:auto; }
@@ -308,6 +315,41 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 .rankcell .r, table.t .r { font-weight:800; min-width:22px; display:inline-block; font-variant-numeric:tabular-nums; }
 .prize { color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums; }
 .move.up { color:var(--good); } .move.down { color:var(--bad); } .move.flat { color:var(--ink-faint); }
+/* The classic table's move, under the rank it belongs to, in the room the
+   two-line name cell already leaves beside it. */
+.mvu { font-size:10px; font-weight:700; line-height:1; margin-top:3px; text-align:right; letter-spacing:-.2px; }
+.mvu.up { color:var(--good); } .mvu.down { color:var(--bad); }
+
+/* A phone is narrower than these tables. Rather than scrolling sideways to a
+   column nobody knew was there, the secondary ones step back, the way the
+   Premier League table's do: bench and hits are tie-break detail, W/D/L are
+   already summed in Pts, and the XP column is blank for two hundred of the
+   classic table's rows and on every profile besides. */
+/* The name column's floor was 150px at every width, which on its own put
+   four-column tables past a 320px screen. It steps down with the screen, and
+   the cell padding with it, as the Premier League table's already do. */
+@media (max-width:389px) {
+  table.t td.name { min-width:128px; max-width:164px; }
+  /* One unbreakable team name — "MainooKiFarakPainda" — held the column
+     open past the screen on its own. On a phone the name and the manager
+     each keep to one line and trail off, as the Premier League table's do. */
+  table.t td.name .who, table.t td.name .mgr {
+    display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+}
+@media (max-width:359px) { table.t td.name { min-width:112px; max-width:132px; }
+                           table.t th, table.t td { padding:10px 8px; } }
+@media (max-width:519px) { table.t.classictbl .c-xp { display:none; } }
+@media (max-width:419px) { table.t.monthtbl .c-bench { display:none; } }
+@media (max-width:459px) { table.t.lmstbl .c-bench { display:none; } }
+@media (max-width:359px) { table.t.lmstbl .c-hits { display:none; } }
+@media (max-width:359px) { table.t.voltbl .c-gw { display:none; } }
+@media (max-width:419px) { table.t.grptbl .c-w, table.t.grptbl .c-d, table.t.grptbl .c-l { display:none; } }
+/* The UCL/UEL tag on the manager's line, sized to it. */
+table.t td .mgr .pill { font-size:9.5px; padding:1px 7px; vertical-align:1px; margin-left:2px; }
+/* Promotion and relegation zones carry a bar at the edge, like "you" does. */
+tr.zone-top td:first-child { box-shadow:inset 3px 0 0 var(--good); }
+tr.zone-bot td:first-child { box-shadow:inset 3px 0 0 var(--bad); }
+tr.me.zone-top td:first-child, tr.me.zone-bot td:first-child { box-shadow:inset 3px 0 0 var(--accent); }
 
 /* How far along a player is towards his price moving. The bar fills from the
    left in both directions — the colour says which way he is going, so the fill
@@ -695,7 +737,10 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
   box-shadow:0 2px 6px rgba(0,0,0,.28); }
 /* The shirt gets the room to be the thing you see first — the card reads as a
    portrait rather than a squat tile. */
-.pshirt { display:block; padding:10px 0 6px; }
+/* content-box, because the height here is the jersey's own and the padding
+   sits around it; under the page's border-box default the padding would eat
+   the height and the floated picture would land on the name bar. */
+.pshirt { display:block; padding:10px 0 6px; height:var(--shirt-h); box-sizing:content-box; }
 .pshirt { --shirt-w:42px; --shirt-h:40px; }
 /* The photograph is not the jersey and need not be its size. The jersey sets
    the height of the slot and so the height of the card, which is why it does
@@ -705,7 +750,11 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
    points of air above it. These fill more of that air: wider than the jersey,
    taller, and starting higher, while still clearing the name bar. */
 .pshirt { --face-w:48px; --face-h:46px; --face-top:6px; --face-gut:6px; }
-.jsy { display:block; width:var(--shirt-w); height:var(--shirt-h); margin:0 auto;
+/* The jersey now floats in the slot exactly as the photograph does, at the
+   photograph's size, so a player without a picture is not drawn smaller than
+   the men beside him. The slot's height is set on .pshirt by hand instead. */
+.jsy { position:absolute; left:50%; top:var(--face-top); transform:translateX(-50%);
+  width:min(var(--face-w), calc(100% - var(--face-gut))); height:var(--face-h);
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
 /* Tight, because the name bar is the width of the card and some surnames are
    not: every point of padding is a character of "Calvert-Lewin". */
@@ -754,7 +803,7 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
   padding:5px 30px 5px 12px; border-radius:999px; }
 
 /* ---- head to head ------------------------------------------------------ */
-.cmppick { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; }
+.cmppick { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin:0 0 12px; }
 .cmppick select { min-width:0; }
 .cmppick .vs { font-size:11px; font-weight:800; color:var(--ink-faint); text-transform:uppercase; }
 .cmphead { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin:10px 0 12px; }
@@ -932,6 +981,10 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .tabrow { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch;
   padding:2px 2px 8px; margin:0 -2px 4px; scrollbar-width:none; }
 .tabrow::-webkit-scrollbar { display:none; }
+/* The row scrolls, and nothing said so: the last chip was simply cut off at
+   the edge. A fade there reads as "more this way". */
+.tabrow { -webkit-mask-image:linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image:linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
 .tabbtn { flex:none; appearance:none; cursor:pointer; font:inherit;
   font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:999px;
   border:1px solid var(--line); background:var(--glass-2); color:var(--ink-soft); }
@@ -1034,8 +1087,22 @@ table.t.cmptable.seasons td.num.win .sp { color:var(--good); }
 .sparkone .v { font-size:30px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
 .sparkone .l { font-size:11.5px; color:var(--ink-faint); }
 /* ---- profile: the prize table ------------------------------------------ */
-table.t.prizetbl td { vertical-align:middle; white-space:nowrap; }
-table.t.prizetbl td.pcomp { white-space:normal; }
+/* Four columns on a phone: the competition keeps its name on one line where
+   there is room, the position column is only as wide as its number, and the
+   XP on the right must never run under the card's edge — so the cells give up
+   padding first, and the "pts clear" line wraps before anything else does. */
+table.t.prizetbl td { vertical-align:middle; white-space:nowrap; padding:10px 10px; }
+@media (max-width:389px) {
+  table.t.prizetbl td { padding:10px 8px; }
+  table.t.prizetbl td.pcomp { min-width:100px; }
+  table.t.prizetbl td.ppos { width:auto; }
+  table.t.prizetbl .prize { font-size:12.5px; }
+}
+table.t.prizetbl td.pcomp { white-space:normal; min-width:118px; }
+/* The "+32 pts clear of 45th" line is the one cell that can give: on a phone
+   it wraps rather than the XP on its right running under the card's edge. */
+table.t.prizetbl td.pstate .mgr { white-space:normal; }
+table.t.prizetbl td.pprize { white-space:nowrap; }
 table.t.prizetbl td.pcomp b { font-size:13.5px; }
 table.t.prizetbl td.ppos { font-size:15px; font-weight:800; width:46px; }
 table.t.prizetbl td.pstate .mgr { margin-top:2px; }
