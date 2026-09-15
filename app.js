@@ -1878,7 +1878,9 @@
     document.body.appendChild(el);
     var icon = el.querySelector("svg"), label = el.querySelector("i");
     var startY = null, dist = 0, pulling = false, busy = false;
-    var THRESH = 64, MAX = 96;
+    // Short travel: the page itself does not move, so the pill stays near
+    // the bar rather than riding down over the first rows.
+    var THRESH = 56, MAX = 76;
     function atTop(t) {
       if ((window.scrollY || 0) > 0) return false;
       var sc = t && t.closest && t.closest(".freeze");
