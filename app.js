@@ -1839,6 +1839,92 @@
     autoCheck().then(scheduleAuto, scheduleAuto);
   }
 
+  // Pull to refresh. The bar's refresh button went because the app already
+  // refreshes itself on every timer and every return to the foreground; what
+  // is left is the moment someone is sitting on an open page and wants to
+  // know now. The gesture every phone already knows does that: pull down
+  // from the top of a page, and the same publish check and live poll the app
+  // runs on its own run at once. The toast afterwards says what happened —
+  // "Updated", or "Up to date" with the age, or that nothing new has been
+  // published and how long that has been so. Sheets, an input being typed
+  // in, and a table scrolled inside its own frame all sit the gesture out.
+  function refreshNow() {
+    var ds = S.dataset();
+    var live = ds && K.liveGwId(ds);
+    var pub = autoCheck();
+    var lv = Promise.resolve(false);
+    if (live && !liveBusy && !busyReading()) {
+      liveBusy = true; liveLast = Date.now();
+      lv = S.liveOverlay().then(function (c) {
+        liveBusy = false;
+        if (c && !busyReading()) liveMotion(function () { keepPlace(render); });
+        return !!c;
+      }, function () { liveBusy = false; return false; });
+    }
+    return Promise.all([pub, lv]).then(function (r) {
+      updateBanner();
+      if (r[0] || r[1]) return "Updated";
+      var d2 = S.dataset();
+      var age = d2 && d2.updatedAt ? Date.now() - Date.parse(d2.updatedAt) : null;
+      if (age !== null && !isNaN(age) && age > 30 * 60 * 1000) return "Nothing new published \u2014 not synced for " + spanText(age);
+      return "Up to date" + (age !== null && !isNaN(age) ? " \u00b7 synced " + agoText(age) : "");
+    });
+  }
+  function setupPull() {
+    if (!("ontouchstart" in window)) return;
+    var el = document.createElement("div");
+    el.id = "ptr"; el.setAttribute("aria-hidden", "true");
+    el.innerHTML = '<span class="ptrin">' + svg("refresh", 18) + '<i>Pull to refresh</i></span>';
+    document.body.appendChild(el);
+    var icon = el.querySelector("svg"), label = el.querySelector("i");
+    var startY = null, dist = 0, pulling = false, busy = false;
+    var THRESH = 64, MAX = 96;
+    function atTop(t) {
+      if ((window.scrollY || 0) > 0) return false;
+      var sc = t && t.closest && t.closest(".freeze");
+      return !(sc && sc.scrollTop > 0);
+    }
+    function draw() {
+      var k = Math.min(1, dist / THRESH);
+      el.style.transform = "translate(-50%," + Math.round(dist) + "px)";
+      el.style.opacity = String(Math.min(1, k * 1.3));
+      icon.style.transform = "rotate(" + Math.round(k * 270) + "deg)";
+      label.textContent = k >= 1 ? "Release to refresh" : "Pull to refresh";
+      el.classList.toggle("armed", k >= 1);
+    }
+    function reset() {
+      el.classList.remove("show", "armed", "busy");
+      el.style.transform = ""; el.style.opacity = ""; icon.style.transform = "";
+    }
+    document.addEventListener("touchstart", function (e) {
+      if (busy || e.touches.length !== 1 || sheetOpen() || busyReading() || !atTop(e.target)) { startY = null; return; }
+      startY = e.touches[0].clientY; dist = 0; pulling = false;
+    }, { passive: true });
+    document.addEventListener("touchmove", function (e) {
+      if (startY === null) return;
+      var dy = e.touches[0].clientY - startY;
+      if (dy <= 0 && !pulling) { startY = null; return; }
+      if ((window.scrollY || 0) > 0) { startY = null; if (pulling) { pulling = false; reset(); } return; }
+      pulling = true;
+      dist = Math.min(MAX, Math.max(0, dy) * 0.45);
+      el.classList.add("show");
+      draw();
+    }, { passive: true });
+    function done() {
+      if (!pulling) { startY = null; return; }
+      var go = dist >= THRESH;
+      startY = null; pulling = false;
+      if (!go) { reset(); return; }
+      busy = true;
+      el.classList.add("busy"); label.textContent = "Refreshing\u2026";
+      el.style.transform = "translate(-50%," + THRESH + "px)";
+      refreshNow().then(function (msg) { toast(msg); }, function () { toast("Could not refresh"); })
+        .then(function () { busy = false; reset(); });
+    }
+    document.addEventListener("touchend", done, { passive: true });
+    document.addEventListener("touchcancel", done, { passive: true });
+  }
+
   /* ---- boot ------------------------------------------------------------ */
   // The header and the tab bar are content-sized — icon metrics, the safe-area
   // inset, and the device's own text scaling all move them. The fill-mode
@@ -1855,6 +1941,7 @@
   }
 
   function boot() {
+    setupPull();
     buildNav();
     measureChrome();
     var remeasure = function () { measureChrome(); };

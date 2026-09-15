@@ -1,7 +1,7 @@
 /* FPL Game On V12 — service worker (network-first for app + data, cache fallback) */
 // Bumped so devices that already stored a failed response under the old name
 // drop it on activate rather than serving that miss for the rest of the season.
-const CACHE = "gameon-v12-3";
+const CACHE = "gameon-v12-4";
 const ASSETS = [
   "./", "./index.html", "./styles.css",
   "./config.js", "./api.js", "./data.js", "./compute.js", "./app.js",
