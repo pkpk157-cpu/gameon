@@ -93,6 +93,12 @@ async function main() {
   console.log("\nWhich URL is the league serving today?");
   const sample = players.slice(0, 5);
   let chosen = null;
+  // Every shape that answered for the whole sample, cheapest first. One shape
+  // is asked first for every player, but the day's cheapest path does not
+  // carry every player — a hundred and five were missing from it at once,
+  // most of them at other shapes that had answered the same probe — so a
+  // player it lacks is tried at each of the others before he is given up on.
+  const working = [];
   for (const cand of CANDIDATES) {
     const got = [];
     for (const p of sample) {
@@ -106,10 +112,12 @@ async function main() {
     // Smallest that works, not first that works: it is the same picture at the
     // other end and we re-encode either way, so there is no reason to pull more
     // of somebody else's bandwidth than the job needs.
-    if (hits.length === sample.length && (!chosen || avg < chosen.avg)) {
-      chosen = { cand: cand, avg: avg };
+    if (hits.length === sample.length) {
+      working.push({ cand: cand, avg: avg });
+      if (!chosen || avg < chosen.avg) chosen = { cand: cand, avg: avg };
     }
   }
+  working.sort((a, b) => a.avg - b.avg);
   if (!chosen) {
     console.error("\nNone of the known URLs answered. The league has moved them again.");
     console.error("Nothing was written; the app keeps showing initials, which is what it does");
@@ -118,7 +126,9 @@ async function main() {
   }
   console.log("\nUsing " + chosen.cand.name + " — about " + (chosen.avg / 1024).toFixed(1) +
     " KB each, so roughly " + ((chosen.avg * players.length) / 1024 / 1024).toFixed(0) +
-    " MB for all " + players.length + ".");
+    " MB for all " + players.length + "." +
+    (working.length > 1 ? " Falling back to " + working.slice(1).map((w) => w.cand.name).join(", ") +
+      " for anyone it lacks." : ""));
   if (probeOnly) { console.log("\n--probe: stopping here, nothing written."); return; }
 
   // Re-encoding is the whole point; without it this commits fifty megabytes.
@@ -146,11 +156,20 @@ async function main() {
   // does not arrive is skipped, never retried to death and never fatal — the
   // next run picks it up, and until then that player wears his initials.
   let got = 0, gone = 0, raw = 0, kept = 0;
+  const viaOther = {};
   for (let i = 0; i < missing.length; i += 8) {
     const batch = missing.slice(i, i + 8);
     await Promise.all(batch.map(async (p) => {
-      const r = await get(chosen.cand.url(p.code), true);
-      if (!r.ok || !isPng(r.body)) { gone++; return; }
+      let r = null;
+      for (const w of working) {
+        const t = await get(w.cand.url(p.code), true);
+        if (t.ok && isPng(t.body)) {
+          r = t;
+          if (w !== working[0]) viaOther[w.cand.name] = (viaOther[w.cand.name] || 0) + 1;
+          break;
+        }
+      }
+      if (!r) { gone++; return; }
       try {
         const small = await sharp(r.body)
           .resize({ width: WIDE, fit: "inside", withoutEnlargement: true })
@@ -169,6 +188,9 @@ async function main() {
   const total = all.reduce((s, f) => s + fs.statSync(path.join(OUT, f)).size, 0);
   console.log("");
   console.log("Fetched " + got + ", " + gone + " had no picture and will show initials.");
+  Object.keys(viaOther).forEach((k) => {
+    console.log("  " + viaOther[k] + " came from " + k + " after the first shape lacked them.");
+  });
   if (got) {
     console.log("  " + (raw / 1024 / 1024).toFixed(1) + " MB of PNG became " +
       (kept / 1024 / 1024).toFixed(2) + " MB of WebP, " +
