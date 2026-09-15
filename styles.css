@@ -969,12 +969,44 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 
 /* ---- profile: compact competition cards ------------------------------- */
 .youline { margin-bottom:2px; }
+/* badges: what a manager has done this season, as chips under the name line */
+.badges { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+.badge { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700; line-height:1;
+  padding:5px 10px 5px 8px; border-radius:999px; color:var(--ink);
+  border:1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  background:color-mix(in srgb, var(--gold) 10%, transparent); }
+.badge svg { color:var(--gold); flex:none; }
+.badge b { font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
+.badgesnone { margin:4px 2px 10px; }
 /* On someone else's profile, the way into a head-to-head with them. */
 .cmpme { width:100%; cursor:pointer; font:inherit; font-size:13.5px; font-weight:700;
   padding:10px 14px; border-radius:var(--radius-s); margin-bottom:8px;
   border:1px solid var(--accent); background:var(--accent-tint); color:var(--accent); }
 .cmpme:hover { background:var(--accent-wash); }
 .cmpme:active { transform:translateY(1px); }
+/* two controls on the name line: compare, and pin as a rival */
+.youline.two { display:grid; grid-template-columns:1fr auto; gap:8px; }
+.youline.two .cmpme { width:auto; margin-bottom:8px; }
+.rvbtn { white-space:nowrap; }
+.rvbtn.on { background:var(--accent); color:#fff; }
+/* the rivals strip: one row each, the gaps in your favour when green */
+.rivals { display:flex; flex-direction:column; }
+.rival { display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px;
+  padding:10px 12px 10px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
+.rival:last-child { border-bottom:0; }
+.rival .rvwho { min-width:0; }
+.rival .rvwho b { display:block; font-size:13.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rival .rvwho span { display:block; font-size:11.5px; color:var(--ink-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rvgap { text-align:right; min-width:44px; }
+.rvgap b { display:block; font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--ink); }
+.rvgap b.up { color:var(--good); }
+.rvgap b.down { color:var(--bad); }
+.rvgap span { display:block; font-size:10px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--ink-faint); }
+.rvcmp { appearance:none; cursor:pointer; width:32px; height:32px; border-radius:50%; display:inline-flex;
+  align-items:center; justify-content:center; padding:0;
+  border:1px solid var(--line-strong); background:var(--glass-hi); color:var(--accent); }
+.rvcmp:hover { border-color:var(--accent); }
+@media (max-width:359px) { .rival { gap:8px; padding:10px 10px; } .rvgap { min-width:40px; } }
 .pcards { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:6px; margin-bottom:4px; }
 .pc { padding:9px 10px; border-radius:var(--radius-xs);
   background:var(--glass); border:1px solid var(--glass-border);

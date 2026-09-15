@@ -1955,6 +1955,87 @@
     return count ? out.slice(-count) : out;
   };
 
+  // Badges: things a manager has done this season that are worth a chip on
+  // the profile. Every one is settled data — finished gameweeks, finished
+  // months, a result the record already holds — so a badge never appears
+  // and then goes away when a score moves. Each carries the gameweeks or
+  // months behind it, so the chip can say exactly what it is for.
+  C.badges = function (ds, id) {
+    if (!ds || !id || !ds.managers || !ds.managers.length) return [];
+    id = +id;
+    var out = [];
+    var played = C.finishedGws(ds);
+    var h = ds.history[id] || {};
+
+    // The league's highest score in a gameweek; a tie shares it. A century
+    // is a hundred points or more. Both use the gameweek points FPL reports,
+    // before hits — the number the Classic table's GW column shows.
+    var tops = [], cents = [];
+    played.forEach(function (g) {
+      var best = null;
+      ds.managers.forEach(function (m) {
+        var r = (ds.history[m.id] || {})[g];
+        if (r && typeof r.p === "number" && (best === null || r.p > best)) best = r.p;
+      });
+      var mine = h[g];
+      if (!mine || typeof mine.p !== "number") return;
+      if (best !== null && mine.p === best) tops.push(g);
+      if (mine.p >= 100) cents.push(g);
+    });
+    if (tops.length) out.push({ k: "top", label: "Top scorer", count: tops.length, gws: tops, icon: "trophy",
+      why: "The league\u2019s highest score of the gameweek" });
+    if (cents.length) out.push({ k: "century", label: "Century", count: cents.length, gws: cents, icon: "sparkle",
+      why: "100 points or more in a gameweek" });
+
+    // Manager of the Month, for months that are over.
+    var months = [];
+    C.monthly(ds).forEach(function (m) {
+      if (!m.complete) return;
+      var r = (m.rows || []).filter(function (x) { return +x.id === id; })[0];
+      if (r && r.pos === 1) months.push(m.label || m.name);
+    });
+    if (months.length) out.push({ k: "month", label: "Manager of the Month", count: months.length, gws: months, icon: "medal",
+      why: "Won the month" });
+
+    // Climbing: a better Classic position than the gameweek before, three or
+    // more finished gameweeks running, counted back from the latest.
+    var cr = classicRankByGw(ds), streak = 0;
+    for (var i = played.length - 1; i >= 1; i--) {
+      var a = cr[played[i]] && cr[played[i]].rank[id];
+      var b = cr[played[i - 1]] && cr[played[i - 1]].rank[id];
+      if (a && b && a < b) streak++; else break;
+    }
+    if (streak >= 3) out.push({ k: "climb", label: "Climbing", count: streak, gws: played.slice(-streak), icon: "up",
+      why: "Up the Classic table " + streak + " gameweeks running" });
+
+    // Giant killer: a group-stage win over an opponent who stood above them
+    // in the Classic table going into that gameweek. The first finished
+    // gameweek has no "going in" table, so it cannot count.
+    var R = C.h2hRecord(ds, id), kills = [];
+    if (R) R.rows.forEach(function (r) {
+      if (r.result !== "W" || !r.opp || !r.opp.known || r.opp.average) return;
+      var gi = played.indexOf(+r.gw);
+      if (gi < 1) return;
+      var band = cr[played[gi - 1]];
+      var mine = band && band.rank[id], theirs = band && band.rank[+r.opp.id];
+      if (mine && theirs && theirs < mine) kills.push(+r.gw);
+    });
+    if (kills.length) out.push({ k: "giant", label: "Giant killer", count: kills.length, gws: kills, icon: "shield",
+      why: "Beat a side that stood above them in the Classic table going into the gameweek" });
+
+    // Survivor: still in Last Manager Standing once a quarter of the field
+    // has gone. Before that it is everyone's, and a badge everyone has says
+    // nothing.
+    var lms = C.lms(ds);
+    if (lms && lms.survivors && !lms.eliminatedAt[id] &&
+        lms.survivors.some(function (x) { return +x.id === id; })) {
+      var total = ds.managers.length, left = lms.survivors.length, gone = total - left;
+      if (gone * 4 >= total) out.push({ k: "survivor", label: "Survivor", count: left, gws: [], icon: "flame",
+        why: "Still standing in Last Manager with " + gone + " of " + total + " out" });
+    }
+    return out;
+  };
+
   // Where a manager stands against the money in every competition at once —
   // in it and by how much, or out of it and by how far.
   C.prizeStatus = function (ds, id) {

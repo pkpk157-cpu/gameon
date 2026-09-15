@@ -5,7 +5,7 @@
   "use strict";
 
   var S = window.GO_STORE, K = window.GO_COMPUTE;
-  var ME_KEY = "go12.me", THEME_KEY = "go12.theme";
+  var ME_KEY = "go12.me", THEME_KEY = "go12.theme", RIVALS_KEY = "go12.rivals", RIVALS_MAX = 3;
   var state = { view: "classic", me: lsGet(ME_KEY), monthKey: null, seasonKey: null, group: null, h2hComp: "UCL" };
 
   /* Minimal line icons (24px, currentColor). */
@@ -158,6 +158,23 @@
   function xpa(n) { return n == null || isNaN(n) ? "\u2014" : num(n) + " XP"; }
   function lsGet(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  // Rivals: up to three managers pinned from their profiles, kept on this
+  // device only. Ids that no longer name a manager are dropped when read, so
+  // a manager who leaves the league leaves the list with him.
+  function rivals() {
+    var v = lsGet(RIVALS_KEY);
+    return Array.isArray(v) ? v.map(Number).filter(function (x) { return x > 0; }).slice(0, RIVALS_MAX) : [];
+  }
+  function isRival(id) { return rivals().indexOf(+id) !== -1; }
+  // Returns "added", "removed", or "full".
+  function toggleRival(id) {
+    id = +id;
+    var r = rivals();
+    var at = r.indexOf(id);
+    if (at !== -1) { r.splice(at, 1); lsSet(RIVALS_KEY, r); return "removed"; }
+    if (r.length >= RIVALS_MAX) return "full";
+    r.push(id); lsSet(RIVALS_KEY, r); return "added";
+  }
   function ordinal(n) { var s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); }
   function monthLabel(m) {
     var late = { jan:1, feb:1, mar:1, apr:1, may:1, jun:1, jul:1 };
@@ -3573,8 +3590,21 @@
     // The manager's team and name live in the top bar, so they are not
     // repeated here. One compact card per competition.
     var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>'
-      : '<div class="youline"><button type="button" class="cmpme" id="cmpMe">' +
-        'Compare with my team</button></div>';
+      : '<div class="youline two"><button type="button" class="cmpme" id="cmpMe">' +
+        'Compare with my team</button>' +
+        '<button type="button" class="cmpme rvbtn' + (isRival(id) ? ' on' : '') + '" id="rvToggle" ' +
+        'aria-pressed="' + (isRival(id) ? 'true' : 'false') + '">' +
+        (isRival(id) ? 'Rival \u2713' : 'Pin as rival') + '</button></div>';
+    // What they have done this season, as chips; on your own page an empty
+    // row says what the first one takes, on anyone else's it just is not there.
+    var B = K.badges(ds, id);
+    if (B.length) h += '<div class="badges">' + B.map(badgeHtml).join("") + '</div>';
+    else if (isMe(id)) h += '<div class="note badgesnone">No badges yet. The first comes with a ' +
+      'gameweek top score, a century, or a month won.</div>';
+
+    // Your rivals, on your own page: where each stands against you this
+    // gameweek and this season. Pinned from their profiles; kept on the phone.
+    if (isMe(id)) h += rivalsHtml(ds, id);
 
     // One section per competition, and how near the places each one is.
     var W = K.winnings(ds, id);
@@ -3687,6 +3717,23 @@
     }
 
     host.innerHTML = h;
+    var rvBtn = $("#rvToggle", host);
+    if (rvBtn) rvBtn.addEventListener("click", function () {
+      var r = toggleRival(id);
+      if (r === "full") { toast("You already have " + RIVALS_MAX + " rivals \u2014 unpin one first"); return; }
+      toast(r === "added" ? "Pinned as a rival" : "Rival unpinned");
+      rvBtn.classList.toggle("on", r === "added");
+      rvBtn.setAttribute("aria-pressed", r === "added" ? "true" : "false");
+      rvBtn.textContent = r === "added" ? "Rival \u2713" : "Pin as rival";
+    });
+    var rvBox = $("#rivalsBox", host);
+    if (rvBox) rvBox.addEventListener("click", function (e) {
+      var c = e.target.closest("[data-cmp]");
+      if (!c) return;
+      e.stopPropagation();
+      state.cmpA = +id; state.cmpB = +c.getAttribute("data-cmp");
+      location.hash = "compare";
+    });
     var cmpBtn = $("#cmpMe", host);
     if (cmpBtn) cmpBtn.addEventListener("click", function () {
       // Nobody can be compared against until the reader has said who they
@@ -3714,6 +3761,63 @@
       show[k] = !show[k];
       fbox.innerHTML = formChart(K.form(ds, id));
     });
+  }
+
+  // The rivals strip on your own profile. Each row is the rival against you:
+  // the gap this gameweek and the gap on the season, in your favour when
+  // positive. Live numbers come from the same rows the Classic table draws.
+  function rivalsHtml(ds, meId) {
+    var ids = rivals();
+    var h = '<div class="section-title"><h2>Rivals</h2><div class="rule"></div></div>';
+    if (!ids.length) {
+      return h + '<div class="note badgesnone">Pin up to ' + RIVALS_MAX + ' rivals from their profiles ' +
+        'and they will sit here, with the gap to each.</div>';
+    }
+    var rows = K.classic(ds), by = {};
+    rows.forEach(function (r) { by[+r.id] = r; });
+    var me = by[+meId];
+    var live = K.liveGwId(ds);
+    var gwLabel = "GW" + (live || K.currentGw(ds) || "");
+    var gap = function (n, lab) {
+      var cls = n > 0 ? "up" : (n < 0 ? "down" : "");
+      var txt = n > 0 ? "+" + num(n) : (n < 0 ? "\u2212" + num(-n) : "level");
+      return '<div class="rvgap"><b class="' + cls + '">' + txt + '</b><span>' + esc(lab) + '</span></div>';
+    };
+    var items = ids.map(function (rid) {
+      var r = by[rid];
+      // Pinning someone and then becoming them leaves a rival who is you.
+      if (!r || !me || rid === +meId) return "";
+      return '<div class="rival" data-entry="' + r.id + '" role="button" tabindex="0">' +
+        '<div class="rvwho"><b>' + esc(r.entryName) + '</b>' +
+          '<span>' + esc(r.playerName) + ' \u00b7 #' + r.computedRank + '</span></div>' +
+        gap((me.eventTotal || 0) - (r.eventTotal || 0), gwLabel) +
+        gap((me.total || 0) - (r.total || 0), "season") +
+        '<button type="button" class="rvcmp" data-cmp="' + r.id + '" aria-label="Compare with ' +
+          esc(r.entryName) + '">' + svg("h2h", 16) + '</button>' +
+        '</div>';
+    }).join("");
+    if (!items) return h + '<div class="note badgesnone">Your rivals are not in the league any more.</div>';
+    return h + '<div class="card"><div class="rivals" id="rivalsBox">' + items + '</div></div>';
+  }
+
+  // One badge chip: icon, name, and the count or size behind it. The title
+  // says what it is for and which gameweeks earned it.
+  function badgeHtml(b) {
+    var what = b.k === "survivor" ? (num(b.count) + " left")
+             : b.k === "climb" ? (b.count + " GWs")
+             : ("\u00d7" + b.count);
+    var when = b.gws && b.gws.length
+      ? " \u00b7 " + (b.k === "month" ? b.gws.join(", ") : b.gws.map(function (g) { return "GW" + g; }).join(", "))
+      : "";
+    return '<span class="badge" title="' + esc(b.why + when) + '">' + sicon(b.icon) +
+      esc(b.label) + '<b>' + esc(what) + '</b></span>';
+  }
+  // The same badges as one line of text, for a table cell.
+  function badgeText(ds, id) {
+    var B = K.badges(ds, id);
+    return B.length ? B.map(function (b) {
+      return b.label + (b.k === "survivor" ? "" : " \u00d7" + b.count);
+    }).join(", ") : "none";
   }
 
   /* ====================================================================== */
@@ -4377,6 +4481,7 @@
     var ac = a.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
     var bc = b.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
     h += cmpRow("Chips played", ac || "none", bc || "none");
+    h += cmpRow("Badges", badgeText(ds, a.id), badgeText(ds, b.id));
     h += '</tbody></table></div></div>';
 
     /* ---- the season side by side: points a week, and where each stood ---- */
