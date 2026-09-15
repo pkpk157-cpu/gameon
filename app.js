@@ -3965,10 +3965,9 @@
   function rivalsHtml(ds, meId) {
     var ids = rivals();
     var h = '<div class="section-title"><h2>Rivals</h2><div class="rule"></div></div>';
-    if (!ids.length) {
-      return h + '<div class="note badgesnone">Pin up to ' + RIVALS_MAX + ' rivals from their profiles ' +
-        'and they will sit here, with the gap to each.</div>';
-    }
+    var invite = h + '<div class="note badgesnone">Pin up to ' + RIVALS_MAX + ' rivals from their profiles ' +
+      'and they will sit here, with the gap to each.</div>';
+    if (!ids.length) return invite;
     var rows = K.classic(ds), by = {};
     rows.forEach(function (r) { by[+r.id] = r; });
     var me = by[+meId];
@@ -3992,7 +3991,7 @@
           esc(r.entryName) + '">' + svg("h2h", 16) + '</button>' +
         '</div>';
     }).join("");
-    if (!items) return h + '<div class="note badgesnone">Your rivals are not in the league any more.</div>';
+    if (!items) return invite; // every pin was someone gone, or you
     return h + '<div class="card"><div class="rivals" id="rivalsBox">' + items + '</div></div>';
   }
 
