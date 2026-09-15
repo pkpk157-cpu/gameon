@@ -697,6 +697,14 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
    portrait rather than a squat tile. */
 .pshirt { display:block; padding:10px 0 6px; }
 .pshirt { --shirt-w:42px; --shirt-h:40px; }
+/* The photograph is not the jersey and need not be its size. The jersey sets
+   the height of the slot and so the height of the card, which is why it does
+   not move; the photograph is absolutely positioned inside that slot, so it
+   can take more of the room without shifting a single thing around it. It is a
+   crop of a head and shoulders, and it was sitting small in a card with ten
+   points of air above it. These fill more of that air: wider than the jersey,
+   taller, and starting higher, while still clearing the name bar. */
+.pshirt { --face-w:48px; --face-h:46px; --face-top:6px; --face-gut:6px; }
 .jsy { display:block; width:var(--shirt-w); height:var(--shirt-h); margin:0 auto;
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
 /* Tight, because the name bar is the width of the card and some surnames are
@@ -764,7 +772,11 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .cmppitch .pitch { --pgap:4px; }
 .cmppitch .pitch .prow { gap:4px; }
 .cmppitch .pcell { min-width:0; max-width:52px; }
-.cmppitch .pshirt { --shirt-w:24px; --shirt-h:23px; }
+/* Five cards to a row on the narrowest screen: the card itself is under 20px
+   there and max-width already has the photograph filling it edge to edge, so
+   there is no room here to give and these stay as they were. */
+.cmppitch .pshirt { --shirt-w:24px; --shirt-h:23px;
+  --face-w:24px; --face-h:23px; --face-top:10px; --face-gut:0px; }
 .cmppitch .pname { font-size:8px; padding:2px 1px; }
 .cmppitch .ppts { font-size:9px; padding:2px 1px; }
 .cmppitch .pb { width:12px; height:12px; font-size:7.5px; line-height:12px; }
@@ -1662,15 +1674,19 @@ table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:
    initials. Nothing here sets a size that depends on the picture arriving, so
    a face that never loads leaves the layout exactly where it was. */
 .pshirt { position:relative; }
-/* Cropped to the head and shoulders: the whole portrait at 40px tall is a
-   thumbnail of a man standing in a field. Sitting exactly where the jersey
-   sits means the card does not move when one replaces the other. */
+/* Cropped to the head and shoulders: the whole portrait at this size is a
+   thumbnail of a man standing in a field. It is laid over the jersey's slot
+   rather than matched to the jersey's size — being absolutely positioned, it
+   can be the larger of the two without the card moving when one replaces the
+   other, which is the only thing that had to stay true. */
 .pcard .facepic {
-  position:absolute; left:50%; top:10px; transform:translateX(-50%);
-  /* The slot is narrower than the shirt on the tightest compare card, where
-     five cards share a 320px screen. The card clips the overflow either way,
-     but a face that fits is better than a face that is trimmed. */
-  width:var(--shirt-w); max-width:100%; height:var(--shirt-h);
+  position:absolute; left:50%; top:var(--face-top); transform:translateX(-50%);
+  /* Wide enough to fill the card, but never wider than it leaves room for:
+     four cards to a row on a 320px screen makes the card 52px, and a 48px
+     photograph there sits two points from each edge. The gutter holds it off
+     instead, and the compare pitch sets it to zero because its cards are
+     narrower than the picture and are meant to fill edge to edge. */
+  width:min(var(--face-w), calc(100% - var(--face-gut))); height:var(--face-h);
   object-fit:cover; object-position:50% 6%;
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));
 }
