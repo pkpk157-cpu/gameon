@@ -864,6 +864,13 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
 
 /* ---- stats & highlights ------------------------------------------------ */
 .hgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:14px; }
+/* Six to a row on a desktop left 104px for "Beat FPL's average". The longest
+   label with its icon needs 170, so above a phone the card asks for that and
+   the row settles at five. */
+@media (min-width:700px) { .hgrid { grid-template-columns:repeat(auto-fit, minmax(176px, 1fr)); } }
+/* An odd count leaves the last card alone beside a gap; on a phone, where the
+   row is two, it takes the row, as the player of the week's card does. */
+@media (max-width:699px) { .hgrid .hcard:last-child:nth-child(odd) { grid-column:1 / -1; } }
 .hcard { padding:13px 14px; border-radius:var(--radius-s);
   background:var(--glass); border:1px solid var(--glass-border);
   box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hi); }
@@ -1061,6 +1068,10 @@ table.t.cmptable.seasons td.num.win .sp { color:var(--good); }
    have no common scale, so an overlay would make their crossings look like
    something the data does not say. */
 .fchart svg { display:block; width:100%; height:auto; overflow:visible; }
+/* The chart is drawn at phone proportions and scales with its card; on a
+   desktop that made a 934-wide, 600-tall chart with text three times its size.
+   It stops growing at a phone-and-a-half and sits in the middle. */
+@media (min-width:700px) { .fchart svg { max-width:560px; margin:0 auto; } }
 .fchart .barP { fill:var(--chart-a); }
 .fchart .lnR { fill:none; stroke:var(--chart-b); stroke-width:2; stroke-linejoin:round;
   stroke-linecap:round; vector-effect:non-scaling-stroke; }

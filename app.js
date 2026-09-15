@@ -514,7 +514,8 @@
       else liveLine = '<br>Live feed: starting up';
     }
     h += '<div class="pffoot">' +
-      (ds ? ("Updated " + new Date(ds.updatedAt).toLocaleString() +
+      (ds ? ('<span title="' + esc(new Date(ds.updatedAt).toLocaleString()) + '">Updated ' +
+             esc(agoText(Date.now() - Date.parse(ds.updatedAt))) + '</span>' +
              " · " + num(ds.managers.length) + " managers" + liveLine)
           : "Standings not loaded yet") +
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
@@ -583,7 +584,7 @@
 
     // Under the theme because it is something you look up when a score seems
     // wrong, not every visit.
-    h += '<div class="menu"><div class="lab-sm">Gameweek status</div>' +
+    h += '<div class="menu">' +
       menuItem("pfGwStatus", "steps", "Gameweek status") +
       '</div>';
 
@@ -1580,7 +1581,7 @@
         '</td></tr>';
     });
     h += '</tbody></table></div>' +
-      '<div class="koline">Only competitions that have finished. Anything still being played is on ' +
+      '<div class="note" style="padding:10px 14px">Only competitions that have finished. Anything still being played is on ' +
       'its own tab until its last gameweek is done.</div></div>';
     host.innerHTML = h;
   }
@@ -1975,6 +1976,10 @@
         // not a quiet afternoon, it is something broken, and a table nobody
         // has told you is old is worse than no table.
         var stale = age > 30 * 60 * 1000;
+        // The warning is the one thing this line must never lose, and on a
+        // 360 phone "GW5 in 2d 22h · not synced for 40m" loses exactly the
+        // warning. While the numbers are stale the deadline gives way to it.
+        if (stale) sub = "";
         sub += '<span class="syncago' + (stale ? ' stale' : '') + '">' +
           (sub ? ' \u00b7 ' : '') +
           (stale ? 'not synced for ' + esc(spanText(age))
