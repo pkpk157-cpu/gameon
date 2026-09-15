@@ -862,6 +862,26 @@ table.t.cmptable .cmid .note { font-size:10px; margin-top:1px; }
 
 table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600; color:var(--ink-soft); line-height:1.35; }
 
+/* ---- live movement ------------------------------------------------------
+   A row that changed place slides from where it was; a number that changed
+   rolls and pops, and its row glows for a moment. */
+tr.livemove { transition:transform .55s cubic-bezier(.2,.7,.2,1); }
+/* The glow is an inset shadow laid over whatever tint the row already has —
+   yours, a zone, a hover — so it fades back to that and never to nothing.
+   The first cell keeps its edge bar and sits the glow out. */
+tr.livetick > td:not(:first-child) { animation:livetick 1.6s ease-out; }
+@keyframes livetick { 0% { box-shadow:inset 0 0 0 200px color-mix(in srgb, var(--good) 24%, transparent); }
+                      100% { box-shadow:inset 0 0 0 200px transparent; } }
+td.livebump > b { display:inline-block; animation:livebump .55s cubic-bezier(.2,.9,.3,1.4); }
+td.livebump:not(:has(b)) { animation:livebump .55s cubic-bezier(.2,.9,.3,1.4); }
+@keyframes livebump { 0% { transform:scale(1); } 40% { transform:scale(1.18); } 100% { transform:scale(1); } }
+.pcard.livetick .ppts { animation:livetick .9s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  tr.livemove { transition:none; }
+  td.livebump > b { animation:none; }
+  td.livebump:not(:has(b)) { animation:none; }
+}
+
 /* ---- stats & highlights ------------------------------------------------ */
 .hgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:14px; }
 /* Six to a row on a desktop left 104px for "Beat FPL's average". The longest

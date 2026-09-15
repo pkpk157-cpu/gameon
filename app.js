@@ -1667,6 +1667,102 @@
     window.scrollTo(0, y);
   }
 
+  // Live movement. A re-render rebuilds the table; without this a rank change
+  // is a row that was here and is now there, and a score that ticked up is a
+  // number that is simply different. Rows are measured by manager before the
+  // rebuild and again after, and each one that moved slides from its old
+  // place to its new one; a number cell that changed rolls to its new value
+  // and its row glows for a moment; a pitch card whose points changed flashes.
+  // Nothing here touches what is shown — the final text is whatever the
+  // render wrote — and under reduced motion only the glow remains.
+  function reducedMotion() {
+    try { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+    catch (e) { return false; }
+  }
+  function liveSnapshot() {
+    var host = $(".view.active");
+    if (!host) return null;
+    var rows = {}, cards = {};
+    $all("table.t tbody tr", host).forEach(function (tr) {
+      var n = tr.querySelector("[data-entry]");
+      if (!n) return;
+      var id = n.getAttribute("data-entry");
+      rows[id] = { top: tr.getBoundingClientRect().top,
+                   nums: $all("td.num", tr).map(function (td) { return td.textContent; }) };
+    });
+    $all(".pcard[data-el]", host).forEach(function (c) {
+      var p = c.querySelector(".ppts");
+      if (p) cards[c.getAttribute("data-el") + "/" + (c.closest(".col") ? "b" : "a")] = p.textContent;
+    });
+    return { rows: rows, cards: cards };
+  }
+  // Counts the digits up from one value to the other, then writes the exact
+  // final text the render produced. Only a cell that is nothing but a number
+  // (or a number in bold) is rolled; anything richer just bumps.
+  function rollNumber(td, before) {
+    var t = td.querySelector("b") || td;
+    if (t.children.length) return;
+    var to = parseFloat(String(t.textContent).replace(/[^\d.\-\u2212]/g, "").replace("\u2212", "-"));
+    var from = parseFloat(String(before).replace(/[^\d.\-\u2212]/g, "").replace("\u2212", "-"));
+    if (isNaN(to) || isNaN(from) || to === from || Math.abs(to - from) > 500) return;
+    var finalText = t.textContent, start = null, D = 520;
+    var whole = finalText.indexOf(".") === -1;
+    function step(ts) {
+      if (!start) start = ts;
+      var k = Math.min(1, (ts - start) / D);
+      var e = 1 - Math.pow(1 - k, 3);
+      var v = from + (to - from) * e;
+      t.textContent = whole ? num(Math.round(v)) : v.toFixed(1);
+      if (k < 1) requestAnimationFrame(step); else t.textContent = finalText;
+    }
+    requestAnimationFrame(step);
+  }
+  function liveMotion(fn) {
+    var before = null;
+    try { before = liveSnapshot(); } catch (e) { before = null; try { console.warn("live motion (before):", e); } catch (e2) {} }
+    fn();
+    if (!before) return;
+    try {
+      var host = $(".view.active");
+      if (!host) return;
+      var quiet = reducedMotion();
+      $all("table.t tbody tr", host).forEach(function (tr) {
+        var n = tr.querySelector("[data-entry]");
+        if (!n) return;
+        var was = before.rows[n.getAttribute("data-entry")];
+        if (!was) return;
+        var nums = $all("td.num", tr), changed = false;
+        nums.forEach(function (td, i) {
+          if (was.nums[i] !== undefined && was.nums[i] !== td.textContent) {
+            changed = true;
+            td.classList.add("livebump");
+            if (!quiet) rollNumber(td, was.nums[i]);
+          }
+        });
+        if (changed) tr.classList.add("livetick");
+        var dy = was.top - tr.getBoundingClientRect().top;
+        if (!quiet && Math.abs(dy) > 1 && Math.abs(dy) < 4000) {
+          tr.style.transition = "none";
+          tr.style.transform = "translateY(" + dy + "px)";
+          tr.classList.add("livemove");
+          // next frame: let it slide home
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              tr.style.transition = "";
+              tr.style.transform = "";
+            });
+          });
+        }
+      });
+      $all(".pcard[data-el]", host).forEach(function (c) {
+        var p = c.querySelector(".ppts");
+        if (!p) return;
+        var was = before.cards[c.getAttribute("data-el") + "/" + (c.closest(".col") ? "b" : "a")];
+        if (was !== undefined && was !== p.textContent) c.classList.add("livetick");
+      });
+    } catch (e) { try { console.warn("live motion:", e); } catch (e2) {} /* decoration; the render already stands */ }
+  }
+
   // Returns true when newer data arrived and was shown. A request that never
   // settles — which a patchy mobile connection will produce sooner or later —
   // must not leave the loop wedged, so give up on one and let the next tick try.
@@ -1680,7 +1776,7 @@
       autoBusy = false;
       if (!ds || ds.updatedAt === before) { updateBanner(); return false; }
       if (busyReading()) return false; // they started while it was in flight
-      keepPlace(render);
+      liveMotion(function () { keepPlace(render); });
       return true;
     }, function () { autoBusy = false; return false; });
   }
@@ -1715,7 +1811,7 @@
     liveBusy = true; liveLast = Date.now();
     S.liveOverlay().then(function (changed) {
       liveBusy = false;
-      if (changed && !busyReading()) keepPlace(render);
+      if (changed && !busyReading()) liveMotion(function () { keepPlace(render); });
       scheduleLive();
     }, function () { liveBusy = false; scheduleLive(); });
   }
