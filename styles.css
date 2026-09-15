@@ -329,21 +329,36 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
    four-column tables past a 320px screen. It steps down with the screen, and
    the cell padding with it, as the Premier League table's already do. */
 @media (max-width:389px) {
-  table.t td.name { min-width:128px; max-width:164px; }
+  /* A fixed cap on the name column is the same overflow one size down: what
+     the name may take is the card less the number columns beside it, so the
+     cap follows the screen. 216 is the widest set of number columns at this
+     padding (Manager of the Month's three), plus the card's edges. */
+  table.t td.name { min-width:128px; max-width:calc(100vw - 216px); }
   /* One unbreakable team name — "MainooKiFarakPainda" — held the column
      open past the screen on its own. On a phone the name and the manager
      each keep to one line and trail off, as the Premier League table's do. */
   table.t td.name .who, table.t td.name .mgr {
     display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 }
-@media (max-width:359px) { table.t td.name { min-width:112px; max-width:132px; }
+@media (max-width:359px) { table.t td.name { min-width:112px; max-width:calc(100vw - 200px); }
                            table.t th, table.t td { padding:10px 8px; } }
 @media (max-width:519px) { table.t.classictbl .c-xp { display:none; } }
-@media (max-width:419px) { table.t.monthtbl .c-bench { display:none; } }
-@media (max-width:459px) { table.t.lmstbl .c-bench { display:none; } }
+@media (max-width:459px) { table.t.monthtbl .c-bench { display:none; } }
+/* LMS carries three number columns beside the name, and a team name with no
+   spaces in it cannot wrap, so it steps down sooner than the others: bench
+   goes below 480, the numbers tighten and the name trails off below 420, and
+   hits go below 360. Measured against the card, not the screen. */
+@media (max-width:479px) { table.t.lmstbl .c-bench { display:none; } }
+@media (max-width:419px) {
+  table.t.lmstbl th.num, table.t.lmstbl td.num { padding-left:8px; padding-right:8px; }
+  table.t.lmstbl td.name { min-width:128px; max-width:170px; }
+  table.t.lmstbl td.name .who, table.t.lmstbl td.name .mgr {
+    display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+}
+@media (max-width:389px) { table.t.lmstbl td.name { max-width:158px; } }
 @media (max-width:359px) { table.t.lmstbl .c-hits { display:none; } }
 @media (max-width:359px) { table.t.voltbl .c-gw { display:none; } }
-@media (max-width:419px) { table.t.grptbl .c-w, table.t.grptbl .c-d, table.t.grptbl .c-l { display:none; } }
+@media (max-width:479px) { table.t.grptbl .c-w, table.t.grptbl .c-d, table.t.grptbl .c-l { display:none; } }
 /* The UCL/UEL tag on the manager's line, sized to it. */
 table.t td .mgr .pill { font-size:9.5px; padding:1px 7px; vertical-align:1px; margin-left:2px; }
 /* Promotion and relegation zones carry a bar at the edge, like "you" does. */
