@@ -862,6 +862,21 @@ table.t.cmptable .cmid .note { font-size:10px; margin-top:1px; }
 
 table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600; color:var(--ink-soft); line-height:1.35; }
 
+/* ---- opening screen -----------------------------------------------------
+   The crest on black while the first standings load. It sits over
+   everything and fades once the page is drawn. */
+#splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:100; background:#000;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  transition:opacity .35s ease-out; }
+#splash.gone { opacity:0; pointer-events:none; }
+#splash img { width:min(62vw, 240px); height:auto; animation:splashin .5s ease-out both; }
+#splash .splashtxt { color:#9a94a8; font-size:13px; font-weight:600; letter-spacing:.3px;
+  animation:splashpulse 1.4s ease-in-out infinite; }
+@keyframes splashin { from { opacity:0; transform:scale(.94); } to { opacity:1; transform:none; } }
+@keyframes splashpulse { 0%, 100% { opacity:.55; } 50% { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { #splash img, #splash .splashtxt { animation:none; } #splash { transition:none; } }
+.empty img.big { width:120px; height:120px; border-radius:24px; }
+
 /* ---- pull to refresh ----------------------------------------------------
    A pill that rides down under the bar with the finger, arms at the
    threshold, and spins while the check runs. The browser's own pull-to-

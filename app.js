@@ -2052,6 +2052,10 @@
     window.addEventListener("pageshow", function (e) { if (e.persisted) onForeground(); });
     window.addEventListener("focus", onForeground);
 
+    // The opening screen leaves once the first standings are drawn — or, if
+    // the load fails or hangs, after a few seconds regardless, so it can
+    // never sit in front of the empty state that explains what is wrong.
+    var splashTimer = setTimeout(hideSplash, 6000);
     S.load().then(function () {
       syncFromHash();
       updateDataState();
@@ -2059,7 +2063,17 @@
       // Ask the live feed straight away rather than after a first full
       // interval — during a match those two minutes are the whole point.
       tickLive();
-    });
+      clearTimeout(splashTimer);
+      hideSplash();
+    }, function () { clearTimeout(splashTimer); syncFromHash(); hideSplash(); });
+  }
+  function hideSplash() {
+    var sp = $("#splash");
+    if (!sp || sp.classList.contains("gone")) return;
+    sp.classList.add("gone");
+    var drop = function () { if (sp.parentNode) sp.parentNode.removeChild(sp); };
+    sp.addEventListener("transitionend", drop);
+    setTimeout(drop, 600);
   }
 
   function buildNav() {
@@ -2267,7 +2281,7 @@
 
   function emptyState() {
     if (!isAdmin()) {
-      return '<div class="empty"><div class="big">🏆</div>' +
+      return '<div class="empty"><img class="big" src="logo-splash.webp" alt="" width="120" height="120"></div>' +
         '<h3>Game On V12</h3>' +
         '<p class="note">Standings haven\'t loaded yet. Please check back shortly.</p>' +
         '<div class="btnrow" style="justify-content:center;margin-top:16px">' +
@@ -2275,7 +2289,7 @@
     }
     var cfg = S.config();
     var hasId = !!cfg.classicLeagueId;
-    return '<div class="empty"><div class="big">🏆</div>' +
+    return '<div class="empty"><img class="big" src="logo-splash.webp" alt="" width="120" height="120"></div>' +
       '<h3>Welcome to Game On V12</h3>' +
       '<p class="note">' + (hasId
         ? 'League ID is set. Pull the latest data from FPL to populate every tab.'

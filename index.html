@@ -15,8 +15,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Game On V12" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<link rel="apple-touch-icon" href="icon.svg" />
-<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="favicon-64.png" type="image/png" sizes="64x64" />
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192" />
 <script>
   /* Apply the saved theme before paint to avoid a flash. */
   (function () {
@@ -29,6 +30,12 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- The opening screen: the crest on black until the first standings are
+       drawn, then it fades out of the way. -->
+  <div id="splash" aria-hidden="true">
+    <img src="logo-splash.webp" alt="" width="240" height="240" decoding="async" fetchpriority="high" />
+    <div class="splashtxt">Loading the league…</div>
+  </div>
   <header class="topbar">
     <button class="backbtn" id="barBack" aria-label="Back" style="display:none"></button>
     <button class="menubtn" id="barMenu" title="Sections" aria-label="Sections"></button>
