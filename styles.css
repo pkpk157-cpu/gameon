@@ -1054,6 +1054,22 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .rvbtn { white-space:nowrap; }
 .rvbtn.on { background:var(--accent); color:#fff; }
 /* the rivals strip: one row each, the gaps in your favour when green */
+/* ---- profile: section chips and folds ---------------------------------- */
+.pchipsbar { position:sticky; top:calc(var(--topbar-h) + env(safe-area-inset-top)); z-index:30;
+  margin:0 -16px 4px; padding:8px 16px 0;
+  /* the same near-solid ground the table headers use: the chart's axis labels
+     read through a glass one as the page slides under it */
+  background:var(--head-solid); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--glass-border); }
+.pchipsbar .tabrow { margin-bottom:0; }
+details.pfold summary { list-style:none; cursor:pointer; }
+details.pfold summary::-webkit-details-marker { display:none; }
+details.pfold summary .caret { flex:none; font-size:14px; color:var(--ink-faint); transition:transform .18s; }
+details.pfold[open] summary .caret { transform:rotate(180deg); }
+details.pfold summary .chip { white-space:nowrap; }
+details.pfold summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:8px; }
+@media (prefers-reduced-motion: reduce) { details.pfold summary .caret { transition:none; } }
+
 /* the rivals table: you among them, best first; a compare button per rival */
 table.t.rvtbl td.rvact, table.t.rvtbl th:last-child { width:40px; padding-left:0; padding-right:10px; text-align:right; }
 .rvcmp { appearance:none; cursor:pointer; width:32px; height:32px; border-radius:50%; display:inline-flex;

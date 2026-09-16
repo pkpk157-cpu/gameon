@@ -1944,6 +1944,7 @@
 
   function boot() {
     setupPull();
+    window.addEventListener("scroll", profileSpy, { passive: true });
     buildNav();
     measureChrome();
     var remeasure = function () { measureChrome(); };
@@ -3805,7 +3806,7 @@
     // One section per competition, and how near the places each one is.
     var W = K.winnings(ds, id);
     var PS = K.prizeStatus(ds, id);
-    h += '<div class="section-title"><h2>XP</h2><div class="rule"></div></div>';
+    h += psect("xp", "XP");
     h += '<div class="pcards">';
     h += pcard("Won", xpa(W.settled), W.settled ? "locked in" : "nothing settled yet");
     h += pcard("On track for", xpa(W.onTrack), W.onTrack ? "if it ended today" : "outside the XP places");
@@ -3835,7 +3836,7 @@
 
     // All four chips, with the gameweek each was played.
     var chips = K.managerChips(ds, id);
-    h += '<div class="section-title"><h2>Chips</h2><div class="rule"></div></div>';
+    h += psect("chips", "Chips");
     h += '<div class="chipgrid">' + chips.map(function (c) {
       return '<div class="chipcard' + (c.used ? ' used' : '') + '">' +
         '<div class="cn">' + esc(c.label) + '</div>' +
@@ -3846,32 +3847,35 @@
     // Form — the shape of their season.
     var fm = K.form(ds, id);
     if (fm.length) {
-      h += '<div class="section-title"><h2>Form</h2><div class="rule"></div></div>';
+      h += psect("form", "Form");
       h += '<div class="card"><div class="bd" id="formBox">' + formChart(fm) + '</div></div>';
     }
 
     // Squad on a football pitch, steppable through every gameweek played.
     var gws = K.squadGws(ds);
     if (gws.length && K.managerPitch(ds, id, gws[gws.length - 1])) {
-      h += '<div class="section-title"><h2>Squad</h2><div class="rule"></div></div>';
+      h += psect("squad", "Squad");
       h += '<div class="card pitchcard"><div class="bd" id="pitchBox"></div></div>';
     }
 
+    // The three reference tables fold closed: they are checked once a
+    // season, and open they pushed the squad off the first two screens.
     if (P.monthly.length) {
-      h += '<div class="section-title"><h2>Manager of the Month</h2><div class="rule"></div></div>';
-      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>';
-      h += P.monthly.map(function (m) {
+      var mom = '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>';
+      mom += P.monthly.map(function (m) {
         return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
           '<td class="num">' + (m.prize ? '<span class="prize">' + xp(m.prize) + '</span>' : '') + '</td></tr>';
       }).join("");
-      h += '</tbody></table></div></div>';
+      mom += '</tbody></table></div></div>';
+      var momWon = P.monthly.filter(function (m) { return m.prize; }).length;
+      h += pfold("month", "Manager of the Month",
+        P.monthly.length + (P.monthly.length === 1 ? " month" : " months") + (momWon ? " \u00b7 " + momWon + " paid" : ""), mom);
     }
 
     // Every head-to-head this manager has played and has left, in the same
     // shape as the fixtures tab.
     var R = K.h2hRecord(ds, id);
     if (R) {
-      h += '<div class="section-title"><h2>Head-to-head</h2><div class="rule"></div></div>';
       var h2hDone = {};
       K.finishedGws(ds).forEach(function (g) { h2hDone[g] = 1; });
       var h2hRow = function (r) {
@@ -3892,27 +3896,31 @@
       // it. Open on this gameweek's match alone; the rest unfold on demand.
       var h2hCur = R.rows.filter(function (r) { return !h2hDone[r.gw]; })[0] || R.rows[R.rows.length - 1];
       var h2hRest = R.rows.filter(function (r) { return r !== h2hCur; });
-      h += '<div class="card"><div class="h2hsum">' +
+      h += pfold("h2h", "Head-to-head", "W" + R.w + " D" + R.d + " L" + R.l,
+        '<div class="card"><div class="h2hsum">' +
         h2hStat("Played", R.played) + h2hStat("W", R.w) + h2hStat("D", R.d) +
         h2hStat("L", R.l) + h2hStat("Points", R.pts) + h2hStat("For", R.pointsFor) +
         '</div><div class="fxwrap"><div class="fxgrp">' + h2hRow(h2hCur) + '</div>' +
         (h2hRest.length ? '<div class="fxgrp" id="h2hRest" hidden>' + h2hRest.map(h2hRow).join("") + '</div>' +
           '<button type="button" class="fxtoggle" id="h2hAll">Show all ' + R.rows.length + ' fixtures</button>' : '') +
-        '</div></div>';
+        '</div></div>');
     }
 
-    h += '<div class="section-title"><h2>Past seasons (FPL)</h2><div class="rule"></div></div>';
+    var past;
     if (P.past && P.past.length) {
-      h += '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Season</th><th class="num">Overall rank</th><th class="num">Points</th></tr></thead><tbody>';
-      h += P.past.slice().reverse().map(function (s) {
+      past = '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Season</th><th class="num">Overall rank</th><th class="num">Points</th></tr></thead><tbody>';
+      past += P.past.slice().reverse().map(function (s) {
         return '<tr><td>' + esc(s.season) + '</td><td class="num">' + num(s.rank) + '</td><td class="num">' + num(s.total) + '</td></tr>';
       }).join("");
-      h += '</tbody></table></div></div>';
+      past += '</tbody></table></div></div>';
     } else {
-      h += '<div class="callout">No past-season history for this manager (new to FPL, or not yet synced).</div>';
+      past = '<div class="callout">No past-season history for this manager (new to FPL, or not yet synced).</div>';
     }
+    h += pfold("past", "Past seasons (FPL)",
+      (P.past && P.past.length) ? P.past.length + (P.past.length === 1 ? " season" : " seasons") : "none", past);
 
     host.innerHTML = h;
+    mountProfileChips(host);
     // A badge opens a small bubble under itself saying what it is for and
     // which gameweeks earned it; tapping it again, another badge, or
     // anywhere else closes it.
@@ -3974,20 +3982,20 @@
   // the gap this gameweek and the gap on the season, in your favour when
   // positive. Live numbers come from the same rows the Classic table draws.
   function rivalsHtml(ds, meId) {
+    // The section exists only once a rival is pinned; before that the
+    // button on other people's profiles is the whole feature.
     var ids = rivals();
-    var h = '<div class="section-title"><h2>Rivals</h2><div class="rule"></div></div>';
-    var invite = h + '<div class="note badgesnone">Pin up to ' + RIVALS_MAX + ' rivals from their profiles ' +
-      'and they will sit here beside you, best total first.</div>';
-    if (!ids.length) return invite;
+    var h = psect("rivals", "Rivals");
+    if (!ids.length) return "";
     var rows = K.classic(ds), by = {};
     rows.forEach(function (r) { by[+r.id] = r; });
     var me = by[+meId];
-    if (!me) return invite;
+    if (!me) return "";
     // You and your rivals as one short table, in the order the Classic
     // table has you — so who is ahead is the order, not a sum to do.
     var set = ids.map(function (rid) { return rid === +meId ? null : by[rid]; })
       .filter(function (r) { return !!r; });
-    if (!set.length) return invite; // every pin was someone gone, or you
+    if (!set.length) return ""; // every pin was someone gone, or you
     set.push(me);
     set.sort(function (a, b) { return (a.computedRank - b.computedRank) || (a.order - b.order); });
     var live = K.liveGwId(ds);
@@ -4007,6 +4015,81 @@
     return h + '<div class="card"><div class="tablewrap" id="rivalsBox"><table class="t rvtbl"><thead><tr>' +
       '<th class="num">#</th><th>Team</th><th class="num">' + esc(gwLabel) + '</th><th class="num">Total</th><th></th>' +
       '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  }
+
+  // A profile section: a title the chip row can find and jump to.
+  function psect(key, label) {
+    return '<div class="section-title" id="ps-' + key + '" data-ps="' + esc(label) + '">' +
+      '<h2>' + esc(label) + '</h2><div class="rule"></div></div>';
+  }
+  // A folded section: the same title as a summary, closed until tapped, with
+  // a short hint of what is inside.
+  function pfold(key, label, hint, inner) {
+    return '<details class="pfold" id="ps-' + key + '" data-ps="' + esc(label) + '">' +
+      '<summary><div class="section-title"><h2>' + esc(label) + '</h2><div class="rule"></div>' +
+      (hint ? '<span class="chip">' + esc(hint) + '</span>' : '') +
+      '<span class="caret" aria-hidden="true">\u25be</span></div></summary>' +
+      '<div class="pfoldbody">' + inner + '</div></details>';
+  }
+  // The chip row at the top of a profile: one chip per section, sticky under
+  // the bar, jumping to the section and following the scroll.
+  function chipOffset() {
+    var bar = $("header.topbar"), row = $("#profChips");
+    return (bar ? bar.getBoundingClientRect().height : 0) + (row ? row.getBoundingClientRect().height : 0);
+  }
+  function mountProfileChips(host) {
+    var secs = $all("[data-ps]", host);
+    if (secs.length < 3) return;
+    var row = document.createElement("div");
+    row.className = "pchipsbar"; row.id = "profChips";
+    row.innerHTML = '<div class="tabrow">' + secs.map(function (el) {
+      var short = { "Manager of the Month": "Month", "Head-to-head": "H2H", "Past seasons (FPL)": "Past" };
+      var label = el.getAttribute("data-ps");
+      return '<button type="button" class="tabbtn" data-go="' + el.id + '">' + esc(short[label] || label) + '</button>';
+    }).join("") + '</div>';
+    host.insertBefore(row, host.firstChild);
+    row.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-go]");
+      if (!b) return;
+      var el = document.getElementById(b.getAttribute("data-go"));
+      if (!el) return;
+      if (el.tagName === "DETAILS") el.open = true; // you asked for it, so show it
+      var top = el.getBoundingClientRect().top + (window.scrollY || 0) - chipOffset() - 6;
+      window.scrollTo({ top: Math.max(0, top), behavior: reducedMotion() ? "auto" : "smooth" });
+    });
+    profileSpy();
+  }
+  // Which section is under the chip row right now; that chip lights and is
+  // scrolled into view. No-op away from a profile.
+  var spyPending = false;
+  function profileSpy() {
+    if (spyPending) return;
+    spyPending = true;
+    requestAnimationFrame(function () {
+      spyPending = false;
+      if (state.view !== "profile") return; // the row stays in its hidden view
+      var row = $("#profChips");
+      if (!row) return;
+      var secs = $all("[data-ps]", row.parentNode);
+      if (!secs.length) return;
+      var line = chipOffset() + 14, cur = secs[0];
+      secs.forEach(function (el) { if (el.getBoundingClientRect().top <= line) cur = el; });
+      // at the very bottom the last section is the one being read even if
+      // its title never reaches the line
+      var atEnd = (window.innerHeight + (window.scrollY || 0)) >= (document.documentElement.scrollHeight - 2);
+      if (atEnd) cur = secs[secs.length - 1];
+      $all(".tabbtn", row).forEach(function (b) {
+        var on = b.getAttribute("data-go") === cur.id;
+        if (on !== b.classList.contains("on")) {
+          b.classList.toggle("on", on);
+          if (on) {
+            var strip = b.parentNode;
+            var want = b.offsetLeft - (strip.clientWidth - b.offsetWidth) / 2;
+            strip.scrollTo({ left: Math.max(0, want), behavior: reducedMotion() ? "auto" : "smooth" });
+          }
+        }
+      });
+    });
   }
 
   function closeBubble() {
