@@ -94,6 +94,14 @@
       '<rect x="1.5" y="1.5" width="27" height="27" rx="8.5" fill="none" stroke="rgba(255,255,255,.4)" stroke-width=".8"/>' +
       '</svg>';
   }
+  // A section's mark: the drawn tile, with the real badge laid over it. If the
+  // picture is missing the tile is what stays, which is what the app looked
+  // like before the badges arrived.
+  function markTile(id, c1, c2, glyph, src) {
+    return '<span class="mi-mark">' + tile(id, c1, c2, glyph) +
+      '<img class="mi-logo" src="' + src + '" alt="" width="30" height="30" ' +
+      'loading="lazy" decoding="async"></span>';
+  }
   var G_TROPHY = '<path d="M10.2 8h9.6v2.4c0 2.65-2.15 4.8-4.8 4.8s-4.8-2.15-4.8-4.8Z" fill="#fff"/>' +
     '<path d="M10.2 8.9H8.3c0 1.9 1 3.1 2.4 3.5M19.8 8.9h1.9c0 1.9-1 3.1-2.4 3.5" fill="none" stroke="#fff" stroke-width="1.3"/>' +
     '<rect x="14.1" y="15" width="1.8" height="2.8" fill="#fff"/><rect x="11.2" y="17.6" width="7.6" height="2.1" rx=".8" fill="#fff"/>' +
@@ -1639,11 +1647,11 @@
       ? "classic" : state.backView;
     var items = [
       { k: "pl", go: "pl", t: "Premier League", s: "Live scores and results, match by match",
-        i: tile("mpl", "#9d5bd2", "#43146e", G_FOOT) },
+        i: markTile("mpl", "#9d5bd2", "#43146e", G_FOOT, "pl-lion.webp") },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
-        i: tile("mgo", "#ffd76a", "#e6a417", G_TROPHY) },
+        i: markTile("mgo", "#ffd76a", "#e6a417", G_TROPHY, "logo-tile.webp") },
       { k: "vol", go: "vol", t: "Game On Voluntary", s: "Five side leagues and prizes",
-        i: tile("mvo", "#ff9f4a", "#d1521c", G_COINS) },
+        i: markTile("mvo", "#ff9f4a", "#d1521c", G_COINS, "logo-tile-inv.webp") },
       { k: "prices", go: "prices", t: "Player stats", s: "Prices, ownership and form",
         i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
     ];
@@ -2049,7 +2057,8 @@
           t.parentNode.removeChild(t);
         }
       }
-      if (t && t.tagName === "IMG" && t.classList && t.classList.contains("crest")) {
+      if (t && t.tagName === "IMG" && t.classList &&
+          (t.classList.contains("crest") || t.classList.contains("mi-logo"))) {
         if (t.parentNode) t.parentNode.removeChild(t);
       }
     }, true);

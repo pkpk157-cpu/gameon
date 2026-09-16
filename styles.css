@@ -471,6 +471,15 @@ tr.me:nth-child(even) td { background:var(--accent-wash); }
   width:100%; text-align:left; cursor:pointer; padding:12px 14px; border-radius:14px;
   border:1px solid var(--line); background:var(--chip); color:var(--ink); }
 .menulist .menuitem .mi-i { grid-row:1 / span 2; display:flex; }
+/* The badge sits over the drawn tile, in the tile's shape and exactly its
+   size. The mark is a little larger than the glyph tiles were: these carry
+   lettering, and at nineteen points the crest was a smudge. */
+.mi-mark { position:relative; display:flex; flex:none; width:34px; height:34px; }
+.mi-mark svg.tile { width:34px; height:34px; flex:none; }
+.mi-mark .mi-logo { position:absolute; left:0; top:0; width:34px; height:34px;
+  border-radius:28%; object-fit:cover; }
+/* every section's mark is the same size, badge or drawn glyph */
+.menulist .menuitem .mi-i svg.tile { width:34px; height:34px; flex:none; }
 .menulist .menuitem:hover { background:var(--chip); border-color:var(--accent); }
 .menulist .menuitem.on { border-color:var(--accent); background:var(--accent-tint); }
 .menulist .menuitem .mi-t { font-size:15px; font-weight:700; line-height:1.25; }
