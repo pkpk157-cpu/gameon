@@ -225,10 +225,17 @@ a { color:var(--accent); text-decoration:none; }
   /* Reaching the bottom of the table must not then start dragging the page —
      the header and the row of controls above it are meant to stay put. */
   overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  /* Rows scroll right up into the top edge of this card: the rounded corner
+     clips them to the outside of the border, not the inside, so on the prices
+     table a pink price or a coloured bar read through that line as a smudge in
+     the corner. Colouring the line does not stop it — the rows paint over it.
+     The top edge goes; the inset highlight below still draws the card's top,
+     and the other three sides keep the glass line. */
   max-height:calc(100vh - 250px); max-height:calc(100dvh - 250px);
   background:var(--glass);
   -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
-  border:1px solid var(--glass-border); border-radius:var(--radius);
+  border:1px solid var(--glass-border); border-top-width:0;
+  border-radius:var(--radius);
   box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
 }
 .freeze table.t { width:100%; }
@@ -907,7 +914,13 @@ html, body { overscroll-behavior-y:contain; }
 .crest { width:18px; height:18px; object-fit:contain; vertical-align:-4px; flex:none; }
 .fx .fxs.l .crest { margin-right:6px; }
 .fx .fxs.r .crest { margin-left:6px; }
-table.t.pltbl td.name .crest { margin-right:7px; }
+/* A crest costs the club name twenty-five points, and this table already
+   carries eleven columns: on a phone the name loses letters for it, which is
+   the wrong way round. The crest joins the table where the table breathes —
+   the same width at which its padding loosens — and the fixtures list, which
+   has room for it at every size, keeps its own. */
+table.t.pltbl td.name .crest { display:none; }
+@media (min-width:560px) { table.t.pltbl td.name .crest { display:inline-block; margin-right:7px; } }
 .bdname .crest { width:16px; height:16px; margin-right:5px; vertical-align:-3px; }
 @media (max-width:359px) { .fx .crest { width:16px; height:16px; margin-left:4px; margin-right:4px; } }
 

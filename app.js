@@ -148,6 +148,15 @@
   /* ---- tiny DOM/util helpers ------------------------------------------- */
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+  // Write into a panel that may already have been replaced. A control's
+  // handler outlives the markup it was bound to — a live refresh or a change
+  // of tab rebuilds the page under it — and a redraw aimed at a panel that is
+  // no longer there should be a no-op, not a thrown error on a live screen.
+  function fill(sel, root, html) {
+    var el = $(sel, root);
+    if (el) el.innerHTML = html;
+    return el;
+  }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function num(n) { if (n == null || isNaN(n)) return "—"; return Number(n).toLocaleString("en-US"); }
@@ -415,9 +424,9 @@
       });
       var info = $("#bdWhat", box);
       if (info) info.classList.toggle("on", tab === "help");
-      $("#bdPanel", box).innerHTML = tab === "help" ? bdHelp()
+      fill("#bdPanel", box, tab === "help" ? bdHelp()
         : tab === "all" ? bdSeasonPanel(hist, at)
-        : bdGwPanel(ds, el, at, at === openedAt ? mult : 1);
+        : bdGwPanel(ds, el, at, at === openedAt ? mult : 1));
     };
     // A sheet cannot open another over itself without throwing this one away,
     // so the explanation is a third panel and either tab brings you back.
@@ -932,7 +941,7 @@
     var draw = function () {
       var list = state.psPos === "all" ? st.rows
         : st.rows.filter(function (r) { return String(r.type) === state.psPos; });
-      $("#psPanel", host).innerHTML = boards.map(function (b) { return psCard(b, list); }).join("");
+      fill("#psPanel", host, boards.map(function (b) { return psCard(b, list); }).join(""));
     };
     $("#psPos", host).addEventListener("change", function () { state.psPos = this.value; draw(); });
     // Tap a player for the same points breakdown the pitch cards open.
@@ -1079,6 +1088,7 @@
       }).join("");
 
       var panel = $("#prPanel", host);
+      if (!panel) return; // the screen moved on while a control was being used
       // "freeze" alone, as the league tables use it: .card carries overflow:hidden
       // and wins on order, which left the rows unreachable by any gesture even
       // though scrollTop still moved them from script.
@@ -2372,7 +2382,7 @@
       var filtered = !q ? rows : rows.filter(function (r) {
         return (r.entryName + " " + r.playerName).toLowerCase().indexOf(q) !== -1;
       });
-      $("#classicBody", host).innerHTML = classicRows(filtered);
+      fill("#classicBody", host, classicRows(filtered));
     });
   }
 
@@ -2454,8 +2464,8 @@
     host.innerHTML = h;
     var draw = function () {
       var M = months.filter(function (m) { return m.key === state.monthKey; })[0];
-      $("#monthMeta", host).innerHTML = gwChips(M.gws, statusFn);
-      $("#monthPanel", host).innerHTML = monthPanel(M);
+      fill("#monthMeta", host, gwChips(M.gws, statusFn));
+      fill("#monthPanel", host, monthPanel(M));
       filterRows($("#monthPanel", host), $("#monthSearch", host).value);
     };
     $("#monthSel", host).addEventListener("change", function () { state.monthKey = this.value; draw(); });
@@ -2903,20 +2913,20 @@
     function draw() {
       var SEA = pyr.seasons.filter(function (s) { return s.key === state.seasonKey; })[0];
       var div = SEA.divisions.filter(function (d) { return d.key === state.pyrDiv; })[0];
-      $("#pyrMeta", host).innerHTML = gwChips(SEA.gws, statusFn);
+      fill("#pyrMeta", host, gwChips(SEA.gws, statusFn));
       // A mini-season nobody has played yet has no table — everyone would sit
       // level on nothing, in an order that means nothing. Say it has not
       // started and say when it does.
       if (!SEA.played) {
-        $("#pyrPanel", host).innerHTML =
+        fill("#pyrPanel", host,
           '<div class="callout"><b>' + esc(SEA.name) + ' has not started.</b><br>' +
           'It runs GW\u00a0' + SEA.gws[0] + '\u2013' + SEA.gws[SEA.gws.length - 1] +
           '. Divisions are set by how ' +
           (SEA.key === "s2" ? "Mini Season 1" : "the mini-season before it") +
-          ' finishes, so the table appears once its first gameweek is played.</div>';
+          ' finishes, so the table appears once its first gameweek is played.</div>');
         return;
       }
-      $("#pyrPanel", host).innerHTML = divisionCard(div, cfg);
+      fill("#pyrPanel", host, divisionCard(div, cfg));
     }
     $("#pyrSeason", host).addEventListener("change", function () { state.seasonKey = this.value; draw(); });
     $("#pyrDiv", host).addEventListener("change", function () { state.pyrDiv = this.value; draw(); });
