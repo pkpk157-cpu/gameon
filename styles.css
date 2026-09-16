@@ -1074,8 +1074,12 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .rvbtn.on { background:var(--accent); color:#fff; }
 /* the rivals strip: one row each, the gaps in your favour when green */
 /* ---- profile: section chips and folds ---------------------------------- */
-.pchipsbar { position:sticky; top:calc(var(--topbar-h) + env(safe-area-inset-top)); z-index:30;
-  margin:0 -16px 4px; padding:8px 16px 0;
+/* The bar must rest exactly where it sticks, or it jumps the moment it
+   catches: the page's own top padding sat above it at rest and vanished when
+   it stuck, and the sticky offset added the safe-area inset a second time —
+   the measured top-bar height already carries it. */
+.pchipsbar { position:sticky; top:var(--topbar-h); z-index:30;
+  margin:-18px -16px 6px; padding:8px 16px 8px;
   /* the same near-solid ground the table headers use: the chart's axis labels
      read through a glass one as the page slides under it */
   background:var(--head-solid); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
@@ -1087,6 +1091,9 @@ details.pfold summary .caret { flex:none; font-size:14px; color:var(--ink-faint)
 details.pfold[open] summary .caret { transform:rotate(180deg); }
 details.pfold summary .chip { white-space:nowrap; }
 details.pfold summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:8px; }
+/* What a closed section still shows: its latest row, and a way in. */
+.pfoldpeek { cursor:pointer; }
+details.pfold[open] + .pfoldpeek { display:none; }
 @media (prefers-reduced-motion: reduce) { details.pfold summary .caret { transition:none; } }
 
 /* the rivals table: you among them, best first; a compare button per rival */

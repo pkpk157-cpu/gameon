@@ -3884,15 +3884,17 @@
     // The three reference tables fold closed: they are checked once a
     // season, and open they pushed the squad off the first two screens.
     if (P.monthly.length) {
-      var mom = '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>';
-      mom += P.monthly.map(function (m) {
-        return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
-          '<td class="num">' + (m.prize ? '<span class="prize">' + xp(m.prize) + '</span>' : '') + '</td></tr>';
-      }).join("");
-      mom += '</tbody></table></div></div>';
+      var momTable = function (rows) {
+        return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Month</th><th class="num">Pos</th><th class="num">Points</th><th class="num">XP</th></tr></thead><tbody>' +
+          rows.map(function (m) {
+            return '<tr><td>' + esc(m.label || m.name) + '</td><td class="num">' + m.pos + '</td><td class="num">' + num(m.score) + '</td>' +
+              '<td class="num">' + (m.prize ? '<span class="prize">' + xp(m.prize) + '</span>' : '') + '</td></tr>';
+          }).join("") + '</tbody></table></div></div>';
+      };
       var momWon = P.monthly.filter(function (m) { return m.prize; }).length;
       h += pfold("month", "Manager of the Month",
-        P.monthly.length + (P.monthly.length === 1 ? " month" : " months") + (momWon ? " \u00b7 " + momWon + " paid" : ""), mom);
+        P.monthly.length + (P.monthly.length === 1 ? " month" : " months") + (momWon ? " \u00b7 " + momWon + " paid" : ""),
+        momTable(P.monthly), momTable(P.monthly.slice(-1)));
     }
 
     // Every head-to-head this manager has played and has left, in the same
@@ -3926,24 +3928,38 @@
         '</div><div class="fxwrap"><div class="fxgrp">' + h2hRow(h2hCur) + '</div>' +
         (h2hRest.length ? '<div class="fxgrp" id="h2hRest" hidden>' + h2hRest.map(h2hRow).join("") + '</div>' +
           '<button type="button" class="fxtoggle" id="h2hAll">Show all ' + R.rows.length + ' fixtures</button>' : '') +
-        '</div></div>');
+        '</div></div>',
+        '<div class="card"><div class="fxwrap"><div class="fxgrp">' + h2hRow(h2hCur) + '</div></div></div>');
     }
 
-    var past;
+    var past, pastPeek = "";
     if (P.past && P.past.length) {
-      past = '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Season</th><th class="num">Overall rank</th><th class="num">Points</th></tr></thead><tbody>';
-      past += P.past.slice().reverse().map(function (s) {
-        return '<tr><td>' + esc(s.season) + '</td><td class="num">' + num(s.rank) + '</td><td class="num">' + num(s.total) + '</td></tr>';
-      }).join("");
-      past += '</tbody></table></div></div>';
+      var pastRows = P.past.slice().reverse(); // newest first
+      var pastTable = function (rows) {
+        return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>Season</th><th class="num">Overall rank</th><th class="num">Points</th></tr></thead><tbody>' +
+          rows.map(function (x) {
+            return '<tr><td>' + esc(x.season) + '</td><td class="num">' + num(x.rank) + '</td><td class="num">' + num(x.total) + '</td></tr>';
+          }).join("") + '</tbody></table></div></div>';
+      };
+      past = pastTable(pastRows);
+      pastPeek = pastTable(pastRows.slice(0, 1));
     } else {
       past = '<div class="callout">No past-season history for this manager (new to FPL, or not yet synced).</div>';
     }
     h += pfold("past", "Past seasons (FPL)",
-      (P.past && P.past.length) ? P.past.length + (P.past.length === 1 ? " season" : " seasons") : "none", past);
+      (P.past && P.past.length) ? P.past.length + (P.past.length === 1 ? " season" : " seasons") : "none", past, pastPeek);
 
     host.innerHTML = h;
     mountProfileChips(host);
+    // The row a closed section shows is a doorway to the rest of it — except
+    // where it carries something of its own, like an opponent's name.
+    host.addEventListener("click", function (e) {
+      var pk = e.target.closest && e.target.closest(".pfoldpeek");
+      if (!pk || e.target.closest("[data-entry], button, a, input, select, label")) return;
+      var d = document.getElementById(pk.getAttribute("data-for"));
+      if (d) d.open = true;
+    });
+
     // A badge opens a small bubble under itself saying what it is for and
     // which gameweeks earned it; tapping it again, another badge, or
     // anywhere else closes it.
@@ -4047,12 +4063,15 @@
   }
   // A folded section: the same title as a summary, closed until tapped, with
   // a short hint of what is inside.
-  function pfold(key, label, hint, inner) {
+  function pfold(key, label, hint, inner, peek) {
     return '<details class="pfold" id="ps-' + key + '" data-ps="' + esc(label) + '">' +
       '<summary><div class="section-title"><h2>' + esc(label) + '</h2><div class="rule"></div>' +
       (hint ? '<span class="chip">' + esc(hint) + '</span>' : '') +
       '<span class="caret" aria-hidden="true">\u25be</span></div></summary>' +
-      '<div class="pfoldbody">' + inner + '</div></details>';
+      '<div class="pfoldbody">' + inner + '</div></details>' +
+      // A closed <details> hides everything inside it, so the row it still
+      // shows lives next to it and steps aside when the section opens.
+      (peek ? '<div class="pfoldpeek" data-for="ps-' + key + '">' + peek + '</div>' : '');
   }
   // The chip row at the top of a profile: one chip per section, sticky under
   // the bar, jumping to the section and following the scroll.
@@ -4106,9 +4125,14 @@
         if (on !== b.classList.contains("on")) {
           b.classList.toggle("on", on);
           if (on) {
+            // Only move the strip when the lit chip cannot be seen: recentring
+            // on every section made the row fidget under the thumb.
             var strip = b.parentNode;
-            var want = b.offsetLeft - (strip.clientWidth - b.offsetWidth) / 2;
-            strip.scrollTo({ left: Math.max(0, want), behavior: reducedMotion() ? "auto" : "smooth" });
+            var l = b.offsetLeft - strip.scrollLeft, r = l + b.offsetWidth;
+            if (l < 8 || r > strip.clientWidth - 8) {
+              var want = b.offsetLeft - (strip.clientWidth - b.offsetWidth) / 2;
+              strip.scrollTo({ left: Math.max(0, want), behavior: reducedMotion() ? "auto" : "smooth" });
+            }
           }
         }
       });
