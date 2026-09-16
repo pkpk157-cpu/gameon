@@ -6,7 +6,7 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#000000",
+  "background_color": "#1e0138",
   "theme_color": "#120a22",
   "categories": [
     "sports",

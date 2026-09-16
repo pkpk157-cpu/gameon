@@ -546,6 +546,7 @@
       (admin ? '<br><span class="warn">Admin mode is on for this device.</span>' : '') +
       '</div>';
 
+    h += drawerCrest();
     $("#youBody").innerHTML = h;
     if (!$("#youBack").classList.contains("show")) pushOverlay();
     $("#youBack").classList.add("show");
@@ -594,6 +595,13 @@
     syncLock();
   }
 
+  // The crest at the foot of a sheet. It sits at the bottom whatever the
+  // sheet holds, and is decoration: no link, nothing for a reader to reach.
+  function drawerCrest() {
+    return '<div class="sheetcrest" aria-hidden="true"><img src="logo-splash.webp" alt="" width="88" height="88" ' +
+      'loading="lazy" decoding="async"></div>';
+  }
+
   // The burger: where you are going, and the two things you set and forget.
   // Everything about you or the league lives under the control on the right.
   function openMenu() {
@@ -613,6 +621,7 @@
       menuItem("pfGwStatus", "steps", "Gameweek status") +
       '</div>';
 
+    h += drawerCrest();
     $("#menuBody").innerHTML = h;
     $all(".menuitem", $("#menuBody")).forEach(function (b) {
       b.addEventListener("click", function () {
