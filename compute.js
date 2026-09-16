@@ -2052,21 +2052,6 @@
     if (streak >= 3) out.push({ k: "climb", label: "Climbing", count: streak, gws: played.slice(-streak), icon: "up",
       why: "Up the Classic table " + streak + " gameweeks running" });
 
-    // Giant killer: a group-stage win over an opponent who stood above them
-    // in the Classic table going into that gameweek. The first finished
-    // gameweek has no "going in" table, so it cannot count.
-    var R = C.h2hRecord(ds, id), kills = [];
-    if (R) R.rows.forEach(function (r) {
-      if (r.result !== "W" || !r.opp || !r.opp.known || r.opp.average) return;
-      var gi = played.indexOf(+r.gw);
-      if (gi < 1) return;
-      var band = cr[played[gi - 1]];
-      var mine = band && band.rank[id], theirs = band && band.rank[+r.opp.id];
-      if (mine && theirs && theirs < mine) kills.push(+r.gw);
-    });
-    if (kills.length) out.push({ k: "giant", label: "Giant killer", count: kills.length, gws: kills, icon: "shield",
-      why: "Beat a side that stood above them in the Classic table going into the gameweek" });
-
     // Survivor: still in Last Manager Standing once a quarter of the field
     // has gone. Before that it is everyone's, and a badge everyone has says
     // nothing.

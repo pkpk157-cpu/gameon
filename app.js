@@ -5,7 +5,7 @@
   "use strict";
 
   var S = window.GO_STORE, K = window.GO_COMPUTE;
-  var ME_KEY = "go12.me", THEME_KEY = "go12.theme", RIVALS_KEY = "go12.rivals", RIVALS_MAX = 3;
+  var ME_KEY = "go12.me", THEME_KEY = "go12.theme", RIVALS_KEY = "go12.rivals", RIVALS_MAX = 2;
   var state = { view: "classic", me: lsGet(ME_KEY), monthKey: null, seasonKey: null, group: null, h2hComp: "UCL" };
 
   /* Minimal line icons (24px, currentColor). */
@@ -3913,6 +3913,17 @@
     }
 
     host.innerHTML = h;
+    // A badge opens a small bubble under itself saying what it is for and
+    // which gameweeks earned it; tapping it again, another badge, or
+    // anywhere else closes it.
+    var bd = $(".badges", host);
+    if (bd) bd.addEventListener("click", function (e) {
+      var btn = e.target.closest(".badge");
+      if (!btn) return;
+      var open = btn.getAttribute("aria-expanded") === "true";
+      closeBubble();
+      if (!open) openBubble(btn, bd);
+    });
     var rvBtn = $("#rvToggle", host);
     if (rvBtn) rvBtn.addEventListener("click", function () {
       var r = toggleRival(id);
@@ -3966,33 +3977,65 @@
     var ids = rivals();
     var h = '<div class="section-title"><h2>Rivals</h2><div class="rule"></div></div>';
     var invite = h + '<div class="note badgesnone">Pin up to ' + RIVALS_MAX + ' rivals from their profiles ' +
-      'and they will sit here, with the gap to each.</div>';
+      'and they will sit here beside you, best total first.</div>';
     if (!ids.length) return invite;
     var rows = K.classic(ds), by = {};
     rows.forEach(function (r) { by[+r.id] = r; });
     var me = by[+meId];
+    if (!me) return invite;
+    // You and your rivals as one short table, in the order the Classic
+    // table has you — so who is ahead is the order, not a sum to do.
+    var set = ids.map(function (rid) { return rid === +meId ? null : by[rid]; })
+      .filter(function (r) { return !!r; });
+    if (!set.length) return invite; // every pin was someone gone, or you
+    set.push(me);
+    set.sort(function (a, b) { return (a.computedRank - b.computedRank) || (a.order - b.order); });
     var live = K.liveGwId(ds);
     var gwLabel = "GW" + (live || K.currentGw(ds) || "");
-    var gap = function (n, lab) {
-      var cls = n > 0 ? "up" : (n < 0 ? "down" : "");
-      var txt = n > 0 ? "+" + num(n) : (n < 0 ? "\u2212" + num(-n) : "level");
-      return '<div class="rvgap"><b class="' + cls + '">' + txt + '</b><span>' + esc(lab) + '</span></div>';
-    };
-    var items = ids.map(function (rid) {
-      var r = by[rid];
-      // Pinning someone and then becoming them leaves a rival who is you.
-      if (!r || !me || rid === +meId) return "";
-      return '<div class="rival" data-entry="' + r.id + '" role="button" tabindex="0">' +
-        '<div class="rvwho"><b>' + esc(r.entryName) + '</b>' +
-          '<span>' + esc(r.playerName) + ' \u00b7 #' + r.computedRank + '</span></div>' +
-        gap((me.eventTotal || 0) - (r.eventTotal || 0), gwLabel) +
-        gap((me.total || 0) - (r.total || 0), "season") +
-        '<button type="button" class="rvcmp" data-cmp="' + r.id + '" aria-label="Compare with ' +
-          esc(r.entryName) + '">' + svg("h2h", 16) + '</button>' +
-        '</div>';
+    var body = set.map(function (r) {
+      var mine = +r.id === +meId;
+      return '<tr' + (mine ? ' class="me"' : '') + '>' +
+        '<td class="num"><span class="r">' + r.computedRank + '</span></td>' +
+        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span>' +
+          '<div class="mgr">' + esc(r.playerName) + '</div></td>' +
+        '<td class="num">' + num(r.eventTotal) + '</td>' +
+        '<td class="num"><b>' + num(r.total) + '</b></td>' +
+        '<td class="rvact">' + (mine ? '' :
+          '<button type="button" class="rvcmp" data-cmp="' + r.id + '" aria-label="Compare with ' +
+          esc(r.entryName) + '">' + svg("h2h", 16) + '</button>') + '</td></tr>';
     }).join("");
-    if (!items) return invite; // every pin was someone gone, or you
-    return h + '<div class="card"><div class="rivals" id="rivalsBox">' + items + '</div></div>';
+    return h + '<div class="card"><div class="tablewrap" id="rivalsBox"><table class="t rvtbl"><thead><tr>' +
+      '<th class="num">#</th><th>Team</th><th class="num">' + esc(gwLabel) + '</th><th class="num">Total</th><th></th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  }
+
+  function closeBubble() {
+    var b = $(".bbubble");
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+    $all(".badge[aria-expanded=true]").forEach(function (x) { x.setAttribute("aria-expanded", "false"); });
+    document.removeEventListener("click", bubbleAway, true);
+  }
+  function bubbleAway(e) {
+    if (e.target.closest && (e.target.closest(".bbubble") || e.target.closest(".badge"))) return;
+    closeBubble();
+  }
+  function openBubble(btn, wrap) {
+    var b = document.createElement("div");
+    b.className = "bbubble";
+    b.setAttribute("role", "note");
+    b.textContent = btn.getAttribute("data-why") || "";
+    wrap.appendChild(b);
+    btn.setAttribute("aria-expanded", "true");
+    // Under the chip, its arrow on the chip's middle, and never past the row's
+    // own edges.
+    var wr = wrap.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    var mid = br.left + br.width / 2 - wr.left;
+    var w = Math.min(b.offsetWidth, wr.width);
+    var left = Math.max(0, Math.min(wr.width - w, mid - w / 2));
+    b.style.left = left + "px";
+    b.style.top = (br.bottom - wr.top + 8) + "px";
+    b.style.setProperty("--arrow", Math.max(12, Math.min(w - 12, mid - left)) + "px");
+    setTimeout(function () { document.addEventListener("click", bubbleAway, true); }, 0);
   }
 
   // One badge chip: icon, name, and the count or size behind it. The title
@@ -4004,8 +4047,8 @@
     var when = b.gws && b.gws.length
       ? " \u00b7 " + (b.k === "month" ? b.gws.join(", ") : b.gws.map(function (g) { return "GW" + g; }).join(", "))
       : "";
-    return '<span class="badge" title="' + esc(b.why + when) + '">' + sicon(b.icon) +
-      esc(b.label) + '<b>' + esc(what) + '</b></span>';
+    return '<button type="button" class="badge" aria-expanded="false" data-why="' + esc(b.why + when) + '">' +
+      sicon(b.icon) + esc(b.label) + '<b>' + esc(what) + '</b></button>';
   }
   // The same badges as one line of text, for a table cell.
   function badgeText(ds, id) {
