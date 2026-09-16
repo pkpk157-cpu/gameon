@@ -41,7 +41,15 @@
     <button class="menubtn" id="barMenu" title="Sections" aria-label="Sections"></button>
     <div class="barwrap">
       <h1 class="bartitle" id="barTitle">Classic League</h1>
-      <div class="barsub" id="barSub"></div>
+      <div class="barline">
+        <div class="barsub" id="barSub"></div>
+        <!-- On another manager's page: compare with yours, or keep an eye on
+             him. They sit with his name rather than in the page under it. -->
+        <div class="barpills" id="barPills" style="display:none">
+          <button type="button" class="barpill" id="cmpMe">Compare</button>
+          <button type="button" class="barpill" id="rvToggle" aria-pressed="false">Rival</button>
+        </div>
+      </div>
     </div>
     <button class="infobtn" id="barInfo" title="Rules" aria-label="Competition rules" style="display:none"></button>
     <div class="spacer"></div>

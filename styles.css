@@ -1089,11 +1089,27 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   border:1px solid var(--accent); background:var(--accent-tint); color:var(--accent); }
 .cmpme:hover { background:var(--accent-wash); }
 .cmpme:active { transform:translateY(1px); }
-/* two controls on the name line: compare, and pin as a rival */
-.youline.two { display:grid; grid-template-columns:1fr auto; gap:8px; }
-.youline.two .cmpme { width:auto; margin-bottom:8px; }
-.rvbtn { white-space:nowrap; }
-.rvbtn.on { background:var(--accent); color:#fff; }
+/* Compare and Rival, in the bar beside the manager's name. They are the two
+   things you do to somebody else's page, so they ride with his name rather
+   than sitting in the page under it. */
+/* the name keeps the top line to itself; these ride on the line below it */
+.barline { display:flex; align-items:center; gap:10px; min-width:0; }
+.barline .barsub { flex:1; min-width:0; }
+.barpills { display:flex; gap:6px; flex:none; margin:2px 0 -1px; }
+.barpill { appearance:none; cursor:pointer; font:inherit; font-size:12px; font-weight:700;
+  padding:6px 12px; border-radius:999px; white-space:nowrap;
+  border:1px solid var(--bar-line); background:var(--bar-fill); color:var(--bar-ink); }
+.barpill:hover { border-color:var(--pl-green); color:var(--pl-green); }
+.barpill.on { background:var(--pl-green); border-color:var(--pl-green); color:#06231a; }
+.barpill.on:hover { color:#06231a; }
+/* On a phone the bar has to hold a back arrow, the burger, the name, these
+   two and the person icon. The pills give up what they can so the name keeps
+   as many letters as possible. */
+@media (max-width:389px) {
+  .barpill { font-size:11.5px; padding:5px 10px; }
+  .barpills { gap:5px; }
+  .barline { gap:8px; }
+}
 /* the rivals strip: one row each, the gaps in your favour when green */
 /* ---- profile: section chips and folds ---------------------------------- */
 /* The bar must rest exactly where it sticks, or it jumps the moment it

@@ -2000,6 +2000,19 @@
     $("#barMenu").addEventListener("click", function () { openMenu(); });
     $("#barYou").innerHTML = svg("person", 19);
     $("#barYou").addEventListener("click", function () { openProfile(); });
+    $("#cmpMe").addEventListener("click", function () {
+      // Nobody can be compared against until the reader has said who they
+      // are, so send them to do that rather than opening a half-empty page.
+      if (!state.me) { toast("Pick your team first"); openProfile({ edit: true }); return; }
+      state.cmpA = state.me; state.cmpB = +state.profileId;
+      location.hash = "compare";
+    });
+    $("#rvToggle").addEventListener("click", function () {
+      var r = toggleRival(state.profileId);
+      if (r === "full") { toast("You already have " + RIVALS_MAX + " rivals \u2014 unpin one first"); return; }
+      toast(r === "added" ? "Pinned as a rival" : "Rival unpinned");
+      paintRivalPill();
+    });
     // Tap a player anywhere a pitch is drawn: the FPL-style points breakdown.
     document.addEventListener("click", function (e) {
       var card = e.target.closest && e.target.closest(".pcard[data-el], .mrow[data-el]");
@@ -2254,6 +2267,22 @@
     var info = $("#barInfo");
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
     else { info.style.display = "none"; info.removeAttribute("data-rules"); }
+
+    // Compare and Rival belong to somebody else's page, beside his name.
+    var pills = $("#barPills");
+    var onOther = state.view === "profile" && state.profileId && !isMe(state.profileId) &&
+                  !!(S.dataset() || {}).managers;
+    pills.style.display = onOther ? "" : "none";
+    if (onOther) paintRivalPill();
+  }
+  // The rival pill carries its own state: lit while he is one of yours.
+  function paintRivalPill() {
+    var b = $("#rvToggle");
+    if (!b) return;
+    var on = isRival(state.profileId);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.title = on ? "One of your rivals \u2014 tap to unpin" : "Keep an eye on this manager";
   }
   function goBack() {
     // A match was opened from a list of fixtures; that is where back leads.
@@ -3842,12 +3871,9 @@
     var P = K.managerProfile(ds, id);
     // The manager's team and name live in the top bar, so they are not
     // repeated here. One compact card per competition.
-    var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>'
-      : '<div class="youline two"><button type="button" class="cmpme" id="cmpMe">' +
-        'Compare with my team</button>' +
-        '<button type="button" class="cmpme rvbtn' + (isRival(id) ? ' on' : '') + '" id="rvToggle" ' +
-        'aria-pressed="' + (isRival(id) ? 'true' : 'false') + '">' +
-        (isRival(id) ? 'Rival \u2713' : 'Pin as rival') + '</button></div>';
+    // Compare and Rival now sit in the bar beside his name; this page keeps
+    // only the note that says when it is your own.
+    var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : "";
     // What they have done this season, as chips; on your own page an empty
     // row says what the first one takes, on anyone else's it just is not there.
     var B = K.badges(ds, id);
@@ -4004,29 +4030,12 @@
       closeBubble();
       if (!open) openBubble(btn, bd);
     });
-    var rvBtn = $("#rvToggle", host);
-    if (rvBtn) rvBtn.addEventListener("click", function () {
-      var r = toggleRival(id);
-      if (r === "full") { toast("You already have " + RIVALS_MAX + " rivals \u2014 unpin one first"); return; }
-      toast(r === "added" ? "Pinned as a rival" : "Rival unpinned");
-      rvBtn.classList.toggle("on", r === "added");
-      rvBtn.setAttribute("aria-pressed", r === "added" ? "true" : "false");
-      rvBtn.textContent = r === "added" ? "Rival \u2713" : "Pin as rival";
-    });
     var rvBox = $("#rivalsBox", host);
     if (rvBox) rvBox.addEventListener("click", function (e) {
       var c = e.target.closest("[data-cmp]");
       if (!c) return;
       e.stopPropagation();
       state.cmpA = +id; state.cmpB = +c.getAttribute("data-cmp");
-      location.hash = "compare";
-    });
-    var cmpBtn = $("#cmpMe", host);
-    if (cmpBtn) cmpBtn.addEventListener("click", function () {
-      // Nobody can be compared against until the reader has said who they
-      // are, so send them to do that rather than opening a half-empty page.
-      if (!state.me) { toast("Pick your team first"); openProfile({ edit: true }); return; }
-      state.cmpA = state.me; state.cmpB = +id;
       location.hash = "compare";
     });
     var h2hBtn = $("#h2hAll", host);
