@@ -3876,10 +3876,10 @@
     var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : "";
     // What they have done this season, as chips; on your own page an empty
     // row says what the first one takes, on anyone else's it just is not there.
+    // Badges are won, not listed: with none there is nothing to say, so
+    // nothing is said.
     var B = K.badges(ds, id);
     if (B.length) h += '<div class="badges">' + B.map(badgeHtml).join("") + '</div>';
-    else if (isMe(id)) h += '<div class="note badgesnone">No badges yet. The first comes with a ' +
-      'gameweek top score, a century, or a month won.</div>';
 
     // Your rivals, on your own page: where each stands against you this
     // gameweek and this season. Pinned from their profiles; kept on the phone.
