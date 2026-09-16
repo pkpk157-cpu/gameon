@@ -1070,6 +1070,13 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .badge svg { color:var(--gold); flex:none; }
 .badge b { font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; }
 .badge[aria-expanded="true"] { background:color-mix(in srgb, var(--gold) 22%, transparent); }
+/* Form badges say where a manager stands today, not what he has won, and they
+   can go away again. Outlined rather than filled, so one leaving the row
+   reads as a change in standing rather than something broken. */
+.badge.form { border-style:dashed; border-color:color-mix(in srgb, var(--ink) 26%, transparent);
+  background:transparent; color:var(--ink-soft); }
+.badge.form svg, .badge.form b { color:var(--ink-soft); }
+.badge.form[aria-expanded="true"] { background:color-mix(in srgb, var(--ink) 8%, transparent); }
 /* the bubble a badge opens: what it is for, and when */
 .bbubble { position:absolute; z-index:5; max-width:min(300px, 100%); padding:9px 12px; border-radius:12px;
   font-size:12.5px; font-weight:600; line-height:1.4; color:var(--ink);

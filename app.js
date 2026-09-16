@@ -58,7 +58,9 @@
     steady: '<path d="M4 12h16"/><path d="M7.5 9.4v5.2M12 8.6v6.8M16.5 9.4v5.2"/>',
     shield: '<path d="M12 3.4 5.2 6.2v5.6c0 4 2.7 7.2 6.8 8.6 4.1-1.4 6.8-4.6 6.8-8.6V6.2Z"/>',
     medal: '<circle cx="12" cy="14.9" r="5.5"/><path d="M8.3 9.6 5.2 3.5h13.6l-3.1 6.1"/>',
-    flame: '<path d="M12 4.4c4.2 3.4 6.4 6.4 6.4 9.6a6.4 6.4 0 0 1-12.8 0c0-2 1-3.7 2.3-5 .25 1.8 1.25 2.9 2.25 2.9 1.35 0 1.85-1.45 1.35-3.6-.25-1.45-1.1-2.85-1.5-3.9Z"/>'
+    flame: '<path d="M12 4.4c4.2 3.4 6.4 6.4 6.4 9.6a6.4 6.4 0 0 1-12.8 0c0-2 1-3.7 2.3-5 .25 1.8 1.25 2.9 2.25 2.9 1.35 0 1.85-1.45 1.35-3.6-.25-1.45-1.1-2.85-1.5-3.9Z"/>',
+    crown: '<path d="M4 18.4h16"/><path d="M4 16 3 7.2l4.6 3.2L12 4.4l4.4 6 4.6-3.2L20 16Z"/>',
+    steps: '<path d="M3.4 20h4.3v-5.2H12V9.6h4.3V4.4h4.3"/><path d="M3.4 20h17.2"/>'
   };
   function sicon(name) {
     if (!SICONS[name]) return "";
@@ -4210,23 +4212,27 @@
     setTimeout(function () { document.addEventListener("click", bubbleAway, true); }, 0);
   }
 
-  // One badge chip: icon, name, and the count or size behind it. The title
-  // says what it is for and which gameweeks earned it.
+  // One badge chip: icon, name, and the count or standing behind it. The
+  // bubble says what it is for and which gameweeks, months or seasons earned
+  // it. A form badge is outlined rather than filled and reads in the present
+  // tense, because it is where the manager stands today and can go away.
   function badgeHtml(b) {
-    var what = b.k === "survivor" ? (num(b.count) + " left")
-             : b.k === "climb" ? (b.count + " GWs")
-             : ("\u00d7" + b.count);
+    var what = b.tag || ("\u00d7" + b.count);
     var when = b.gws && b.gws.length
-      ? " \u00b7 " + (b.k === "month" ? b.gws.join(", ") : b.gws.map(function (g) { return "GW" + g; }).join(", "))
+      ? " \u00b7 " + b.gws.map(function (g) {
+          return typeof g === "number" ? "GW" + g : g;
+        }).join(", ")
       : "";
-    return '<button type="button" class="badge" aria-expanded="false" data-why="' + esc(b.why + when) + '">' +
+    var why = (b.form ? "Right now: " : "") + b.why + when;
+    return '<button type="button" class="badge' + (b.form ? " form" : "") +
+      '" aria-expanded="false" data-why="' + esc(why) + '">' +
       sicon(b.icon) + esc(b.label) + '<b>' + esc(what) + '</b></button>';
   }
   // The same badges as one line of text, for a table cell.
   function badgeText(ds, id) {
     var B = K.badges(ds, id);
     return B.length ? B.map(function (b) {
-      return b.label + (b.k === "survivor" ? "" : " \u00d7" + b.count);
+      return b.label + (b.tag ? " " + b.tag : "");
     }).join(", ") : "none";
   }
 

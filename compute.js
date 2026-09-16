@@ -1999,70 +1999,262 @@
     return count ? out.slice(-count) : out;
   };
 
-  // Badges: things a manager has done this season that are worth a chip on
-  // the profile. Every one is settled data — finished gameweeks, finished
-  // months, a result the record already holds — so a badge never appears
-  // and then goes away when a score moves. Each carries the gameweeks or
-  // months behind it, so the chip can say exactly what it is for.
+  /* Facts about the league in one finished gameweek that several badges need
+     at once: the highest score, the best armband, and how many squads held
+     each player. Every squad is read once here rather than once per badge,
+     and the answer is kept until the data changes. */
+  var _gwf = { key: null, val: null };
+  function gwFacts(ds) {
+    var played = C.finishedGws(ds);
+    var key = (ds.updatedAt || "") + "|" + played.join(",");
+    if (_gwf.key === key) return _gwf.val;
+    var out = {};
+    played.forEach(function (g) {
+      var best = null, capBest = null, own = {}, caps = {}, squads = 0;
+      var hist = ds.history || {};
+      (ds.managers || []).forEach(function (m) {
+        var r = (hist[m.id] || {})[g];
+        if (r && typeof r.p === "number" && (best === null || r.p > best)) best = r.p;
+      });
+      var pk = picksAt(ds, g), lp = liveAt(ds, g) || {};
+      if (pk) Object.keys(pk).forEach(function (mid) {
+        var p = (pk[mid] || {}).p;
+        if (!p || !p.length) return;
+        squads++;
+        var seen = {}, wore = null, mult = 0;
+        p.forEach(function (t) {
+          if (!seen[t[0]]) { seen[t[0]] = 1; own[t[0]] = (own[t[0]] || 0) + 1; }
+          // The armband as it ended up. A captain who did not play hands it to
+          // the vice, and the stored squad carries that as the multiplier, so
+          // reading the multiplier reads the armband that actually counted.
+          if (t[1] >= 2 && t[1] > mult) { mult = t[1]; wore = t[0]; }
+        });
+        // Who wore it, so a badge can ask how many others wore the same one.
+        if (wore !== null) {
+          caps[wore] = (caps[wore] || 0) + 1;
+          var pts = lp[wore];
+          if (typeof pts === "number" && (capBest === null || pts > capBest)) capBest = pts;
+        }
+      });
+      out[g] = { best: best, capBest: capBest, own: own, caps: caps, squads: squads,
+                 lp: lp, picks: pk };
+    });
+    _gwf = { key: key, val: out };
+    return out;
+  }
+
+  /* Who won a group and who went up a division: league-wide answers that are
+     the same for everybody, so they are worked out once and looked up. */
+  var _snf = { key: null, val: null };
+  function seasonFacts(ds) {
+    var key = (ds.updatedAt || "") + "|" + C.finishedGws(ds).join(",");
+    if (_snf.key === key) return _snf.val;
+    var groupWins = {}, promos = {};
+
+    (C.h2h(ds).groups || []).forEach(function (G) {
+      if (!G.complete) return;
+      var top = (G.table || [])[0];
+      if (top) (groupWins[+top.id] || (groupWins[+top.id] = [])).push(G.name);
+    });
+
+    var P = C.pyramid(ds);
+    var order = {}; (P.divisions || []).forEach(function (d, i) { order[d.key] = i; });
+    function divisionOf(season) {
+      var r = (P.rosters || {})[season.key] || {}, at = {};
+      Object.keys(r).forEach(function (k) {
+        (r[k] || []).forEach(function (mid) { at[+mid] = k; });
+      });
+      return at;
+    }
+    var seasons = P.seasons || [];
+    for (var s = 1; s < seasons.length; s++) {
+      // A mini-season that is not over has promoted nobody. The next season's
+      // divisions are derived from it provisionally and can still move, and a
+      // badge is not given for a standing that is still being played.
+      if (!seasons[s - 1].complete) break;
+      var was = divisionOf(seasons[s - 1]), now = divisionOf(seasons[s]), name = seasons[s].name;
+      Object.keys(now).forEach(function (mid) {
+        var a = was[mid], b = now[mid];
+        if (a && b && order[b] < order[a]) (promos[mid] || (promos[mid] = [])).push(name);
+      });
+    }
+    var val = { groupWins: groupWins, promos: promos };
+    _snf = { key: key, val: val };
+    return val;
+  }
+
+  // An overall FPL rank in as few characters as a chip has room for.
+  function shortRank(n) {
+    if (n < 1000) return String(n);
+    return (Math.round(n / 100) / 10) + "k";
+  }
+
+  // Badges: what a manager has done this season, and where he stands today.
+  //
+  // An honour is settled and permanent. It is read from finished gameweeks,
+  // finished months and finished mini-seasons, it never goes away once it is
+  // won, and winning it again adds to the count. A form badge is the
+  // opposite: it is true today and can stop being true next week. Those are
+  // marked as such, worded in the present tense and drawn differently, so one
+  // leaving a profile reads as a change in standing rather than a fault.
+  //
+  // Each badge carries the gameweeks, months or seasons behind it, so the
+  // chip can say exactly what it is for.
   C.badges = function (ds, id) {
     if (!ds || !id || !ds.managers || !ds.managers.length) return [];
     id = +id;
-    var out = [];
+    var honours = [], form = [];
     var played = C.finishedGws(ds);
-    var h = ds.history[id] || {};
+    var h = (ds.history || {})[id] || {};
+    var F = gwFacts(ds), SF = seasonFacts(ds), cr = classicRankByGw(ds);
 
-    // The league's highest score in a gameweek; a tie shares it. A century
-    // is a hundred points or more. Both use the gameweek points FPL reports,
-    // before hits — the number the Classic table's GW column shows.
-    var tops = [], cents = [];
-    played.forEach(function (g) {
-      var best = null;
-      ds.managers.forEach(function (m) {
-        var r = (ds.history[m.id] || {})[g];
-        if (r && typeof r.p === "number" && (best === null || r.p > best)) best = r.p;
-      });
-      var mine = h[g];
+    function honour(k, label, count, gws, icon, tag, why) {
+      honours.push({ k: k, label: label, count: count, gws: gws || [], icon: icon,
+                     tag: tag, why: why, form: false });
+    }
+    function now(k, label, count, gws, icon, tag, why) {
+      form.push({ k: k, label: label, count: count, gws: gws || [], icon: icon,
+                  tag: tag, why: why, form: true });
+    }
+
+    // Which chip was played in which gameweek, from the manager's own record.
+    var chipAt = {};
+    ((ds.chips || {})[id] || []).forEach(function (c) { chipAt[c.gw] = c.n; });
+
+    /* ---- one pass over the finished gameweeks -------------------------- */
+    var tops = [], dbls = [], cents = [], backs = [], arms = [], caps = [],
+        diffs = [], cleans = [];
+    played.forEach(function (g, i) {
+      var f = F[g] || {}, mine = h[g];
       if (!mine || typeof mine.p !== "number") return;
-      if (best !== null && mine.p === best) tops.push(g);
-      if (mine.p >= 100) cents.push(g);
-    });
-    if (tops.length) out.push({ k: "top", label: "Top scorer", count: tops.length, gws: tops, icon: "trophy",
-      why: "The league\u2019s highest score of the gameweek" });
-    if (cents.length) out.push({ k: "century", label: "Century", count: cents.length, gws: cents, icon: "sparkle",
-      why: "100 points or more in a gameweek" });
+      var sq = f.picks && f.picks[id];
 
-    // Manager of the Month, for months that are over.
+      // The gameweek points FPL reports, before hits — the number the Classic
+      // table's GW column shows.
+      if (f.best !== null && f.best !== undefined && mine.p === f.best) tops.push(g);
+      if (mine.p >= 200) dbls.push(g);
+      if (mine.p >= 100) cents.push(g);
+
+      // Comeback: seventy-five places or more up the Classic table in one
+      // gameweek. Fifty places is an ordinary week in a field of this size.
+      if (i > 0) {
+        var at = cr[g] && cr[g].rank[id], before = cr[played[i - 1]] && cr[played[i - 1]].rank[id];
+        if (at && before && before - at >= 75) backs.push(g);
+      }
+
+      // Clean sheet: nothing spent on hits and nothing left scoring on the
+      // bench. A Bench Boost week cannot waste bench points, so it is not one.
+      var chip = chipAt[g] || (sq && sq.c) || "";
+      if (chip !== "bboost" && !(mine.h || 0) && !(mine.b || 0)) cleans.push(g);
+
+      var pl = sq && sq.p;
+      if (!pl || !pl.length) return;
+
+      // The armband that counted, and what it brought in after doubling.
+      var capEl = null, capMult = 0;
+      pl.forEach(function (t) { if (t[1] >= 2 && t[1] > capMult) { capMult = t[1]; capEl = t[0]; } });
+      var capPts = (capEl !== null && typeof f.lp[capEl] === "number") ? f.lp[capEl] : null;
+      if (capPts !== null) {
+        if (capPts * capMult >= 40) caps.push(g);
+        // Best armband is for the call, not the haul: the league's top captain
+        // when most of the league was somewhere else. Where the best captain
+        // was also the obvious one, picking him was not a decision and nobody
+        // gets it — which is what keeps this apart from the haul above.
+        if (f.capBest !== null && capPts === f.capBest && f.squads &&
+            (f.caps[capEl] || 0) / f.squads < 0.25) arms.push(g);
+      }
+
+      // Differential: someone in the eleven that fewer than a tenth of the
+      // league held, with fifteen points or more. Ownership is counted the
+      // way FPL counts its own — squad membership, bench included.
+      if (f.squads) {
+        var got = false;
+        pl.forEach(function (t) {
+          if (got || !(t[1] > 0)) return;
+          var pts = f.lp[t[0]];
+          if (typeof pts !== "number" || pts < 15) return;
+          if ((f.own[t[0]] || 0) / f.squads < 0.1) got = true;
+        });
+        if (got) diffs.push(g);
+      }
+    });
+
+    /* ---- honours: settled, permanent, and they stack ------------------- */
     var months = [];
     C.monthly(ds).forEach(function (m) {
       if (!m.complete) return;
       var r = (m.rows || []).filter(function (x) { return +x.id === id; })[0];
       if (r && r.pos === 1) months.push(m.label || m.name);
     });
-    if (months.length) out.push({ k: "month", label: "Manager of the Month", count: months.length, gws: months, icon: "medal",
-      why: "Won the month" });
+    if (months.length) honour("month", "Manager of the Month", months.length, months, "medal",
+      "×" + months.length, "Won the month");
+
+    var groupWins = SF.groupWins[id] || [];
+    if (groupWins.length) honour("group", "Group winner", groupWins.length, groupWins, "users",
+      "×" + groupWins.length, "Topped a group when the group stage ended");
+
+    var ups = SF.promos[id] || [];
+    if (ups.length) honour("promo", "Promoted", ups.length, ups, "steps",
+      "×" + ups.length, "Went up a division between mini-seasons");
+
+    if (tops.length) honour("top", "Top scorer", tops.length, tops, "trophy",
+      "×" + tops.length, "The league’s highest score of the gameweek");
+    if (dbls.length) honour("dbl", "Double ton", dbls.length, dbls, "star",
+      "×" + dbls.length, "200 points or more in a gameweek");
+    if (cents.length) honour("century", "Century", cents.length, cents, "sparkle",
+      "×" + cents.length, "100 points or more in a gameweek");
+    if (backs.length) honour("comeback", "Comeback", backs.length, backs, "chart",
+      "×" + backs.length, "Up 75 places or more in the Classic table in one gameweek");
+    if (arms.length) honour("armband", "Best armband", arms.length, arms, "target",
+      "×" + arms.length, "The league’s highest-scoring captain, when under a quarter of the league had him");
+    if (caps.length) honour("capt", "Captain fantastic", caps.length, caps, "captain",
+      "×" + caps.length, "An armband worth 40 points or more after doubling");
+    if (diffs.length) honour("diff", "Differential", diffs.length, diffs, "gem",
+      "×" + diffs.length, "Started a player under a tenth of the league owned who scored 15 or more");
+    if (cleans.length) honour("clean", "Clean sheet", cleans.length, cleans, "check",
+      "×" + cleans.length, "No hits taken and nothing left scoring on the bench");
+
+    /* ---- form: true today, and it can stop being true ------------------ */
+    var row = C.classic(ds).filter(function (r) { return +r.id === id; })[0];
+    if (row && row.computedRank === 1) {
+      now("leader", "Leader", 1, [], "crown", "1st", "Top of the Classic table");
+    } else if (row && row.computedRank <= 10) {
+      now("topten", "Top ten", row.computedRank, [], "steady", ordinalOf(row.computedRank),
+        "Inside the top ten of the Classic table");
+    }
+
+    // Overall FPL rank, from the last finished gameweek FPL has ranked.
+    var overall = null;
+    for (var j = played.length - 1; j >= 0; j--) {
+      var rec = h[played[j]];
+      if (rec && rec.r) { overall = rec.r; break; }
+    }
+    if (overall && overall <= 10000) now("top10k", "Top 10k", overall, [], "globe",
+      shortRank(overall), "Inside the top 10,000 of FPL overall");
 
     // Climbing: a better Classic position than the gameweek before, three or
     // more finished gameweeks running, counted back from the latest.
-    var cr = classicRankByGw(ds), streak = 0;
+    var streak = 0;
     for (var i = played.length - 1; i >= 1; i--) {
       var a = cr[played[i]] && cr[played[i]].rank[id];
       var b = cr[played[i - 1]] && cr[played[i - 1]].rank[id];
       if (a && b && a < b) streak++; else break;
     }
-    if (streak >= 3) out.push({ k: "climb", label: "Climbing", count: streak, gws: played.slice(-streak), icon: "up",
-      why: "Up the Classic table " + streak + " gameweeks running" });
+    if (streak >= 3) now("climb", "Climbing", streak, played.slice(-streak), "up",
+      streak + " GWs", "Up the Classic table " + streak + " gameweeks running");
 
-    // Survivor: still in Last Manager Standing once a quarter of the field
-    // has gone. Before that it is everyone's, and a badge everyone has says
+    // Survivor: still in Last Manager Standing once a quarter of the field has
+    // gone. Before that it is everyone's, and a badge everyone has says
     // nothing.
     var lms = C.lms(ds);
     if (lms && lms.survivors && !lms.eliminatedAt[id] &&
         lms.survivors.some(function (x) { return +x.id === id; })) {
       var total = ds.managers.length, left = lms.survivors.length, gone = total - left;
-      if (gone * 4 >= total) out.push({ k: "survivor", label: "Survivor", count: left, gws: [], icon: "flame",
-        why: "Still standing in Last Manager with " + gone + " of " + total + " out" });
+      if (gone * 4 >= total) now("survivor", "Survivor", left, [], "flame", left + " left",
+        "Still standing in Last Manager with " + gone + " of " + total + " out");
     }
-    return out;
+
+    return honours.concat(form);
   };
 
   // Where a manager stands against the money in every competition at once —
