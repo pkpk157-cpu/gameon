@@ -454,18 +454,21 @@
       // A survivor with no score for a finished GW counts as 0 (didn't play).
       contenders.forEach(function (c) { if (c.score === null) c.score = 0; });
 
+      // Worst first, since this decides who goes out. The league's order:
+      // score, then bench points, then goals, then clean sheets, then assists
+      // across the playing XI — more of any of them keeps you up. The week's
+      // table is shown in this same order, so what the page shows is the order
+      // the eliminations were read off, not an approximation of it.
+      var order = function (a, b) {
+        return (a.score - b.score) || (a.bench - b.bench) ||
+               lmsTieBreak(ds, a.id, b.id, [gw]);
+      };
+      contenders.sort(order);
+
       var eliminatedIds, unresolved = null;
       if (manualElim[gw]) {
         eliminatedIds = manualElim[gw].filter(function (id) { return alive[id]; });
       } else {
-        // Worst first, since this decides who goes out. The league's order:
-        // score, then bench points, then goals, then clean sheets, then assists
-        // across the playing XI — more of any of them keeps you up.
-        var order = function (a, b) {
-          return (a.score - b.score) || (a.bench - b.bench) ||
-                 lmsTieBreak(ds, a.id, b.id, [gw]);
-        };
-        contenders.sort(order);
         var forced = carriedTies[gw] || [];
 
         // Managers the rules cannot separate are one block. If the cut falls
@@ -506,6 +509,9 @@
 
       // Full week table: every survivor at start of GW, scored, worst first.
       var elimSet = {}; eliminatedIds.forEach(function (id) { elimSet[id] = 1; });
+      // contenders is already in the order above; re-sorting it on score and
+      // bench alone would drop the goals, clean sheets and assists that
+      // separated the managers those two could not.
       var table = contenders.map(function (c) {
         var hh = (ds.history[c.id] && ds.history[c.id][gw]) ? ds.history[c.id][gw] : null;
         var pc = playedCount(ds, c.id, gw);
@@ -513,7 +519,7 @@
                  score: c.score, bench: c.bench, hit: hh ? hh.h : 0,
                  played: pc.played, playedTotal: pc.total,
                  eliminated: !!elimSet[c.id] };
-      }).sort(function (a, b) { return (a.score - b.score) || (a.bench - b.bench); });
+      });
 
       perGw.push({
         gw: gw, need: need, sog: sog, eog: eog, table: table, unresolved: unresolved,
