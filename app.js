@@ -3500,9 +3500,23 @@
     var c = m && m[7];
     return (typeof c === "number" && c > 0) ? c : 0;
   }
+  // Photographs whose player has changed club since the shot was taken. They
+  // are named after the player, so a transfer leaves him in the old shirt;
+  // until the league publishes a new one he wears the jersey the app draws.
+  var _hidden = null, _hiddenFor = null;
+  function faceHidden(code) {
+    var ds = S.dataset();
+    if (!ds) return false;
+    if (_hiddenFor !== ds) {
+      _hidden = {};
+      (ds.faceHide || []).forEach(function (c) { _hidden[String(c)] = 1; });
+      _hiddenFor = ds;
+    }
+    return !!_hidden[String(code)];
+  }
   function facePic(el, cls) {
     var code = faceCode(el);
-    if (!code) return "";
+    if (!code || faceHidden(code)) return "";
     return '<img class="facepic' + (cls ? " " + cls : "") + '" src="photos/p' + code +
       '.webp" alt="" loading="lazy" decoding="async">';
   }

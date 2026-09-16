@@ -994,6 +994,28 @@ async function h2hAll(id) {
     Object.keys(gwStamps).forEach((k) => { if (!Object.keys(gwStamps[k]).length) delete gwStamps[k]; });
   }
 
+  // A photograph is filed under the player, not the club, so a transfer leaves
+  // the old shirt behind: the league re-shoots a player in his new kit, but not
+  // the day he signs. photos/kits.json records which club each stored
+  // photograph shows, and which ones the photo job knows are behind; anyone on
+  // that list, or whose club no longer matches what the photograph shows, has
+  // his picture held back and wears the club jersey the app draws instead.
+  const faceHide = (() => {
+    let kits;
+    try { kits = JSON.parse(fs.readFileSync("photos/kits.json", "utf8")); }
+    catch (e) { return []; }
+    const clubOf = {};
+    Object.values(elements).forEach((e) => { if (e && e[7] != null) clubOf[String(e[7])] = e[2]; });
+    const hide = new Set((kits.wrong || []).map(String));
+    Object.entries(kits.kit || {}).forEach(([code, shows]) => {
+      const now = clubOf[code];
+      if (now && shows && now !== shows) hide.add(code);
+    });
+    // only codes we actually hold a photograph for are worth carrying
+    return [...hide].filter((c) => { try { return fs.existsSync("photos/p" + c + ".webp"); } catch (e) { return true; } }).sort();
+  })();
+  if (faceHide.length) console.log("  " + faceHide.length + " photograph(s) held back: the player has changed club since the shot");
+
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name }, rosterAsOf, voluntary,
@@ -1004,7 +1026,7 @@ async function h2hAll(id) {
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps,
-    pending
+    faceHide, pending
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.

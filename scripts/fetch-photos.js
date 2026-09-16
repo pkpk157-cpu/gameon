@@ -20,6 +20,7 @@
    ========================================================================== */
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const OUT = "photos";
 // The jersey behind a pitch card is 42 CSS pixels across, so this is already
@@ -64,6 +65,28 @@ async function get(url, asBuffer) {
 // A picture that is not a picture is worse than no picture: a 200 carrying an
 // HTML error page would be written to disk and served as a broken image for the
 // rest of the season. Check the file really begins the way a PNG begins.
+// Which club does each stored photograph show? A photograph is filed under the
+// player, so a transfer leaves him in the old shirt until the league re-shoots
+// him. This record is what lets the app tell the difference: the club the shot
+// was taken at, the hash of the league's original so a new one can be spotted,
+// and the list the app hides for now.
+const KITS = path.join(OUT, "kits.json");
+function readKits() {
+  try {
+    const k = JSON.parse(fs.readFileSync(KITS, "utf8"));
+    return { v: 1, at: k.at || null, note: k.note, kit: k.kit || {}, src: k.src || {}, wrong: (k.wrong || []).map(String) };
+  } catch (e) {
+    return { v: 1, at: null, kit: {}, src: {}, wrong: [] };
+  }
+}
+function writeKits(k) {
+  k.at = new Date().toISOString();
+  k.note = "kit = the club a stored photograph shows; wrong = photographs still in a club the player has left; src = the hash of the league original, so a new shot can be spotted";
+  k.wrong = [...new Set(k.wrong.map(String))].sort();
+  fs.writeFileSync(KITS, JSON.stringify(k) + "\n");
+}
+const sha1 = (buf) => crypto.createHash("sha1").update(buf).digest("hex");
+
 function isPng(buf) {
   return buf && buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 &&
          buf[2] === 0x4e && buf[3] === 0x47;
@@ -81,9 +104,12 @@ async function main() {
     console.error("Could not read the player list (HTTP " + bs.status + "). Nothing written.");
     process.exit(1);
   }
+  const clubShort = {};
+  (bs.body.teams || []).forEach((t) => { clubShort[t.id] = t.short_name; });
   const players = (bs.body.elements || [])
     .filter((e) => e && e.code)
-    .map((e) => ({ code: String(e.code), name: e.web_name || String(e.id) }));
+    .map((e) => ({ code: String(e.code), name: e.web_name || String(e.id),
+                   club: clubShort[e.team] || null }));
   console.log("  " + players.length + " players, " +
     new Set(players.map((p) => p.code)).size + " distinct photo codes");
   if (!players.length) { console.error("No players. Nothing written."); process.exit(1); }
@@ -155,6 +181,7 @@ async function main() {
   // Gently: this is somebody else's CDN and there is no hurry. A picture that
   // does not arrive is skipped, never retried to death and never fatal — the
   // next run picks it up, and until then that player wears his initials.
+  const kitLog = readKits();
   let got = 0, gone = 0, raw = 0, kept = 0;
   const viaOther = {};
   for (let i = 0; i < missing.length; i += 8) {
@@ -171,6 +198,9 @@ async function main() {
       }
       if (!r) { gone++; return; }
       try {
+        kitLog.kit[p.code] = p.club || kitLog.kit[p.code] || null;
+        kitLog.src[p.code] = sha1(r.body);
+        kitLog.wrong = kitLog.wrong.filter((c) => c !== p.code);
         const small = await sharp(r.body)
           .resize({ width: WIDE, fit: "inside", withoutEnlargement: true })
           .webp({ quality: QUALITY, alphaQuality: 80, effort: 6 })
@@ -184,6 +214,55 @@ async function main() {
     }));
     if (i && i % 200 === 0) { console.log("  " + got + " fetched..."); await sleep(400); }
   }
+  // Transfers: a photograph whose player has since changed club shows the wrong
+  // shirt. Ask the league for his picture again each run; when the bytes change
+  // the shot has been redone and it can be trusted again. Until then the app
+  // holds it back and draws the club jersey instead.
+  const moved = players.filter((p) => {
+    if (!fs.existsSync(path.join(OUT, "p" + p.code + ".webp"))) return false;
+    if (kitLog.wrong.indexOf(p.code) !== -1) return true;
+    const shows = kitLog.kit[p.code];
+    return !!(shows && p.club && shows !== p.club);
+  });
+  if (moved.length) {
+    console.log("\n" + moved.length + " photograph(s) of players who have changed club since the shot:");
+    let refreshed = 0, waiting = 0;
+    for (const p of moved) {
+      let r = null;
+      for (const w of working) {
+        const t = await get(w.cand.url(p.code), true);
+        if (t.ok && isPng(t.body)) { r = t; break; }
+      }
+      if (!r) { console.log("  " + p.name.padEnd(18) + "no picture served at all"); continue; }
+      const h = sha1(r.body), had = kitLog.src[p.code];
+      if (had && h !== had) {
+        try {
+          const small = await sharp(r.body)
+            .resize({ width: WIDE, fit: "inside", withoutEnlargement: true })
+            .webp({ quality: QUALITY, alphaQuality: 80, effort: 6 })
+            .toBuffer();
+          if (small && small.length > 200) {
+            fs.writeFileSync(path.join(OUT, "p" + p.code + ".webp"), small);
+            kitLog.kit[p.code] = p.club;
+            kitLog.src[p.code] = h;
+            kitLog.wrong = kitLog.wrong.filter((c) => c !== p.code);
+            refreshed++;
+            console.log("  " + p.name.padEnd(18) + "a new shot has been published \u2014 taken, now in " + p.club);
+            continue;
+          }
+        } catch (e) { /* fall through to waiting */ }
+      }
+      if (!had) kitLog.src[p.code] = h;
+      if (kitLog.wrong.indexOf(p.code) === -1) kitLog.wrong.push(p.code);
+      waiting++;
+      console.log("  " + p.name.padEnd(18) + "still the old shirt \u2014 he wears the " + (p.club || "club") + " jersey for now");
+    }
+    console.log("  " + refreshed + " redone, " + waiting + " still waiting.");
+  }
+  writeKits(kitLog);
+  console.log("\nKit record: " + Object.keys(kitLog.kit).length + " photographs placed at a club, " +
+    kitLog.wrong.length + " held back.");
+
   await fetchBadges(bs.body.teams || [], sharp);
 
   const all = fs.readdirSync(OUT).filter((f) => f.endsWith(".webp"));
