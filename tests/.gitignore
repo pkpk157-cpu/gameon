@@ -1,4 +1,5 @@
 node_modules/
 bat*.log
 bat.progress
+bat-times.txt
 *.png

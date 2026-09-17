@@ -47,6 +47,9 @@ an environment where a broken suite means a change goes out unchecked.
 ## The pieces
 
 - `battery.sh` — the runner
+- `bat-times.seed.txt` — how long each suite took here, so a machine that has
+  never run them still starts the long ones first; each run then keeps its own
+  `bat-times.txt`, which is not committed
 - `lib/env.js` — path resolution
 - `mkstates.js` — builds the 22 hostile datasets from `data.json`
 - `audit/harness.js` — loads `compute.js` in a sandbox, for the suites that

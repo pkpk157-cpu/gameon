@@ -21,7 +21,7 @@
 # them as they land, for watching a run that is still going.
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 LOG=${1:-bat.log}; JOBS=${2:-4}; shift 2 2>/dev/null
-TIMES=bat-times.txt; PROG=bat.progress
+TIMES=bat-times.txt; SEED=bat-times.seed.txt; PROG=bat.progress
 
 ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pltable pltcrests prsplit lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills errsweep statesweep nullstack2"
 SUITES=${*:-$ALL}
@@ -75,6 +75,7 @@ order() {
   local s t
   for s in $SUITES; do
     t=$(awk -v k="$s" '$1==k {print $2}' "$TIMES" 2>/dev/null | tail -1)
+    [ -z "$t" ] && t=$(awk -v k="$s" '$1==k {print $2}' "$SEED" 2>/dev/null | tail -1)
     echo "${t:-99999} $s"
   done | sort -rn | awk '{print $2}'
 }
