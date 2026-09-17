@@ -64,9 +64,12 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     }
     if (withFiles) await p.screenshot({ path: "crest-table.png" });
     await p.evaluate(() => location.hash = "#profile/1255976"); await p.waitForTimeout(1500);
-    await p.evaluate(() => { const c = document.querySelector(".pcard[data-el]"); c && c.click(); }); await p.waitForTimeout(900);
-    const md = await p.evaluate(() => { const n = document.querySelector(".bdname span"); const i = n && n.querySelector("img.crest"); return { text: n && n.textContent, crest: !!(i && i.complete && i.naturalWidth > 0), img: !!(n && n.querySelector("img")) }; });
-    chk(withFiles ? md.crest : !md.img, withFiles ? "player card: crest before the club" : "player card without files: none left behind", md.text);
+    // A tapped card opens his page; the crest sits beside his club on it. It
+    // used to sit in a sheet that no longer exists.
+    await p.evaluate(() => { const c = document.querySelector(".pcard[data-el]"); c && c.click(); });
+    await p.waitForSelector(".pphead", { timeout: 15000 }); await p.waitForTimeout(900);
+    const md = await p.evaluate(() => { const n = document.querySelector(".ppclub"); const i = n && n.querySelector("img.crest"); return { text: n && n.textContent, crest: !!(i && i.complete && i.naturalWidth > 0), img: !!(n && n.querySelector("img")) }; });
+    chk(withFiles ? md.crest : !md.img, withFiles ? "his page: crest before the club" : "his page without files: none left behind", md.text);
     if (withFiles) await p.screenshot({ path: "crest-player.png", clip: { x: 0, y: 60, width: 390, height: 240 } });
     chk(errs.length === 0, "no JS errors", errs.join(" | "));
     await ctx.close();

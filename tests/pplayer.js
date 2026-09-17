@@ -94,7 +94,7 @@ async function open(b, hash, w, waitFor) {
     chk(r.face && r.crest, "a face and a club crest");
     chk((r.club || "").indexOf((ds.teamNames || {})[meta[2]] || meta[2]) !== -1, "his club in full", r.club);
     // the four numbers, each against the data behind it
-    const labs = ["Total points", "Price", "Owned by FPL", "Owned by Game On"];
+    const labs = ["Total points", "Price", "Owned by FPL", "Owned by GO"];
     chk(r.boxes.length === 4, "four boxes in the rail", JSON.stringify(r.boxes.map(x => x.lab)));
     chk(r.boxes.map(x => x.lab).join("|") === labs.join("|"),
       "in the order asked for", r.boxes.map(x => x.lab).join(" | "));
@@ -125,6 +125,19 @@ async function open(b, hash, w, waitFor) {
     chk(new Set(r.boxes.map(x => x.valTop)).size === 1,
       "and all four numbers sit level, whatever the label above them did",
       JSON.stringify(r.boxes.map(x => x.valTop)));
+    // the page's blocks are the same distance apart all the way down, the tab
+    // switch included \u2014 it is not a card, and the card rhythm used to skip it
+    const gaps = await p.evaluate(() => {
+      const view = document.querySelector('.view[data-view="player"]');
+      const rs = [...view.children].filter(e => e.getBoundingClientRect().height > 0).map(e => e.getBoundingClientRect());
+      return rs.slice(1).map((r, i) => Math.round(r.top - rs[i].bottom));
+    });
+    chk(gaps.length >= 3 && new Set(gaps).size === 1, "every block the same distance from the next", gaps.join(","));
+    chk(await p.evaluate(() => !document.querySelector(".pstnote")), "no caption under the strip");
+    // the columns: none narrower than its own heading, and the flexible one
+    // takes what is left rather than a fixed 150px that belongs to manager names
+    const colsOk = await p.evaluate(() => [...document.querySelectorAll("table.pptbl thead th")].every(th => th.scrollWidth <= th.clientWidth + 1));
+    chk(colsOk, "no column heading is trimmed");
     chk(errs.length === 0, "no page errors", errs.join(" | "));
     await ctx.close();
   }

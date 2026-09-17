@@ -1601,11 +1601,7 @@
     next.forEach(function (f) {
       h += cell(f.gw, f.opp, f.home, fdrChip(f.fdr), "next");
     });
-    return h + '</div><div class="note pstnote">' +
-      (done.length ? "What he has done" : "") +
-      (done.length && next.length ? ", and " : "") +
-      (next.length ? "what is ahead — the number is FPL's difficulty rating, 1 easy to 5 hard" : "") +
-      '</div></div>';
+    return h + '</div></div>';
   }
 
   function renderPlayer(host, ds) {
@@ -1647,7 +1643,7 @@
                 (moved > 0 ? "\u25b2" : "\u25bc") + Math.abs(moved).toFixed(1) + '</b> so far'
               : "unchanged") +
       ppBox("Owned by FPL", P.owned.toFixed(1) + "%", "of all squads") +
-      ppBox("Owned by Game On", P.goOwned == null ? "\u2013" : P.goOwned.toFixed(1) + "%",
+      ppBox("Owned by GO", P.goOwned == null ? "\u2013" : P.goOwned.toFixed(1) + "%",
         P.goOwned == null ? "no squads yet"
           : num(Math.round((P.goOwned / 100) * P.managers)) + " of " + num(P.managers)) +
       '</div></div>';
@@ -1657,7 +1653,7 @@
 
     // 5 — every match, behind and ahead
     var tab = state.ppTab === "fixtures" ? "fixtures" : "results";
-    h += '<div class="pseg psegwide" role="tablist" id="ppSeg">' +
+    h += '<div class="pseg psegwide ppseg" role="tablist" id="ppSeg">' +
       '<button type="button" role="tab" data-pp="results"' +
         (tab === "results" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Results</button>' +
       '<button type="button" role="tab" data-pp="fixtures"' +
@@ -1737,8 +1733,8 @@
       return home ? f[4] + " - " + f[5] : f[5] + " - " + f[4];
     };
     return '<table class="t pptbl"><thead><tr>' +
-      '<th class="num">GW</th><th>Opponent</th><th class="num">Result</th>' +
-      '<th class="num">Points</th><th class="num" aria-label="More"></th>' +
+      '<th class="gw">GW</th><th>Opponent</th><th class="sc">Result</th>' +
+      '<th class="pt">Points</th><th class="more" aria-label="More"></th>' +
       '</tr></thead><tbody>' + rows.map(function (r) {
         var f = r.fixtures[0];
         var opp = r.blank ? '<span class="bdblank">no fixture</span>'
@@ -1748,10 +1744,10 @@
         var pts = r.pts == null ? '<span class="bdblank">–</span>'
           : '<b>' + num(r.pts) + '</b>' + (r.prov ? '<i class="bdprov" title="includes provisional bonus">*</i>' : '');
         return '<tr' + (r.blank ? '' : ' data-ppgw="' + r.gw + '" role="button" tabindex="0"') + '>' +
-          '<td class="num">' + r.gw + '</td><td class="name">' + opp + '</td>' +
-          '<td class="num"><span class="ppsc">' + esc(sc) + '</span></td>' +
-          '<td class="num">' + pts + '</td>' +
-          '<td class="num">' + (r.blank ? '' : '<i class="ppmore" aria-hidden="true">+</i>') + '</td></tr>';
+          '<td class="gw">' + r.gw + '</td><td class="name">' + opp + '</td>' +
+          '<td class="sc"><span class="ppsc">' + esc(sc) + '</span></td>' +
+          '<td class="pt">' + pts + '</td>' +
+          '<td class="more">' + (r.blank ? '' : '<i class="ppmore" aria-hidden="true">+</i>') + '</td></tr>';
       }).join("") + '</tbody></table>';
   }
 
@@ -1759,8 +1755,8 @@
   function ppFixtures(P) {
     if (!P.ahead.length) return '<div class="callout">No fixtures left this season.</div>';
     return '<table class="t pptbl ppfx"><thead><tr>' +
-      '<th>Date</th><th class="num">GW</th><th>Opponent</th>' +
-      '<th class="num" aria-label="Fixture difficulty rating">FDR</th>' +
+      '<th>Date</th><th class="gw">GW</th><th>Opponent</th>' +
+      '<th class="fd" aria-label="Fixture difficulty rating">FDR</th>' +
       '</tr></thead><tbody>' + P.ahead.map(function (f) {
         // Two lines rather than one long one: "Sat, 10 Oct, 02:00 PM" across a
         // phone leaves no room for the rating beside it, and the day and the
@@ -1771,10 +1767,10 @@
             '</b><span>' + esc(d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })) + '</span>'
           : '<b>–</b>';
         return '<tr><td class="ppwhen">' + when + '</td>' +
-          '<td class="num">' + f.gw + '</td>' +
+          '<td class="gw">' + f.gw + '</td>' +
           '<td class="name"><span class="nwrap">' + crest(f.opp) + esc(f.opp) +
           '<i class="bdha">' + (f.home ? "H" : "A") + '</i></span></td>' +
-          '<td class="num">' + fdrChip(f.fdr) + '</td></tr>';
+          '<td class="fd">' + fdrChip(f.fdr) + '</td></tr>';
       }).join("") + '</tbody></table>';
   }
 
