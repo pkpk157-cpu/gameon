@@ -2815,6 +2815,23 @@
      What this is: the fifteen he will own. What it is not: the eleven, the
      captain, or the bench order. None of those are in the transfer log, and
      the page says so rather than drawing a formation it cannot know. */
+  // The fifteen a manager owns right now, as element ids. Prices move overnight
+  // on what is held today, so a transfer already made for the next gameweek
+  // counts and the squad that played last gameweek does not: the pending squad
+  // wins where there is one. Returns null when we hold no squad for him at all,
+  // which the caller must tell apart from an empty one.
+  C.mySquadIds = function (ds, id) {
+    if (!ds || !id) return null;
+    id = +id;
+    var pend = C.pendingSquad(ds, id);
+    if (pend && pend.squad && pend.squad.length) {
+      return pend.squad.map(function (c) { return +c.el; });
+    }
+    var sq = ds.picks && ds.picks[ds.pitchGw] && ds.picks[ds.pitchGw][id];
+    if (sq && sq.p && sq.p.length) return sq.p.map(function (t) { return +t[0]; });
+    return null;
+  };
+
   C.pendingSquad = function (ds, id) {
     var p = ds && ds.pending;
     if (!p || !p.gw || !p.moves) return null;

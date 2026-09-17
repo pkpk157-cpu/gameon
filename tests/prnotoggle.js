@@ -1,7 +1,9 @@
 const GOENV = require("./lib/env.js");
 /* The two player pages are reached from the profile sheet, one each, so neither
-   carries a toggle to the other any more — and each still opens the right page
-   with its own title, and back still leaves. */
+   carries a toggle TO THE OTHER any more — and each still opens the right page
+   with its own title, and back still leaves. A control that filters the page
+   you asked for is a different thing and is allowed: Price changes has one for
+   narrowing to your own squad. What is forbidden is a control that navigates. */
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8783;
@@ -25,17 +27,18 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
       await p.click(item); await p.waitForTimeout(1000);
       const r = await p.evaluate((sel) => {
         const view = document.querySelector("section.view.active");
-        const first = view.firstElementChild;
+        const segs = [...view.querySelectorAll(".pseg")];
         return { hash: location.hash, title: document.querySelector("#barTitle").textContent.trim(),
-                 toggles: view.querySelectorAll("[data-pr], .pseg").length,
-                 firstClass: first ? first.className : "(none)",
+                 crossers: view.querySelectorAll("[data-pr]").length,
+                 // any segment bar that is not the prices page's own squad filter
+                 strays: segs.filter((x) => x.id !== "prWho").length,
                  rows: view.querySelectorAll(sel).length };
       }, rows);
       const tag = w + " " + title;
       chk(r.hash === hash, tag + ": opens its own page", r.hash);
       chk(r.title === title, tag + ": the bar names it", r.title);
-      chk(r.toggles === 0, tag + ": no toggle above the content", String(r.toggles));
-      chk(!/pseg/.test(r.firstClass), tag + ": the page starts with its own content", r.firstClass);
+      chk(r.crossers === 0, tag + ": nothing on the page navigates to the other half", String(r.crossers));
+      chk(r.strays === 0, tag + ": and no segment bar beyond the page's own filter", String(r.strays));
       chk(r.rows > 0, tag + ": and the content is there", String(r.rows));
       // back leaves rather than crossing to the other half
       await p.click("#barBack"); await p.waitForTimeout(700);

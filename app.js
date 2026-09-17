@@ -1045,14 +1045,57 @@
     if (!colOf(state.priceSort)) { state.priceSort = "price"; state.priceDir = 0; }
     if (!state.priceDir) state.priceDir = colOf(state.priceSort).first;
 
+    // Six hundred players is the right list for finding a transfer and the
+    // wrong one for the question most people open this page with, which is
+    // whether anything they own is about to move tonight. This narrows the
+    // table rather than navigating anywhere, so it belongs on the page in a
+    // way the old Prices/Stats toggle did not.
+    if (state.prMine !== true) state.prMine = false;
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
-    var h = '<div class="pickrow">' +
+    var h = '<div class="pseg psegwide" role="tablist" id="prWho">' +
+      '<button type="button" role="tab" data-mine="0"' +
+        (state.prMine ? ' aria-selected="false"' : ' class="on" aria-selected="true"') + '>All players</button>' +
+      '<button type="button" role="tab" data-mine="1"' +
+        (state.prMine ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>My team</button>' +
+      '</div>' +
+      '<div class="pickrow">' +
       '<select class="in narrow" id="prPos">' + Object.keys(poss).map(function (k) {
         return '<option value="' + k + '"' + (k === state.pricePos ? ' selected' : '') + '>' + esc(poss[k]) + '</option>';
       }).join("") + '</select>' +
       searchBox("prSearch") + '</div>';
     h += '<div id="prPanel"></div>';
     host.innerHTML = h;
+
+    function emptyWhy() {
+      if (state.prMine && !mineSet) return "We do not have your squad yet. It arrives with the next sync after a deadline.";
+      if (state.prMine) return "Nobody in your team matches that.";
+      return "No player matches that search.";
+    }
+
+    // Whoever he is today. Read once per render rather than per keystroke.
+    var mineSet = null;
+    if (state.me) {
+      var mineIds = K.mySquadIds(ds, state.me);
+      if (mineIds) { mineSet = {}; mineIds.forEach(function (e) { mineSet[e] = 1; }); }
+    }
+    $all('[data-mine]', host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var want = b.getAttribute("data-mine") === "1";
+        if (want && !state.me) {
+          toast("Pick your team first");
+          openProfile({ edit: true });
+          return;
+        }
+        if (want === state.prMine) return;
+        state.prMine = want;
+        $all('[data-mine]', host).forEach(function (x) {
+          var on = (x.getAttribute("data-mine") === "1") === want;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        draw();
+      });
+    });
 
     // Every player is in the table, so nobody is unreachable by scrolling. But
     // laying out 600 rows before the first paint cost more than two seconds on a
@@ -1064,6 +1107,7 @@
       gen++;
       if (pending) { cancelAnimationFrame(pending); pending = 0; }
       var list = rows.slice();
+      if (state.prMine && mineSet) list = list.filter(function (r) { return mineSet[r.id]; });
       if (state.pricePos !== "all") list = list.filter(function (r) { return String(r.type) === state.pricePos; });
       // Search all 600-odd players, not just the ones on screen. Filtering the
       // rendered rows used to hide anyone the current sort had pushed down.
@@ -1098,7 +1142,7 @@
       // though scrollTop still moved them from script.
       panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
         head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale, forward) + '</tbody></table></div>' +
-        (list.length ? '' : '<div class="callout nohits">No player matches that search.</div>') +
+        (list.length ? '' : '<div class="callout nohits">' + esc(emptyWhy()) + '</div>') +
         (tracked && !told && !thr.measured
           ? '<div class="koline">Pressure orders who is being bought and sold hardest. ' +
             'It becomes a distance to a price change once we have seen a night of real ' +
