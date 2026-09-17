@@ -34,6 +34,20 @@ const cells = (p, i) => p.evaluate((i) =>
       return (who ? who.textContent : td.innerText).trim();
     }), i);
 
+// The prices table fills in across frames now — a screenful, then the rest a
+// hundred at a time — so a fixed pause after a sort is a guess about how busy
+// the machine is. Wait for the row count to stop moving instead. This suite
+// failed exactly once, on a loaded box, reading a table that was still filling.
+async function filled(pg) {
+  // The table itself says when it is still arriving, so this waits on the app
+  // rather than on a stopwatch. Guessing at it with a fixed pause is what made
+  // three suites go red on a loaded machine and green on a quiet one.
+  await pg.waitForFunction(
+    () => { const el = document.querySelector("#prPanel"); return !!el && !el.hasAttribute("data-filling"); },
+    null, { timeout: 60000 });
+  return pg.evaluate(() => document.querySelectorAll("table.pricetbl tbody tr").length);
+}
+
 (async () => {
   await new Promise((r) => srv.listen(9907, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
@@ -106,7 +120,7 @@ const cells = (p, i) => p.evaluate((i) =>
   // not shift, because a hidden column is still in the DOM.
   const phonePlan = plan.filter(([key]) => ["owned", "rate"].indexOf(key) === -1);
   for (const [key, idx, label, kind] of phonePlan) {
-    await p.click('th[data-sort="' + key + '"]'); await p.waitForTimeout(450);
+    await p.click('th[data-sort="' + key + '"]'); await filled(p);
     const first = await cells(p, idx);
     const st1 = await p.evaluate((k) => {
       const th = document.querySelector('th[data-sort="' + k + '"]');
@@ -117,7 +131,7 @@ const cells = (p, i) => p.evaluate((i) =>
                marked: all.filter((x) => x.classList.contains("sorted")).map((x) => x.getAttribute("data-sort")),
                right: Math.round(table.getBoundingClientRect().right), vw: window.innerWidth };
     }, key);
-    await p.click('th[data-sort="' + key + '"]'); await p.waitForTimeout(450);
+    await p.click('th[data-sort="' + key + '"]'); await filled(p);
     const second = await cells(p, idx);
     const st2 = await p.evaluate((k) => {
       const th = document.querySelector('th[data-sort="' + k + '"]');
@@ -168,9 +182,9 @@ const cells = (p, i) => p.evaluate((i) =>
       const th = await pw.$('th[data-sort="' + key + '"]');
       chk(label + " (wide): the column is there to sort", !!th && await th.isVisible());
       if (!th) continue;
-      await pw.click('th[data-sort="' + key + '"]'); await pw.waitForTimeout(450);
+      await pw.click('th[data-sort="' + key + '"]'); await filled(pw);
       const first = (await cells(pw, idx)).map(num);
-      await pw.click('th[data-sort="' + key + '"]'); await pw.waitForTimeout(450);
+      await pw.click('th[data-sort="' + key + '"]'); await filled(pw);
       const second = (await cells(pw, idx)).map(num);
       console.log("   " + label.padEnd(8) + " top: " + JSON.stringify(first.slice(0, 3)) +
         " then " + JSON.stringify(second.slice(0, 3)));
@@ -193,7 +207,7 @@ const cells = (p, i) => p.evaluate((i) =>
   console.log("\nat 320px, in each sort state:");
   for (const [key, , label] of narrowPlan) {
     for (const pass of [1, 2]) {
-      await p2.click('th[data-sort="' + key + '"]'); await p2.waitForTimeout(350);
+      await p2.click('th[data-sort="' + key + '"]'); await filled(p2);
       const fit = await p2.evaluate(() => {
         const t = document.querySelector('[data-view="prices"] table.t');
         const th = [...t.querySelectorAll("th")];
@@ -210,15 +224,15 @@ const cells = (p, i) => p.evaluate((i) =>
   await p2.screenshot({ path: GOENV.OUT + "/sorted-320.png" });
 
   // two players sharing a surname must land the same way round every time
-  await p.fill("#prSearch", ""); await p.waitForTimeout(300);
+  await p.fill("#prSearch", ""); await filled(p);
   const orderOf = async () => {
-    await p.click('th[data-sort="name"]'); await p.waitForTimeout(400);
+    await p.click('th[data-sort="name"]'); await filled(p);
     return p.evaluate(() => [...document.querySelectorAll('[data-view="prices"] tbody tr')]
       .map((r) => r.querySelectorAll("td")[0].innerText.replace(/\s+/g, " ").trim()));
   };
   const viaName = await orderOf();
-  await p.click('th[data-sort="go"]'); await p.waitForTimeout(400);
-  await p.click('th[data-sort="price"]'); await p.waitForTimeout(400);
+  await p.click('th[data-sort="go"]'); await filled(p);
+  await p.click('th[data-sort="price"]'); await filled(p);
   const viaOthers = await orderOf();
   const dupes = viaName.filter((v, i) => i && v.split(" ")[0] === viaName[i - 1].split(" ")[0]);
   console.log("\nshared surnames on screen: " + (dupes.length ? dupes.join(", ") : "none"));
@@ -241,11 +255,11 @@ const cells = (p, i) => p.evaluate((i) =>
       const now = await p.evaluate(() =>
         document.querySelector('th[data-sort="name"]').getAttribute("aria-sort"));
       if (now === want) return;
-      await p.click('th[data-sort="name"]'); await p.waitForTimeout(400);
+      await p.click('th[data-sort="name"]'); await filled(p);
     }
     throw new Error("could not reach " + want);
   };
-  await p.fill("#prSearch", ""); await p.waitForTimeout(300);
+  await p.fill("#prSearch", ""); await filled(p);
   await sortName("ascending");
   const azTop = await shown();
   console.log("A to Z renders " + azTop.length + " rows, starting " + JSON.stringify(azTop[0]));
@@ -262,23 +276,23 @@ const cells = (p, i) => p.evaluate((i) =>
       String(zaTop.indexOf(last)));
 
   for (const sortBy of ["name", "price", "go"]) {
-    await p.fill("#prSearch", ""); await p.waitForTimeout(300);
-    await p.click('th[data-sort="' + sortBy + '"]'); await p.waitForTimeout(400);
-    await p.fill("#prSearch", last); await p.waitForTimeout(400);
+    await p.fill("#prSearch", ""); await filled(p);
+    await p.click('th[data-sort="' + sortBy + '"]'); await filled(p);
+    await p.fill("#prSearch", last); await filled(p);
     const hits = await shown();
     console.log("sorted by " + sortBy.padEnd(6) + " search " + JSON.stringify(last) + " -> " + JSON.stringify(hits));
     chk("a player at the far end is findable when sorted by " + sortBy,
         hits.indexOf(last) !== -1, JSON.stringify(hits));
   }
   // and a search with no match says so rather than showing a blank table
-  await p.fill("#prSearch", "zzzznobody"); await p.waitForTimeout(400);
+  await p.fill("#prSearch", "zzzznobody"); await filled(p);
   const none = await p.evaluate(() => ({
     rows: document.querySelectorAll('[data-view="prices"] tbody tr').length,
     note: (document.querySelector('[data-view="prices"] .nohits') || {}).innerText || ""
   }));
   console.log("search with no match: " + none.rows + " rows, note " + JSON.stringify(none.note));
   chk("a search with no match says so", none.rows === 0 && /No player/i.test(none.note), none.note);
-  await p.fill("#prSearch", ""); await p.waitForTimeout(400);
+  await p.fill("#prSearch", ""); await filled(p);
   const back = await p.evaluate(() => document.querySelectorAll('[data-view="prices"] tbody tr').length);
   console.log("clearing the search brings back " + back + " rows");
   chk("clearing the search restores every player", back === N, String(back));

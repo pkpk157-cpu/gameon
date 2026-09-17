@@ -31,16 +31,34 @@ cd "$(dirname "$(readlink -f "$0")")" || exit 1
 LOG=${1:-bat.log}; JOBS=${2:-4}; shift 2 2>/dev/null
 TIMES=bat-times.txt; SEED=bat-times.seed.txt; PROG=bat.progress
 
-ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook pflags overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pltable pltcrests mevents prsplit prnotoggle prmine prfavs prfill lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills menuart pfhead errsweep statesweep nullstack2"
+ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook pflags overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pplayer pltable pltcrests mevents prsplit prnotoggle prmine prfavs prfill lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills menuart pfhead errsweep statesweep nullstack2"
 SUITES=${*:-$ALL}
 
+# Two batteries at once means two servers on every port, and a page of
+# failures that say nothing about the app. One at a time.
+LOCK=/tmp/go-battery.lock
+if ! mkdir "$LOCK" 2>/dev/null; then
+  if [ -f "$LOCK/pid" ] && kill -0 "$(cat "$LOCK/pid")" 2>/dev/null; then
+    echo "a battery is already running (pid $(cat "$LOCK/pid")) — not starting a second" >&2; exit 1
+  fi
+  rm -rf "$LOCK"; mkdir "$LOCK" || { echo "could not take the battery lock" >&2; exit 1; }
+fi
+echo $$ > "$LOCK/pid"
+
 OUT=$(mktemp -d)
-trap 'rm -rf "$OUT"' EXIT
 : > "$PROG"
 
 # A few suites share this one static server. The stock handler is single
 # threaded, which would serialise exactly the suites we are trying to overlap.
 APP=$(node -e 'process.stdout.write(require("./lib/env.js").APP)')
+
+# A killed run used to leave this server behind, because it was stopped on the
+# last line of the script rather than on the way out. The next run then could
+# not bind the port: its own server died unseen, every suite that uses the
+# shared one got 404s, and a dozen suites with nothing wrong with them reported
+# red. Take the port back first, and stop the server however this script ends.
+if [ -z "$APP" ]; then echo "could not resolve the app directory" >&2; exit 1; fi
+pkill -f "python3 - $APP" >/dev/null 2>&1 && sleep 1
 python3 - "$APP" <<'PY' >/dev/null 2>&1 &
 import http.server, socketserver, os, sys
 os.chdir(sys.argv[1])
@@ -49,7 +67,15 @@ class S(socketserver.ThreadingTCPServer):
 S(("", 8099), http.server.SimpleHTTPRequestHandler).serve_forever()
 PY
 HS=$!
+trap 'kill $HS 2>/dev/null; rm -rf "$OUT" "$LOCK"' EXIT INT TERM
 sleep 1
+
+# And never run blind: a battery whose shared server is not answering reports
+# failures that say nothing about the app.
+if ! node -e 'require("http").get("http://127.0.0.1:8099/index.html",r=>process.exit(r.statusCode===200?0:1)).on("error",()=>process.exit(1))'; then
+  echo "the shared server on 8099 is not answering — not running a battery that would blame the suites" >&2
+  exit 1
+fi
 
 # The hostile datasets are generated from data.json, not stored. Build them if
 # this machine has not built them yet, or the sweeps have nothing to sweep.
@@ -101,7 +127,6 @@ fi
 : > "$LOG"
 for s in $SUITES; do [ -f "$OUT/$s" ] && cat "$OUT/$s" >> "$LOG"; done
 n=$(printf '%s\n' $SUITES | wc -w)
-bad=$(grep -c "FAIL" "$LOG")
+bad=$(grep -c "^=== .*FAIL" "$LOG")
 printf "%s suites, %s failed, %sm%ss wall at %s-way\n" "$n" "$bad" $((WALL/60)) $((WALL%60)) "$JOBS" >> "$LOG"
 echo "done" >> "$LOG"
-kill $HS 2>/dev/null

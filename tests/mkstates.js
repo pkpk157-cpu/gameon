@@ -242,6 +242,43 @@ Object.keys(dmg).forEach(k => { const d = clone(base); dmg[k](d); out[k] = d; })
   out["player-flags"] = d;
 }
 
+// --- a player's own page -------------------------------------------------
+// The page needs three things the published data did not carry until today:
+// FPL's form and points per match on each element, and a difficulty rating on
+// each side of every fixture. Built here so the page can be checked before the
+// updater has run once with them. Every other state lacks all three, which is
+// the test that the page is honest about not having them rather than broken.
+{
+  const d = clone(base); const ds = d.dataset;
+  const lp = ds.livePoints || {};
+  const gws = Object.keys(lp).map(Number).sort((a, b) => a - b);
+  Object.keys(ds.elements).forEach((el) => {
+    let total = 0, apps = 0;
+    gws.forEach((g) => {
+      const p = (lp[g] || {})[el];
+      if (p == null) return;
+      total += p; if (p !== 0) apps++;
+    });
+    const last3 = gws.slice(-3);
+    let recent = 0;
+    last3.forEach((g) => { recent += ((lp[g] || {})[el] || 0); });
+    ds.elements[el][8] = last3.length ? +(recent / last3.length).toFixed(1) : 0;   // form
+    ds.elements[el][9] = apps ? +(total / apps).toFixed(1) : 0;                     // points per match
+  });
+  // A difficulty either side of every fixture. Deterministic from the club
+  // names so a rerun gives the same page, and spread across all five bands so
+  // every colour is drawn at least once.
+  const band = (a, b) => 1 + ((a.charCodeAt(0) + a.charCodeAt(2) + b.charCodeAt(1)) % 5);
+  Object.keys(ds.gwFixtures || {}).forEach((gw) => {
+    ds.gwFixtures[gw].forEach((f) => {
+      f[9] = band(f[0], f[1]);
+      f[10] = band(f[1], f[0]);
+    });
+  });
+  ds.updatedAt = new Date().toISOString();
+  out["player-page"] = d;
+}
+
 fs.mkdirSync(GOENV.STATES, { recursive: true });
 Object.keys(out).forEach(k => fs.writeFileSync(GOENV.STATES + "/" + k + ".json", JSON.stringify(out[k])));
 console.log(Object.keys(out).length + " datasets written:", Object.keys(out).join(", "));
@@ -249,7 +286,7 @@ console.log(Object.keys(out).length + " datasets written:", Object.keys(out).joi
 // The sweeps read whatever is in this directory, so a state that quietly stops
 // being written costs coverage without failing anything. Say the number out
 // loud and refuse a short count.
-const EXPECTED = 24;
+const EXPECTED = 25;
 if (Object.keys(out).length !== EXPECTED) {
   console.error("expected " + EXPECTED + " datasets, wrote " + Object.keys(out).length);
   process.exit(1);

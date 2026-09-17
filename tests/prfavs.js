@@ -26,6 +26,19 @@ const look = (p) => p.evaluate(() => {
   };
 });
 
+// The prices table fills in across frames — a screenful, then the rest a
+// hundred at a time — so a fixed pause after a redraw is a guess about how busy
+// the machine is. Wait for the row count to stop moving instead.
+async function filled(pg) {
+  // The table itself says when it is still arriving, so this waits on the app
+  // rather than on a stopwatch. Guessing at it with a fixed pause is what made
+  // three suites go red on a loaded machine and green on a quiet one.
+  await pg.waitForFunction(
+    () => { const el = document.querySelector("#prPanel"); return !!el && !el.hasAttribute("data-filling"); },
+    null, { timeout: 60000 });
+  return pg.evaluate(() => document.querySelectorAll("table.pricetbl tbody tr").length);
+}
+
 (async () => {
   await new Promise(r => srv.listen(PORT, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
@@ -35,7 +48,7 @@ const look = (p) => p.evaluate(() => {
     await ctx.addInitScript((me) => { try { localStorage.setItem("go12.me", JSON.stringify(me)); } catch (e) {} }, ME);
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", e => errs.push(e.message));
     await p.goto("http://127.0.0.1:" + PORT + "/index.html#prices", { waitUntil: "domcontentloaded" });
-    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 }); await p.waitForTimeout(900);
+    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 }); await filled(p);
 
     let r = await look(p);
     chk(r.tabs === 3 && r.on === "all", w + ": three tabs, opening on all players", r.tabs + " / " + r.on);
@@ -44,10 +57,10 @@ const look = (p) => p.evaluate(() => {
     chk(r.starred.length === 0, w + ": none lit to begin with", r.starred.join(","));
 
     // the empty Starred tab explains itself
-    await p.click('#prWho [data-who="favs"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="favs"]'); await filled(p);
     r = await look(p);
     chk(r.rows === 0 && /star beside a name/i.test(r.empty), w + ": empty Starred says how to fill it", r.empty);
-    await p.click('#prWho [data-who="all"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="all"]'); await filled(p);
 
     // star three
     const want = [];
@@ -63,7 +76,7 @@ const look = (p) => p.evaluate(() => {
       w + ": a lit star says so to a screen reader");
 
     // the Starred tab holds exactly them
-    await p.click('#prWho [data-who="favs"]'); await p.waitForTimeout(700);
+    await p.click('#prWho [data-who="favs"]'); await filled(p);
     r = await look(p);
     chk(r.rows === 3 && r.names.slice().sort().join("|") === want.slice().sort().join("|"),
       w + ": the Starred tab holds exactly those three", r.names.join(","));
@@ -76,13 +89,13 @@ const look = (p) => p.evaluate(() => {
 
     // it survives a reload
     await p.reload({ waitUntil: "domcontentloaded" });
-    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 }); await p.waitForTimeout(900);
+    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 }); await filled(p);
     r = await look(p);
     chk(r.on === "all", w + ": a reload opens on all players again", r.on);
     chk(r.starred.length === 2, w + ": with the two stars still lit", r.starred.join(","));
 
     // position and search still narrow the starred list
-    await p.click('#prWho [data-who="favs"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="favs"]'); await filled(p);
     await p.fill("#prSearch", "zzzznobody"); await p.waitForTimeout(500);
     r = await look(p);
     chk(r.rows === 0 && /starred/i.test(r.empty), w + ": a search inside Starred says so when empty", r.empty);
@@ -90,7 +103,7 @@ const look = (p) => p.evaluate(() => {
 
     // nothing spills out of the card at any tab
     for (const who of ["all", "mine", "favs"]) {
-      await p.click(`#prWho [data-who="${who}"]`); await p.waitForTimeout(600);
+      await p.click(`#prWho [data-who="${who}"]`); await filled(p);
       const fit = await p.evaluate(() => {
         const t = document.querySelector("table.pricetbl"); if (!t) return { ok: true };
         const sc = t.closest(".freeze");

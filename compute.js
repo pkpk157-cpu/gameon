@@ -2749,6 +2749,93 @@
     };
   };
 
+  /* ---- one footballer, gathered ------------------------------------------
+     What a player's own page needs, in one pass. The history, the breakdown
+     and the flag already have their own functions and are not repeated here;
+     this is the header figures, where he ranks among his position, and the
+     fixtures still to come.
+
+     Form and points per match are FPL's own numbers rather than ours. Both
+     could be worked out from what we hold, but FPL averages them over its own
+     window, and a page showing 8.1 beside the official app's 8.2 is a page
+     nobody trusts twice. The rank beside each is ours, because FPL publishes
+     no such thing \u2014 it is a straight ordering of every player in that
+     position, which is what "1 of 78" means in their app too.              */
+  var PROF_POS = { 1: "Goalkeeper", 2: "Defender", 3: "Midfielder", 4: "Forward" };
+  var PROF_POS_PL = { 1: "Goalkeepers", 2: "Defenders", 3: "Midfielders", 4: "Forwards" };
+
+  C.playerProfile = function (ds, el, upcoming) {
+    if (!ds || !ds.elements || !ds.elements[el]) return null;
+    el = +el;
+    var m = ds.elements[el], type = m[1], club = m[2];
+    var own = C.leagueOwnership(ds);
+
+    // Every player in the same position, so a rank can say what it is out of.
+    var peers = [];
+    Object.keys(ds.elements).forEach(function (id) {
+      if (ds.elements[id][1] === type) peers.push(+id);
+    });
+    // Ties share a place, as a league table does: two men on 8.2 are both
+    // second, and the next is fourth.
+    var rankOf = function (pick) {
+      var mine = pick(el);
+      if (mine == null) return null;
+      var better = 0;
+      peers.forEach(function (id) {
+        var v = pick(id);
+        if (v != null && v > mine) better++;
+      });
+      return { rank: better + 1, of: peers.length };
+    };
+    var val = function (slot) {
+      return function (id) {
+        var e = ds.elements[id];
+        return e && e[slot] != null ? +e[slot] : null;
+      };
+    };
+    var figure = function (slot, digits) {
+      var v = val(slot)(el), r = rankOf(val(slot));
+      return { value: v == null ? null : +v.toFixed(digits == null ? 1 : digits),
+               rank: r && r.rank, of: r && r.of };
+    };
+
+    // Fixtures he has still to play, soonest first.
+    var fin = {};
+    C.finishedGws(ds).forEach(function (g) { fin[g] = 1; });
+    var ahead = [];
+    Object.keys(ds.gwFixtures || {}).map(Number).sort(function (a, b) { return a - b; })
+      .forEach(function (gw) {
+        if (fin[gw]) return;
+        (ds.gwFixtures[gw] || []).forEach(function (f) {
+          if (f[0] !== club && f[1] !== club) return;
+          // a fixture already played is behind him even if its gameweek is not
+          // finished, which is every Sunday of a split gameweek
+          if (f[3] || f[8]) return;
+          var home = f[0] === club;
+          ahead.push({ gw: gw, opp: home ? f[1] : f[0], home: home,
+                       ko: f[7] || null,
+                       // 1 to 5, and 0 where an older publish has no such slot
+                       fdr: (home ? f[9] : f[10]) || 0 });
+        });
+      });
+
+    return {
+      el: el, name: m[0], full: m[5] || m[0], club: club,
+      pos: PROF_POS[type] || "", posPlural: PROF_POS_PL[type] || "",
+      type: type,
+      price: (m[3] || 0) / 10, start: (m[6] || 0) / 10,
+      owned: m[4] || 0,
+      goOwned: own ? (own.pct[el] == null ? null : own.pct[el]) : null,
+      managers: own ? own.managers : 0,
+      ppm: figure(9), form: figure(8),
+      selected: (function () {
+        var r = rankOf(val(4));
+        return { value: m[4] || 0, rank: r && r.rank, of: r && r.of };
+      })(),
+      ahead: upcoming ? ahead.slice(0, +upcoming) : ahead
+    };
+  };
+
   /* ---- who is hurt, banned or a doubt -------------------------------------
      FPL publishes one snapshot: how a player stands today. There is no history
      of it, so a flag can only ever mean "as of now" \u2014 which is why a finished

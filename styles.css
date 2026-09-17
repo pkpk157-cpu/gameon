@@ -798,6 +798,95 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .ppts.live { background:linear-gradient(90deg, #e4004f, #ec5a12); }
 /* the opponent, shown in the points slot until kick-off */
 .ppts.opp { font-size:9px; letter-spacing:.02em; color:#eaf7ff; opacity:.92; font-weight:700; }
+/* ---------- one footballer's own page ----------
+   The tap-up sheet answers what he scored; this answers whether to own him.
+   Same furniture as the rest of the app — cards, the segmented control, the
+   table shapes — so it reads as a page of this app rather than an imitation of
+   another one. */
+.face.xl { width:72px; height:72px; }
+.face.xl > i { font-size:24px; }
+.pphead { display:flex; align-items:center; gap:14px; }
+.ppwho { min-width:0; }
+.ppos { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px;
+  color:var(--ink-faint); }
+.ppwho h2 { font-size:20px; font-weight:800; line-height:1.2; margin:2px 0 4px; }
+.ppclub { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600;
+  color:var(--ink-soft); }
+.ppclub .crest { width:18px; height:18px; }
+.ppprice { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.ppprice .ppl { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.7px;
+  color:var(--ink-faint); }
+.ppprice b { font-size:19px; font-weight:800; font-variant-numeric:tabular-nums; }
+.ppmv { font-size:12px; font-weight:700; color:var(--ink-faint); }
+.ppmv.up { color:var(--good); } .ppmv.down { color:var(--bad); }
+
+/* three figures, each with where he stands among his own position */
+.pfrow { display:grid; grid-template-columns:repeat(3, 1fr); }
+.pfig { text-align:center; padding:2px 4px; min-width:0; }
+.pfig + .pfig { border-left:1px solid var(--line); }
+.pfl { font-size:11px; font-weight:600; color:var(--ink-faint); line-height:1.3; }
+.pfv { font-size:20px; font-weight:800; line-height:1.25; font-variant-numeric:tabular-nums; }
+.pfr { display:block; font-size:11px; font-weight:600; color:var(--ink-faint);
+  font-variant-numeric:tabular-nums; }
+.pfnote { text-align:center; font-size:12px; font-weight:700; margin-top:8px; }
+/* the one figure the official app cannot show */
+.pfgo { text-align:center; font-size:12.5px; font-weight:600; color:var(--ink-soft);
+  margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.pfgo b { color:var(--accent); font-weight:800; }
+
+/* what he has done, and what is ahead */
+.pstrip { padding:0; overflow:hidden; }
+.pstwrap { display:flex; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.pstcell { flex:1 0 74px; min-width:74px; text-align:center; padding:10px 4px;
+  border-right:1px solid var(--line); }
+.pstcell:last-child { border-right:0; }
+.pstcell.next { background:var(--chip); }
+.pstgw { font-size:10.5px; font-weight:700; color:var(--ink-faint); letter-spacing:.3px; }
+.pstcr { margin:5px 0 3px; }
+.pstcr .crest { width:24px; height:24px; }
+.pstopp { font-size:11.5px; font-weight:700; line-height:1.2; white-space:nowrap; }
+.pstopp i { font-style:normal; font-weight:600; color:var(--ink-faint); }
+.pstv { margin-top:5px; font-size:12px; font-weight:600; color:var(--ink-soft); }
+.pstv b { font-size:13.5px; font-weight:800; color:var(--ink); }
+.pstnote { padding:0 12px 10px; }
+
+/* FPL's difficulty rating, in its own colours: 1 kind, 5 brutal */
+.fdr { display:inline-block; min-width:26px; padding:2px 6px; border-radius:6px;
+  font-size:12px; font-weight:800; font-variant-numeric:tabular-nums; text-align:center; }
+.fdr.f1, .fdr.f2 { background:#01fc7a; color:#063a22; }
+.fdr.f3 { background:#e7e7e7; color:#2b0b34; }
+.fdr.f4 { background:#ff1751; color:#fff; }
+.fdr.f5 { background:#80072d; color:#fff; }
+.fdr.none { background:var(--chip); color:var(--dash); }
+
+/* every match, either way */
+/* the flexing goes on a span inside the cell, never on the cell: a table-cell
+   turned flex container stops taking part in the column width algorithm, and
+   the last column — the rating, the whole point of the tab — was pushed off
+   the edge of the card */
+table.t.pptbl td.name { white-space:nowrap; }
+table.t.pptbl td.name .nwrap { display:flex; align-items:center; gap:6px; min-width:0; }
+table.t.pptbl td.name .crest { width:17px; height:17px; flex:none; }
+table.t.pptbl .ppsc { font-variant-numeric:tabular-nums; font-weight:700; font-size:12.5px; }
+table.t.pptbl .ppwhen { white-space:nowrap; line-height:1.25; }
+table.t.pptbl .ppwhen b { display:block; font-size:12.5px; font-weight:700; }
+table.t.pptbl .ppwhen span { display:block; font-size:11px; color:var(--ink-faint);
+  font-variant-numeric:tabular-nums; }
+table.t.pptbl.ppfx th, table.t.pptbl.ppfx td { padding-left:6px; padding-right:6px; }
+table.t.pptbl tr[data-ppgw] { cursor:pointer; }
+table.t.pptbl tr[data-ppgw]:active { background:var(--glass-hi); }
+.ppmore { font-style:normal; font-size:16px; font-weight:700; color:var(--ink-faint);
+  display:inline-block; transition:transform .15s ease; }
+tr[data-ppgw].open .ppmore { transform:rotate(45deg); color:var(--accent); }
+.ppexp > td { padding:0 0 10px; background:var(--chip); }
+.ppexp table.t.bdtbl { margin:0; }
+@media (max-width:359px) {
+  .ppwho h2 { font-size:17px; }
+  .face.xl { width:60px; height:60px; }
+  .pfv { font-size:18px; }
+  table.t.pptbl .ppwhen { font-size:11px; }
+}
+
 /* ---------- hurt, banned or a doubt ----------
    A fit player draws nothing at all, which is nine cards in ten, so a quiet
    week looks exactly as it did before any of this existed. When there is

@@ -24,6 +24,19 @@ const open = (p) => p.evaluate(() => ({
   empty: (document.querySelector(".nohits") || {}).textContent || ""
 }));
 
+// The prices table fills in across frames — a screenful, then the rest a
+// hundred at a time — so a fixed pause after a redraw is a guess about how busy
+// the machine is. Wait for the row count to stop moving instead.
+async function filled(pg) {
+  // The table itself says when it is still arriving, so this waits on the app
+  // rather than on a stopwatch. Guessing at it with a fixed pause is what made
+  // three suites go red on a loaded machine and green on a quiet one.
+  await pg.waitForFunction(
+    () => { const el = document.querySelector("#prPanel"); return !!el && !el.hasAttribute("data-filling"); },
+    null, { timeout: 60000 });
+  return pg.evaluate(() => document.querySelectorAll("table.pricetbl tbody tr").length);
+}
+
 (async () => {
   await new Promise((r) => srv.listen(PORT, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
@@ -34,15 +47,14 @@ const open = (p) => p.evaluate(() => ({
     await ctx.addInitScript((me) => { try { localStorage.setItem("go12.me", JSON.stringify(me)); } catch (e) {} }, ME);
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto("http://127.0.0.1:" + PORT + "/index.html#prices", { waitUntil: "domcontentloaded" });
-    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 });
-    await p.waitForTimeout(700);
+    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 }); await filled(p);
 
     let r = await open(p);
     chk(r.tabs === 3 && r.on === "all", w + ": opens on All players, three tabs now", r.on + " / " + r.tabs + " tabs");
     const all = r.rows;
     chk(all > 100, w + ": the whole list is there to begin with", String(all));
 
-    await p.click('#prWho [data-who="mine"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="mine"]'); await filled(p);
     r = await open(p);
     chk(r.on === "mine", w + ": the toggle moves", r.on);
     chk(r.rows === SQUAD.length, w + ": exactly the fifteen he owns", r.rows + " of " + SQUAD.length);
@@ -67,7 +79,7 @@ const open = (p) => p.evaluate(() => ({
     await p.fill("#prSearch", ""); await p.waitForTimeout(500);
 
     // back to all
-    await p.click('#prWho [data-who="all"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="all"]'); await filled(p);
     r = await open(p);
     chk(r.rows === all && r.on === "all", w + ": and back to the whole list", r.rows + " vs " + all);
     chk(errs.length === 0, w + ": no JS errors", errs.join(" | "));
@@ -79,10 +91,9 @@ const open = (p) => p.evaluate(() => ({
     const ctx = await b.newContext({ viewport: { width: 390, height: 880 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto("http://127.0.0.1:" + PORT + "/index.html#prices", { waitUntil: "domcontentloaded" });
-    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 });
-    await p.waitForTimeout(600);
+    await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 }); await filled(p);
     const before = (await open(p)).rows;
-    await p.click('#prWho [data-who="mine"]'); await p.waitForTimeout(700);
+    await p.click('#prWho [data-who="mine"]'); await filled(p);
     const r = await p.evaluate(() => ({
       sheet: document.querySelector("#youBack").classList.contains("show"),
       toast: (document.querySelector("#toast") || {}).textContent || "",

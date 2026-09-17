@@ -9,8 +9,11 @@ const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8794, ME = 1255976;
 const EV = GOENV.STATES + "/match-events.json";
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
-let DATA = EV;
+let DATA = EV, BODY = null;
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
+  if (u === "/data.json" && BODY) {
+    r.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }); r.end(BODY); return;
+  }
   const f = u === "/data.json" ? DATA : path.join(APP, u);
   fs.readFile(f, (e, b) => { if (e) { r.writeHead(404); r.end(); return; }
     r.writeHead(200, { "content-type": T[path.extname(f)] || "text/plain", "cache-control": "no-store" }); r.end(b); }); });
@@ -212,16 +215,20 @@ const scoreOf = (tag) => { const [gw, pair] = tag.split("/"); const [h, a] = pai
     await ctx.close();
   }
   {
-    // the published data predates all of this; every device holds it for the
-    // ten minutes before the next publish, and older ones for longer
-    DATA = path.join(APP, "data.json");
+    // Data published before any of this existed. Built here by taking the key
+    // back out, rather than by serving the repo's own data.json and trusting it
+    // not to have one: the moment the updater published events, that control
+    // stopped being a control and this failed for the wrong reason.
+    const bare = JSON.parse(fs.readFileSync(EV, "utf8"));
+    delete bare.dataset.gwEvents;
+    BODY = JSON.stringify(bare);
     const { ctx, p, errs } = await open(b, picked.first);
     const r = await look(p);
     chk(!r.card, "data with no events at all: the page is exactly as it was");
     chk(await p.evaluate(() => !!document.querySelector(".mcols") && !!document.querySelector(".psegrow")),
       "...squads and metric picker still there");
     chk(errs.length === 0, "no events: no page errors", errs.join(" | "));
-    DATA = EV;
+    BODY = null;
     await ctx.close();
   }
 

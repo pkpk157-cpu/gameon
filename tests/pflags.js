@@ -8,8 +8,11 @@ const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8795, ME = 1255976;
 const FL = GOENV.STATES + "/player-flags.json";
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
-let DATA = FL;
+let DATA = FL, BODY = null;
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
+  if (u === "/data.json" && BODY) {
+    r.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }); r.end(BODY); return;
+  }
   const f = u === "/data.json" ? DATA : path.join(APP, u);
   fs.readFile(f, (e, b) => { if (e) { r.writeHead(404); r.end(); return; }
     r.writeHead(200, { "content-type": T[path.extname(f)] || "text/plain", "cache-control": "no-store" }); r.end(b); }); });
@@ -196,14 +199,20 @@ let BROWSER = null;
     await ctx.close();
   }
   {
-    DATA = path.join(APP, "data.json");
+    // Data published before any of this existed. Built here by taking the key
+    // back out, rather than by serving the repo's own data.json and trusting it
+    // not to have one: the moment the updater published flags, that control
+    // stopped being a control and this failed for the wrong reason.
+    const bare = JSON.parse(fs.readFileSync(FL, "utf8"));
+    delete bare.dataset.flags;
+    BODY = JSON.stringify(bare);
     const { ctx, p, errs } = await open(390);
     const rows = await cards(p);
     chk(rows.length >= 11 && rows.every(r => !r.mark && !r.tint),
       "data with no flags key: not one mark, and every name bar as it was", String(rows.length));
     chk(await p.evaluate(() => !document.querySelector(".pflagbar")), "...and no banner anywhere");
     chk(errs.length === 0, "no flags: no page errors", errs.join(" | "));
-    DATA = FL;
+    BODY = null;
     await ctx.close();
   }
 

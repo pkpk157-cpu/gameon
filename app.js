@@ -61,6 +61,8 @@
     ball: '<circle cx="12" cy="12" r="8.4"/><path d="m12 8.2 3.1 2.3-1.2 3.7h-3.8l-1.2-3.7Z"/>' +
           '<path d="M12 8.2V3.6M15.1 10.5l4.4-1.4M13.9 14.2l2.7 3.6M10.1 14.2l-2.7 3.6M8.9 10.5 4.5 9.1"/>',
     assist: '<circle cx="17.2" cy="12" r="4.2"/><path d="M2.6 12h7.2M7.1 8.6 10.5 12l-3.4 3.4"/>',
+    open: '<path d="M14.5 4H20v5.5M20 4l-7.5 7.5"/>' +
+          '<path d="M18 14.2v4.3A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
     medal: '<circle cx="12" cy="14.9" r="5.5"/><path d="M8.3 9.6 5.2 3.5h13.6l-3.1 6.1"/>',
     flame: '<path d="M12 4.4c4.2 3.4 6.4 6.4 6.4 9.6a6.4 6.4 0 0 1-12.8 0c0-2 1-3.7 2.3-5 .25 1.8 1.25 2.9 2.25 2.9 1.35 0 1.85-1.45 1.35-3.6-.25-1.45-1.1-2.85-1.5-3.9Z"/>',
     crown: '<path d="M4 18.4h16"/><path d="M4 16 3 7.2l4.6 3.2L12 4.4l4.4 6 4.6-3.2L20 16Z"/>',
@@ -441,6 +443,8 @@
       '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
       '<div class="bdname"><b>' + esc(name) + '</b><span>' + crest(club) + esc(club) +
       ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div>' +
+      '<button type="button" class="hinfo bdfull" id="bdFull" aria-label="Open his own page">' +
+      svg("open", 17) + '</button>' +
       '<button type="button" class="hinfo bdinfo" id="bdWhat" aria-label="What these figures mean">' +
       svg("info", 17) + '</button></div>';
     // What he costs and who holds him, as of now. These sit outside the tabs
@@ -483,6 +487,16 @@
         : tab === "all" ? bdSeasonPanel(hist, at)
         : bdGwPanel(ds, el, at, at === openedAt ? mult : 1));
     };
+    // The sheet answers what he scored; his own page answers whether to own
+    // him. This is the way through, and it takes the sheet out of the way
+    // rather than leaving it stacked over the page it opened.
+    var fullBtn = $("#bdFull", box);
+    if (fullBtn) {
+      fullBtn.addEventListener("click", function () {
+        closeModal(true);
+        navFromOverlay("player/" + el);
+      });
+    }
     // A sheet cannot open another over itself without throwing this one away,
     // so the explanation is a third panel and either tab brings you back.
     var infoBtn = $("#bdWhat", box);
@@ -1274,22 +1288,28 @@
 
       if (list.length > FIRST) {
         var mine = gen, body = $("tbody", panel), at = FIRST;
+        // While rows are still arriving the table is not yet the whole list.
+        // Saying so out loud costs an attribute and saves anything that reads
+        // this table — a test, or a future affordance — from having to guess
+        // at how busy the machine is.
+        panel.setAttribute("data-filling", "1");
+        var done = function () { if (panel) panel.removeAttribute("data-filling"); };
         var fill = function () {
           // A tap or a keystroke while this was queued has already redrawn the
           // table; appending the rest of a list nobody is looking at any more
           // would mix two sorts together. isConnected rather than parentNode
           // because a replaced panel leaves its old table whole but detached,
           // which the parent check could not tell from a live one.
-          if (mine !== gen || !body.isConnected) return;
+          if (mine !== gen || !body.isConnected) { done(); return; }
           // Views are kept rather than thrown away, so leaving this one for
           // another would otherwise have left six hundred rows laying
           // themselves out behind a page the reader had already moved on to.
           // Stopping is safe: coming back here renders the table again.
-          if (!host.classList.contains("active")) return;
+          if (!host.classList.contains("active")) { done(); return; }
           var end = Math.min(list.length, at + CHUNK);
           body.insertAdjacentHTML("beforeend", priceRows(list.slice(at, end), tracked, scale, forward, favSet));
           at = end;
-          if (at < list.length) afterPaint(fill);
+          if (at < list.length) afterPaint(fill); else done();
         };
         afterPaint(fill);
       }
@@ -1669,6 +1689,207 @@
       '<div class="mevcols"><div class="mevside">' + side(ev.home) + '</div>' +
       '<div class="mevside r">' + side(ev.away) + '</div></div>' +
       '<div class="note mevnote">' + esc(note) + '</div></div>';
+  }
+
+  /* ====================================================================== */
+  /* One footballer's own page                                              */
+  /* ====================================================================== */
+  /* The tap-up sheet answers "what did he score"; this answers "should I own
+     him". Same player, different question, so it is a page with an address
+     rather than a sheet over whatever you were looking at.
+
+     Three figures across the top, each with where he stands among his own
+     position, then what is behind him and what is ahead of him, then every
+     match either way. Form and points per match are FPL's own numbers so the
+     page agrees with the official app; the rank beside them is ours, because
+     FPL publishes no such thing.                                          */
+
+  // 1 is a kind fixture and 5 a brutal one, coloured as the official app does.
+  function fdrChip(n) {
+    if (!n) return '<span class="fdr none" title="Difficulty not published">–</span>';
+    return '<span class="fdr f' + n + '" role="img" aria-label="Difficulty ' + n +
+      ' of 5">' + n + '</span>';
+  }
+  function profFigure(lab, val, f, suffix) {
+    var where = (f && f.rank && f.of)
+      ? '<span class="pfr">' + num(f.rank) + ' of ' + num(f.of) + '</span>' : '';
+    return '<div class="pfig"><div class="pfl">' + esc(lab) + '</div>' +
+      '<div class="pfv">' + esc(val) + (suffix || "") + '</div>' + where + '</div>';
+  }
+  // The six matches either side of now: what he did, then what is coming.
+  function profStrip(hist, ahead) {
+    var done = (hist ? hist.rows : []).filter(function (r) { return !r.ahead && !r.blank; }).slice(-3);
+    var next = (ahead || []).slice(0, 3);
+    if (!done.length && !next.length) return "";
+    var cell = function (gw, opp, home, body, cls) {
+      return '<div class="pstcell' + (cls ? " " + cls : "") + '">' +
+        '<div class="pstgw">GW' + gw + '</div>' +
+        '<div class="pstcr">' + crest(opp) + '</div>' +
+        '<div class="pstopp">' + esc(opp) + ' <i>(' + (home ? "H" : "A") + ')</i></div>' +
+        '<div class="pstv">' + body + '</div></div>';
+    };
+    var h = '<div class="card pstrip"><div class="pstwrap">';
+    done.forEach(function (r) {
+      var f = r.fixtures[0] || { opp: "–", home: true };
+      h += cell(r.gw, f.opp, f.home,
+        r.pts == null ? '<span class="dash">–</span>'
+          : '<b>' + num(r.pts) + '</b> pt' + (Math.abs(r.pts) === 1 ? '' : 's'), "was");
+    });
+    next.forEach(function (f) {
+      h += cell(f.gw, f.opp, f.home, fdrChip(f.fdr), "next");
+    });
+    return h + '</div><div class="note pstnote">' +
+      (done.length ? "What he has done" : "") +
+      (done.length && next.length ? ", and " : "") +
+      (next.length ? "what is ahead — the number is FPL's difficulty rating, 1 easy to 5 hard" : "") +
+      '</div></div>';
+  }
+
+  function renderPlayer(host, ds) {
+    var el = state.playerId;
+    if (!ds || !ds.elements || !el || !ds.elements[el]) {
+      host.innerHTML = '<div class="callout">That player is not in this data.</div>';
+      return;
+    }
+    var P = K.playerProfile(ds, el), hist = K.playerHistory(ds, el);
+    var flag = K.availability(ds, el, null);
+
+    var h = flagBanner(flag);
+
+    // 1 — who he is
+    h += '<div class="card pphead">' + faceBox(el, P.name, "xl") +
+      '<div class="ppwho"><div class="ppos">' + esc(P.pos) + '</div>' +
+      '<h2>' + esc(P.full) + '</h2>' +
+      '<div class="ppclub">' + crest(P.club) + esc((ds.teamNames || {})[P.club] || P.club) + '</div>' +
+      '</div></div>';
+
+    // 2 — what he costs, and what that has done this season
+    var moved = Math.round((P.price - P.start) * 10) / 10;
+    h += '<div class="card ppprice"><span class="ppl">Price</span>' +
+      '<b>' + psMoney(P.price) + '</b>' +
+      '<span class="ppmv' + (moved > 0 ? " up" : moved < 0 ? " down" : "") + '">' +
+      (moved ? (moved > 0 ? "▲" : "▼") + Math.abs(moved).toFixed(1) + " this season"
+             : "unchanged all season") + '</span></div>';
+
+    // 3 — the three figures, and where they place him
+    h += '<div class="card ppfigs"><div class="pfrow">' +
+      profFigure("Pnts/Match", P.ppm.value == null ? "–" : P.ppm.value.toFixed(1), P.ppm) +
+      profFigure("Form", P.form.value == null ? "–" : P.form.value.toFixed(1), P.form) +
+      profFigure("Owned by FPL", P.selected.value.toFixed(1), P.selected, "%") +
+      '</div><div class="pfnote">Ranking for ' + esc(P.posPlural) + '</div>' +
+      // the one figure the official app cannot show
+      (P.goOwned == null ? '' :
+        '<div class="pfgo"><b>' + P.goOwned.toFixed(1) + '%</b> of our ' + num(P.managers) +
+        ' own him</div>') + '</div>';
+
+    // 4 — recent form and what is coming
+    h += profStrip(hist, P.ahead);
+
+    // 5 — every match, behind and ahead
+    var tab = state.ppTab === "fixtures" ? "fixtures" : "results";
+    h += '<div class="pseg psegwide" role="tablist" id="ppSeg">' +
+      '<button type="button" role="tab" data-pp="results"' +
+        (tab === "results" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Results</button>' +
+      '<button type="button" role="tab" data-pp="fixtures"' +
+        (tab === "fixtures" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Fixtures</button>' +
+      '</div><div class="card"><div id="ppPanel"></div></div>';
+
+    host.innerHTML = h;
+
+    var panel = $("#ppPanel", host);
+    var paint = function () {
+      panel.innerHTML = tab === "fixtures" ? ppFixtures(P) : ppResults(ds, el, hist);
+    };
+    $all("[data-pp]", host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var want = b.getAttribute("data-pp");
+        if (want === tab) return;
+        tab = state.ppTab = want;
+        $all("[data-pp]", host).forEach(function (x) {
+          var on = x.getAttribute("data-pp") === want;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        paint();
+      });
+    });
+    // A row opens its own gameweek underneath it rather than over the page:
+    // the question "where did those twelve points come from" is asked of a row
+    // while reading the column, and a sheet would take the column away.
+    panel.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-ppgw]");
+      if (!b) return;
+      var gw = b.getAttribute("data-ppgw");
+      var open = panel.querySelector('.ppexp[data-for="' + gw + '"]');
+      $all(".ppexp", panel).forEach(function (x) { if (x !== open) x.remove(); });
+      $all("[data-ppgw]", panel).forEach(function (x) {
+        if (x !== b) x.classList.remove("open");
+      });
+      if (open) { open.remove(); b.classList.remove("open"); return; }
+      b.classList.add("open");
+      var row = document.createElement("tr");
+      row.className = "ppexp";
+      row.setAttribute("data-for", gw);
+      row.innerHTML = '<td colspan="5">' + bdGwPanel(ds, el, +gw, 1) + '</td>';
+      b.parentNode.insertBefore(row, b.nextSibling);
+    });
+    paint();
+  }
+
+  // What he has done: every gameweek played, newest first, each opening its
+  // own points breakdown underneath.
+  function ppResults(ds, el, hist) {
+    var rows = (hist ? hist.rows : []).filter(function (r) { return !r.ahead; })
+      .slice().reverse();
+    if (!rows.length) return '<div class="callout">No gameweeks have been played yet.</div>';
+    var fx = ds.gwFixtures || {}, club = ds.elements[el][2];
+    var scoreOf = function (gw, opp, home) {
+      var f = (fx[gw] || []).filter(function (x) {
+        return (x[0] === club && x[1] === opp) || (x[1] === club && x[0] === opp);
+      })[0];
+      if (!f || f[4] == null || f[5] == null) return "";
+      return home ? f[4] + " - " + f[5] : f[5] + " - " + f[4];
+    };
+    return '<table class="t pptbl"><thead><tr>' +
+      '<th class="num">GW</th><th>Opponent</th><th class="num">Result</th>' +
+      '<th class="num">Points</th><th class="num" aria-label="More"></th>' +
+      '</tr></thead><tbody>' + rows.map(function (r) {
+        var f = r.fixtures[0];
+        var opp = r.blank ? '<span class="bdblank">no fixture</span>'
+          : '<span class="nwrap">' + crest(f.opp) + esc(f.opp) +
+            '<i class="bdha">' + (f.home ? "H" : "A") + '</i></span>';
+        var sc = r.blank ? "" : scoreOf(r.gw, f.opp, f.home);
+        var pts = r.pts == null ? '<span class="bdblank">–</span>'
+          : '<b>' + num(r.pts) + '</b>' + (r.prov ? '<i class="bdprov" title="includes provisional bonus">*</i>' : '');
+        return '<tr' + (r.blank ? '' : ' data-ppgw="' + r.gw + '" role="button" tabindex="0"') + '>' +
+          '<td class="num">' + r.gw + '</td><td class="name">' + opp + '</td>' +
+          '<td class="num"><span class="ppsc">' + esc(sc) + '</span></td>' +
+          '<td class="num">' + pts + '</td>' +
+          '<td class="num">' + (r.blank ? '' : '<i class="ppmore" aria-hidden="true">+</i>') + '</td></tr>';
+      }).join("") + '</tbody></table>';
+  }
+
+  // What is ahead: date, gameweek, who, and how hard FPL rates it.
+  function ppFixtures(P) {
+    if (!P.ahead.length) return '<div class="callout">No fixtures left this season.</div>';
+    return '<table class="t pptbl ppfx"><thead><tr>' +
+      '<th>Date</th><th class="num">GW</th><th>Opponent</th>' +
+      '<th class="num" aria-label="Fixture difficulty rating">FDR</th>' +
+      '</tr></thead><tbody>' + P.ahead.map(function (f) {
+        // Two lines rather than one long one: "Sat, 10 Oct, 02:00 PM" across a
+        // phone leaves no room for the rating beside it, and the day and the
+        // time are read for different reasons anyway.
+        var d = f.ko ? new Date(f.ko) : null;
+        var when = d
+          ? '<b>' + esc(d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })) +
+            '</b><span>' + esc(d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })) + '</span>'
+          : '<b>–</b>';
+        return '<tr><td class="ppwhen">' + when + '</td>' +
+          '<td class="num">' + f.gw + '</td>' +
+          '<td class="name"><span class="nwrap">' + crest(f.opp) + esc(f.opp) +
+          '<i class="bdha">' + (f.home ? "H" : "A") + '</i></span></td>' +
+          '<td class="num">' + fdrChip(f.fdr) + '</td></tr>';
+      }).join("") + '</tbody></table>';
   }
 
   /* ---- gameweek status ---------------------------------------------------
@@ -2376,7 +2597,7 @@
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
       .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
-               "winnings", "gwstatus", "vol"]);
+               "winnings", "gwstatus", "vol", "player"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -2395,6 +2616,7 @@
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
     if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
     if (view === "vol" && parts[1]) state.volKey = parts[1];
+    if (view === "player") state.playerId = +parts[1] || null;
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
       state.plGw = +parts[1] || null;
@@ -2446,12 +2668,14 @@
     pl:      { t: "Premier League" },
     winnings:{ t: "Winnings" },
     gwstatus:{ t: "Gameweek status" },
-    vol:     { t: "Game On Voluntary", topic: "voluntary" }
+    vol:     { t: "Game On Voluntary", topic: "voluntary" },
+    // the bar carries his name, so the page body never repeats it
+    player:  { t: "Player" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
   var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
-                   "winnings", "gwstatus", "vol"];
+                   "winnings", "gwstatus", "vol", "player"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -2462,6 +2686,12 @@
       if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
     if (state.view === "prices" && state.prTab === "stats") title = "Player stats";
+    // A player's page carries his name and club in the bar, as a manager's does
+    if (state.view === "player" && state.playerId) {
+      var pm = (S.dataset() || {}).elements;
+      pm = pm && pm[state.playerId];
+      if (pm) { title = pm[0]; sub = esc((pm[2] || "") + " \u00b7 " + (PPOS_LBL[pm[1]] || "")); }
+    }
     // How old the numbers are belongs on every page, not just the competition
     // tabs: a table is only as true as its last sync, and the page that says
     // so cannot be the one page you happen not to be on. Competition tabs also
@@ -2566,6 +2796,7 @@
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
     if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
     if (state.view === "vol") return renderVoluntary(host, S.dataset());
+    if (state.view === "player") return renderPlayer(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
       host.innerHTML = emptyState();

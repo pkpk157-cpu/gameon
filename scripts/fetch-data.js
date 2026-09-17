@@ -495,14 +495,21 @@ async function h2hAll(id) {
       ? full : "";
     // [name, position, club, price(tenths), owned% across all FPL, full name,
     //  season-start price(tenths) — the purchase price of an original pick,
-    //  photo code]
+    //  photo code, form, points per match]
     // The photo code, not the element id: ids are reassigned between seasons
     // and a picture filed under one would put another man's face on the card.
     // The code follows the player for as long as he plays.
     elements[el.id] = [el.web_name, el.element_type, teamShort[el.team] || "",
                        el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra,
                        (el.now_cost || 0) - (el.cost_change_start || 0),
-                       el.code || 0];
+                       el.code || 0,
+                       // FPL's own form and points per match, stored rather
+                       // than worked out. Both are derivable from what we hold,
+                       // but FPL computes them over its own window, and a
+                       // player page showing 8.1 beside the official app's 8.2
+                       // is a page nobody trusts twice.
+                       parseFloat(el.form) || 0,
+                       parseFloat(el.points_per_game) || 0];
     // Whoever is hurt, banned or a doubt. Kept apart from the element row and
     // only for the men it applies to: some fifty of six hundred carry anything
     // at all, and an empty slot against the other five hundred and fifty would
@@ -971,7 +978,10 @@ async function h2hAll(id) {
         [teamShort[f.team_h] || "?", teamShort[f.team_a] || "?", f.started ? 1 : 0, f.finished ? 1 : 0,
          f.team_h_score == null ? null : +f.team_h_score,
          f.team_a_score == null ? null : +f.team_a_score,
-         +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0]);
+         +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0,
+         // how hard FPL rates the match for each side, 1 to 5. Appended, so
+         // anything written for the older nine-slot shape keeps working.
+         +f.team_h_difficulty || 0, +f.team_a_difficulty || 0]);
       const ev = [];
       (f.stats || []).forEach((st) => {
         const kind = EV_KIND[st.identifier];
