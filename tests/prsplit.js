@@ -47,26 +47,25 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     // Price changes
     await p.click("#pfPrices"); await p.waitForTimeout(900);
     let r = await p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent.trim(),
-      tab: (document.querySelector('[data-pr].on') || {}).textContent, sheet: document.querySelector("#youBack").classList.contains("show"),
+      tab: !!document.querySelector('section.view.active table.pricetbl'), sheet: document.querySelector("#youBack").classList.contains("show"),
       rows: document.querySelectorAll('.view.active table.t tbody tr').length }));
     chk(r.hash === "#prices" && !r.sheet, w + ": Price changes opens the prices page and shuts the sheet", JSON.stringify(r));
     chk(r.title === "Price changes", w + ": the bar says Price changes", r.title);
-    chk(r.tab === "Prices" && r.rows > 0, w + ": the Prices tab is the one showing, with rows", r.tab + " / " + r.rows);
+    chk(r.tab === true && r.rows > 0, w + ": the prices table is the one showing, with rows", r.tab + " / " + r.rows);
 
     // Player stats
     await p.click("#barYou"); await p.waitForTimeout(450);
     await p.click("#pfPlayers"); await p.waitForTimeout(900);
     r = await p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent.trim(),
-      tab: (document.querySelector('[data-pr].on') || {}).textContent, sheet: document.querySelector("#youBack").classList.contains("show"),
+      tab: !!document.querySelector('section.view.active table.pricetbl'), sheet: document.querySelector("#youBack").classList.contains("show"),
       rows: document.querySelectorAll('.view.active table.t tbody tr').length }));
     chk(r.hash === "#prices/stats" && !r.sheet, w + ": Player stats opens the stats page and shuts the sheet", JSON.stringify(r));
     chk(r.title === "Player stats", w + ": the bar says Player stats", r.title);
-    chk(r.tab === "Stats" && r.rows > 0, w + ": the Stats tab is the one showing, with rows", r.tab + " / " + r.rows);
+    chk(r.tab === false && r.rows > 0, w + ": the boards are what is showing, with rows", r.tab + " / " + r.rows);
 
-    // the toggle between them still works, and still renames the bar
-    await p.click('[data-pr="prices"]'); await p.waitForTimeout(700);
-    r = await p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent.trim() }));
-    chk(r.hash === "#prices" && r.title === "Price changes", w + ": the on-page toggle still crosses between them", JSON.stringify(r));
+    // and neither page carries a control to the other: the sheet is the way
+    chk(await p.evaluate(() => document.querySelectorAll('section.view.active [data-pr]').length) === 0,
+      w + ": no toggle on either page");
 
     // back from either lands where the reader was
     await p.click("#barBack"); await p.waitForTimeout(700);

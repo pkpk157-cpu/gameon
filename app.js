@@ -939,14 +939,13 @@
   function renderPlayerBoards(host, ds) {
     var st = ds ? K.playerStats(ds) : null;
     if (!st || !st.rows.length) {
-      host.innerHTML = prHead("stats") +
+      host.innerHTML =
         '<div class="callout">The season’s player numbers arrive with the next data sync.</div>';
-      prWire(host);
       return;
     }
     if (!state.psPos) state.psPos = "all";
     var poss = { all: "All positions", 1: "Goalkeepers", 2: "Defenders", 3: "Midfielders", 4: "Forwards" };
-    host.innerHTML = prHead("stats") +
+    host.innerHTML =
       '<div class="pickrow"><select class="in narrow" id="psPos">' +
       Object.keys(poss).map(function (k) {
         return '<option value="' + k + '"' + (k === state.psPos ? " selected" : "") + '>' +
@@ -955,7 +954,6 @@
       '<div class="statlead">' + num(st.gws.length) + ' gameweek' + (st.gws.length === 1 ? '' : 's') +
       ' played · GO is his share of Game On’s ' + num(st.managers) + ' squads</div>' +
       '<div id="psPanel"></div>';
-    prWire(host);
 
     var boards = psBoards(st);
     var draw = function () {
@@ -972,30 +970,17 @@
     draw();
   }
 
-  // Prices or the season's leaderboards: one head for both, so the toggle does
-  // not jump when you cross between them.
-  function prHead(tab) {
-    return '<div class="pseg psegwide" role="tablist">' +
-      '<button type="button" role="tab" data-pr="prices"' +
-        (tab === "prices" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Prices</button>' +
-      '<button type="button" role="tab" data-pr="stats"' +
-        (tab === "stats" ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>Stats</button>' +
-      '</div>';
-  }
-  function prWire(host) {
-    $all('[data-pr]', host).forEach(function (b) {
-      b.addEventListener("click", function () {
-        location.hash = b.getAttribute("data-pr") === "stats" ? "prices/stats" : "prices";
-      });
-    });
-  }
+  // Prices and the season's leaderboards used to share a toggle here, from the
+  // days when one menu entry led to both and you had to cross between them.
+  // They are two entries now, so the toggle was a control that only ever took
+  // you where you had not asked to go, above the thing you had asked for. The
+  // Premier League keeps its own (plHead) because that section really is one
+  // entry with two views.
 
   function renderPrices(host, ds) {
     var rows = ds ? K.priceTable(ds) : null;
     if (!rows || !rows.length) {
-      host.innerHTML = prHead("prices") +
-        '<div class="callout">No player list in this data yet.</div>';
-      prWire(host);
+      host.innerHTML = '<div class="callout">No player list in this data yet.</div>';
       return;
     }
     // Prices and both ownerships are published already; which way a price is
@@ -1061,14 +1046,13 @@
     if (!state.priceDir) state.priceDir = colOf(state.priceSort).first;
 
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
-    var h = prHead("prices") + '<div class="pickrow">' +
+    var h = '<div class="pickrow">' +
       '<select class="in narrow" id="prPos">' + Object.keys(poss).map(function (k) {
         return '<option value="' + k + '"' + (k === state.pricePos ? ' selected' : '') + '>' + esc(poss[k]) + '</option>';
       }).join("") + '</select>' +
       searchBox("prSearch") + '</div>';
     h += '<div id="prPanel"></div>';
     host.innerHTML = h;
-    prWire(host);
 
     // Every player is in the table, so nobody is unreachable by scrolling. But
     // laying out 600 rows before the first paint cost more than two seconds on a

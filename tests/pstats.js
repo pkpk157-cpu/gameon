@@ -1,5 +1,5 @@
 const GOENV = require("./lib/env.js");
-/* Player stats: the renamed section, the Prices/Stats toggle, and the ten
+/* Player stats: the two entries in the profile sheet, and the ten
    leaderboards. The numbers are recounted here from the raw dataset by a
    second, independent path — if compute.js and a plain loop over livePoints
    and breakdown disagree, one of them is wrong and the page is not shippable. */
@@ -148,12 +148,14 @@ function recount() {
                title: (document.querySelector("#barTitle") || {}).textContent };
     });
     chk("prices is still the prices table", pr.view === "prices" && pr.priceRows > 50, JSON.stringify(pr));
-    chk("with a toggle, on Prices", pr.tabs === 2 && pr.on === "prices", JSON.stringify(pr));
+    // No toggle any more: each half is its own entry in the profile sheet, so a
+    // control to the other one sat above the thing that had been asked for.
+    chk("no toggle above the prices table", pr.tabs === 0, JSON.stringify(pr));
     chk("the bar says Price changes on the prices half", pr.title === "Price changes", pr.title);
 
-    // cross to the boards by tapping, not by URL
-    await page.click('[data-pr="stats"]');
-    await page.waitForTimeout(800);
+    // to the boards the way a reader gets there: the profile sheet
+    await page.click("#barYou"); await page.waitForTimeout(400);
+    await page.click("#pfPlayers"); await page.waitForTimeout(900);
     const ps = await page.evaluate(() => {
       const s = document.querySelector("section.view.active");
       return { hash: location.hash, boards: s.querySelectorAll("table.psbtbl").length,
@@ -162,7 +164,7 @@ function recount() {
                lead: (s.querySelector(".statlead") || {}).textContent,
                over: document.documentElement.scrollWidth - document.documentElement.clientWidth };
     });
-    chk("tapping Stats crosses over", ps.hash === "#prices/stats", ps.hash);
+    chk("the sheet opens the boards", ps.hash === "#prices/stats", ps.hash);
     chk("ten boards, each with its rule underneath", ps.boards === 10 && ps.notes === 10,
         ps.boards + " boards, " + ps.notes + " notes");
     chk("the page says how much season it is reading", /4 gameweeks played/.test(ps.lead || ""), ps.lead);
@@ -231,9 +233,9 @@ function recount() {
     chk("and it closes again",
         await page.evaluate(() => !document.querySelector("#modalBack.show")));
 
-    // and back again
-    await page.click('[data-pr="prices"]');
-    await page.waitForTimeout(700);
+    // and back to prices the same way
+    await page.click("#barYou"); await page.waitForTimeout(400);
+    await page.click("#pfPrices"); await page.waitForTimeout(900);
     const back = await page.evaluate(() => ({ hash: location.hash,
       priceRows: document.querySelectorAll("table.pricetbl tbody tr").length }));
     chk("and back to prices", back.hash === "#prices" && back.priceRows > 50, JSON.stringify(back));
