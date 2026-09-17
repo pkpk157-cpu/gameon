@@ -24,6 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The app is served from the repo root, so whatever is in the checkout is
+      # published. The test suites are not part of the app and have no business
+      # on the web: drop them from this throwaway checkout before it is packed.
+      # This touches the runner's copy only, never the repository.
+      - run: rm -rf tests
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

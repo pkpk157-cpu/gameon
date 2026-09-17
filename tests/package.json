@@ -1,0 +1,12 @@
+{
+  "name": "gameon-tests",
+  "private": true,
+  "description": "Browser suites for the Game On V12 tracker. See README.md.",
+  "scripts": {
+    "test": "bash battery.sh bat.log 4",
+    "states": "node mkstates.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

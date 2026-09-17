@@ -28,6 +28,20 @@ SCRIPTS.concat(NODE).forEach((f) => {
   try { new vm.Script(fs.readFileSync(p, "utf8"), { filename: f }); }
   catch (e) { fail(f, e.message); }
 });
+
+// The test suites, which nothing here runs — they need a browser and a server.
+// Parsing them still catches the failure that matters: a suite that cannot
+// start is a check that silently is not being made, and the whole point of
+// keeping them in the repository is that they are there when needed.
+["tests", "tests/audit", "tests/lib"].forEach((dir) => {
+  const d = path.join(ROOT, dir);
+  if (!fs.existsSync(d)) return;
+  fs.readdirSync(d).filter((f) => /\.js$/.test(f)).forEach((f) => {
+    const rel = dir + "/" + f;
+    try { new vm.Script(fs.readFileSync(path.join(d, f), "utf8"), { filename: rel }); }
+    catch (e) { fail(rel, e.message); }
+  });
+});
 MODULES.forEach((f) => {
   const p = path.join(ROOT, f);
   if (!fs.existsSync(p)) return;

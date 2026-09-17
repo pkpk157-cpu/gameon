@@ -60,6 +60,9 @@ jobs:
           done
           echo "could not push data.json after 5 attempts" >&2
           exit 1
+      # Same as in pages.yml: the test suites are not part of the served app.
+      # This runs after the push above, so it only trims the runner's checkout.
+      - run: rm -rf tests
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
