@@ -1175,6 +1175,9 @@
                pts: base * (mult || 1), base: base, prov: prov,
                price: meta[3] || 0, eo: (eot && eot.eo[el]) || 0,
                opp: oppText, waiting: waiting, live: live,
+               // hurt, banned or a doubt, as of now and only for a gameweek
+               // still to be played — see C.availability
+               flag: C.availability(ds, el, gw),
                cap: !!isCap, vice: !!isVice, mult: mult || 0 };
     }
 
@@ -2744,6 +2747,63 @@
                  hs: f[4], as: f[5], mins: f[6] || 0, ko: f[7] || null },
       home: side(home), away: side(away)
     };
+  };
+
+  /* ---- who is hurt, banned or a doubt -------------------------------------
+     FPL publishes one snapshot: how a player stands today. There is no history
+     of it, so a flag can only ever mean "as of now" \u2014 which is why a finished
+     gameweek shows none. A knock picked up in September has nothing to say
+     about a pitch from August, and drawing it there would be inventing a past
+     that did not happen.
+
+     Two chances are published and they mean different things. "This round" is
+     the gameweek being played; "next round" is the one being picked. Before a
+     deadline the second is the live question; once the round is under way the
+     first is. Reading the wrong one flags the wrong men every Saturday, so the
+     gameweek being looked at decides which is read.
+
+     The severity bands are FPL's own, and the app's colours follow them:
+     nothing at all for a fit player, yellow at 75, orange at 50 and 25, red
+     for out.                                                               */
+  C.availability = function (ds, el, gw) {
+    if (!ds || !ds.flags) return null;
+    var f = ds.flags[el] || ds.flags[String(el)];
+    if (!f) return null;
+    var status = f[0], news = f[3] || "", since = f[4] || null;
+
+    var chance = null;
+    if (gw != null) {
+      gw = +gw;
+      // A flag is about today. It belongs over the squad owned today — which
+      // is the newest one there is, whether or not its gameweek has finished,
+      // because that is the eleven a reader is deciding about. Looking back at
+      // an earlier gameweek's pitch gets none: a knock picked up in September
+      // has nothing to say about a pitch from August, and drawing it there
+      // would be inventing a past that did not happen.
+      var gws = C.squadGws(ds) || [];
+      var latest = gws.length ? +gws[gws.length - 1] : null;
+      if (latest != null && gw < latest) return null;
+      // In play, the question is whether he is on the pitch; otherwise it is
+      // whether to pick him next. FPL answers those with different fields.
+      var live = C.liveGwId(ds);
+      var playing = live != null && gw === +live;
+      chance = playing ? f[1] : f[2];
+      if (chance == null) chance = playing ? f[2] : f[1];
+    } else {
+      chance = f[2] == null ? f[1] : f[2];
+    }
+
+    // Out is out, whatever number sits beside it; a suspension has no
+    // percentage and neither does a man who is not in the squad at all.
+    var level;
+    if (chance === 0 || status === "i" || status === "s" ||
+        status === "u" || status === "n") level = "out";
+    else if (chance === 25 || chance === 50) level = "major";
+    else if (chance === 75) level = "minor";
+    else if (status === "d") level = "minor";
+    else return null;                       // fit, or nothing worth drawing
+
+    return { level: level, status: status, chance: chance, news: news, since: since };
   };
 
   /* ---- what happened in a match -------------------------------------------

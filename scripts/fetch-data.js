@@ -447,6 +447,8 @@ async function h2hAll(id) {
   }
 
   let elements = null, pitchGw = null;
+  // whoever is hurt, banned or a doubt — sparse, see where it is filled below
+  const flags = {};
   const livePoints = {}, picks = {}, liveBonus = {}, picksFinal = {}, liveStats = {}, breakdown = {};
   // goals, clean sheets and assists for one gameweek, kept only where a player
   // actually recorded one — these are the Last Manager Standing tie-breakers
@@ -501,6 +503,19 @@ async function h2hAll(id) {
                        el.now_cost || 0, parseFloat(el.selected_by_percent) || 0, extra,
                        (el.now_cost || 0) - (el.cost_change_start || 0),
                        el.code || 0];
+    // Whoever is hurt, banned or a doubt. Kept apart from the element row and
+    // only for the men it applies to: some fifty of six hundred carry anything
+    // at all, and an empty slot against the other five hundred and fifty would
+    // be pure weight. Both chances are stored because they answer different
+    // questions \u2014 "this round" is the gameweek being played, "next round" the
+    // one being picked \u2014 and a card showing the wrong one would flag the wrong
+    // players every Saturday.
+    if ((el.status && el.status !== "a") || el.news) {
+      flags[el.id] = [el.status || "a",
+                      el.chance_of_playing_this_round == null ? null : +el.chance_of_playing_this_round,
+                      el.chance_of_playing_next_round == null ? null : +el.chance_of_playing_next_round,
+                      el.news || "", el.news_added || null];
+    }
   });
 
   /* ---- prices, and the transfer flow that moves them -------------------- */
@@ -1068,7 +1083,7 @@ async function h2hAll(id) {
     historyCarried: carried.length ? { ids: carried, from: prev.updatedAt || null } : null,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
-    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps, gwEvents,
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps, gwEvents, flags,
     faceHide, pending
   };
   // Refuse to publish something clearly worse than what is already live: a

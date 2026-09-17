@@ -3,6 +3,8 @@ const GOENV = require("./lib/env.js");
 const fs = require("fs");
 const base = JSON.parse(fs.readFileSync(GOENV.APP + "/data.json", "utf8"));
 const clone = (o) => JSON.parse(JSON.stringify(o));
+// the manager whose squad the availability state hangs its flags on
+const FLAG_ME = 1255976;
 const out = {};
 
 // --- gameweek lifecycle -------------------------------------------------
@@ -196,6 +198,50 @@ Object.keys(dmg).forEach(k => { const d = clone(base); dmg[k](d); out[k] = d; })
   out["match-events"] = d;
 }
 
+// --- player availability -------------------------------------------------
+// Flags only mean anything over a gameweek still to be played, so this state
+// puts GW2 back in play. Which squad a pitch draws depends on where in the
+// week it is — a pending squad once transfers are in, the picked one before —
+// so rather than guess, every player this manager has ever had is a candidate
+// and they are dealt a spread of states: out, a 25% and a 50% doubt, a 75%
+// doubt, a suspension, news with no percentage, and news on a man who is fit
+// again. Every other state here has no flags key at all, which is also the
+// test that a pitch is fine without one.
+{
+  const d = clone(base); const ds = d.dataset;
+  ds.bootstrap.events.forEach(e => { e.is_current = e.id === 2; e.is_next = e.id === 3;
+    if (e.id === 2) { e.finished = false; e.data_checked = false; }
+    if (e.id === 1) { e.finished = true; e.data_checked = true; } });
+  ds.picks["2"] = ds.picks["1"]; ds.livePoints["2"] = ds.livePoints["1"]; ds.pitchGw = 2;
+  const seen = [];
+  [ds.picks, ds.picksFinal].forEach((src) => Object.keys(src || {}).forEach((gw) => {
+    (((src[gw] || {})[FLAG_ME] || {}).p || []).forEach((pk) => {
+      if (seen.indexOf(pk[0]) === -1) seen.push(pk[0]);
+    });
+  }));
+  const day = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  // [status, chanceThisRound, chanceNextRound, news, newsAdded]
+  const DEAL = [
+    ["i", 0, 0, "Hamstring injury - expected back 25 Oct", 3],
+    ["d", 25, 25, "Knock - 25% chance of playing", 1],
+    ["d", 50, 50, "Ankle injury - 50% chance of playing", 2],
+    ["d", 75, 75, "Unspecified injury - 75% chance of playing", 0.4],
+    ["s", 0, 0, "Suspended until 20 Sep", 6],
+    ["d", null, null, "Illness - chance unknown", 1],
+    ["a", 100, 100, "Returned from injury", 9]      // fit, news not yet cleared
+  ];
+  ds.flags = {};
+  seen.forEach((el, i) => {
+    // not everyone: a pitch where every man is hurt tests nothing about the
+    // nine cards in ten that must stay exactly as they were
+    if (i % 3 !== 0) return;
+    const f = DEAL[(i / 3) % DEAL.length];
+    ds.flags[el] = [f[0], f[1], f[2], f[3], day(f[4])];
+  });
+  ds.updatedAt = new Date().toISOString();
+  out["player-flags"] = d;
+}
+
 fs.mkdirSync(GOENV.STATES, { recursive: true });
 Object.keys(out).forEach(k => fs.writeFileSync(GOENV.STATES + "/" + k + ".json", JSON.stringify(out[k])));
 console.log(Object.keys(out).length + " datasets written:", Object.keys(out).join(", "));
@@ -203,7 +249,7 @@ console.log(Object.keys(out).length + " datasets written:", Object.keys(out).joi
 // The sweeps read whatever is in this directory, so a state that quietly stops
 // being written costs coverage without failing anything. Say the number out
 // loud and refuse a short count.
-const EXPECTED = 23;
+const EXPECTED = 24;
 if (Object.keys(out).length !== EXPECTED) {
   console.error("expected " + EXPECTED + " datasets, wrote " + Object.keys(out).length);
   process.exit(1);

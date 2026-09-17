@@ -798,6 +798,46 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .ppts.live { background:linear-gradient(90deg, #e4004f, #ec5a12); }
 /* the opponent, shown in the points slot until kick-off */
 .ppts.opp { font-size:9px; letter-spacing:.02em; color:#eaf7ff; opacity:.92; font-weight:700; }
+/* ---------- hurt, banned or a doubt ----------
+   A fit player draws nothing at all, which is nine cards in ten, so a quiet
+   week looks exactly as it did before any of this existed. When there is
+   something to say the name bar takes the colour of how bad it is, the way the
+   official app does, and a mark sits against it in the one corner of the card
+   nothing else uses.
+
+   Shape carries the meaning as well as colour: a solid triangle for a man who
+   will not play, a hollow one for a doubt. Red and amber are the same mark to
+   a good many readers, and "out" against "might not start" is the distinction
+   worth being able to see. */
+.pflag { position:absolute; left:1px; bottom:0; z-index:3; display:flex; line-height:0;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+.pflag svg { display:block; }
+.pflag > svg > path:first-child { fill:currentColor; stroke:none; }
+.pflag .bang { fill:var(--pflag-ink); stroke:var(--pflag-ink); }
+/* a doubt: outlined, and the mark inside takes the colour rather than the ink */
+.pflag.minor > svg > path:first-child, .pflag.major > svg > path:first-child {
+  fill:var(--pflag-hollow); stroke:currentColor; stroke-width:2.2; stroke-linejoin:round; }
+/* the mark inside a hollow triangle stays dark: a yellow "!" on near-white
+   is the one combination at 12px that nobody can read */
+.pflag.minor .bang, .pflag.major .bang { fill:var(--pflag-ink); stroke:var(--pflag-ink); }
+:root { --pflag-ink:#2b0b34; --pflag-hollow:rgba(255,255,255,.92); }
+.pflag.minor { color:#e0a800; }
+.pflag.major { color:#e2700f; }
+.pflag.out   { color:#d32f2f; }
+/* the name bar, which is the thing actually seen first */
+.pname.flagged.minor { background:#f6c445; color:#2b0b34; }
+.pname.flagged.major { background:#f08a24; color:#2b0b34; }
+.pname.flagged.out   { background:#c62828; color:#fff; }
+
+/* the same thing in full, across the top of a player's sheet */
+.pflagbar { display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:12px;
+  margin:0 0 12px; font-size:13px; font-weight:700; line-height:1.35; }
+.pflagbar .pfi { flex:none; }
+.pflagbar .pft { min-width:0; }
+.pflagbar.minor { background:#f6c445; color:#2b0b34; --pflag-ink:#f6c445; }
+.pflagbar.major { background:#f08a24; color:#2b0b34; --pflag-ink:#f08a24; }
+.pflagbar.out   { background:#c62828; color:#fff; --pflag-ink:#c62828; }
+
 /* captain / vice / top-scorer badges */
 .pb { position:absolute; top:2px; z-index:2; width:16px; height:16px; border-radius:50%;
   font-size:9.5px; font-weight:800; font-style:normal; line-height:16px; text-align:center;

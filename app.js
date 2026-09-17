@@ -436,7 +436,9 @@
     // not: he was not captained that week just because he is captained now.
     var at = +gw, openedAt = +gw;
 
-    var head = '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
+    // Across the top, above the name, where the official app puts it.
+    var head = flagBanner(K.availability(ds, el, at)) +
+      '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
       '<div class="bdname"><b>' + esc(name) + '</b><span>' + crest(club) + esc(club) +
       ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div>' +
       '<button type="button" class="hinfo bdinfo" id="bdWhat" aria-label="What these figures mean">' +
@@ -3794,6 +3796,46 @@
     return '<img class="facepic' + (cls ? " " + cls : "") + '" src="photos/p' + code +
       '.webp" alt="" loading="lazy" decoding="async">';
   }
+  /* ---- hurt, banned or a doubt -------------------------------------------
+     One mark, three shades, and nothing at all for a fit player. The shape
+     changes with the shade as well as the colour \u2014 a full triangle for a man
+     who is out, a hollow one for a doubt \u2014 because a red mark and an amber one
+     are the same mark to a good many people.                                */
+  function flagWords(f) {
+    if (f.status === "s") return "Suspended";
+    if (f.status === "u" || f.status === "n") return "Unavailable";
+    if (f.chance === 0) return "Out";
+    if (f.chance != null) return f.chance + "% chance of playing";
+    return f.status === "i" ? "Injured" : "A doubt";
+  }
+  function flagMark(f, name) {
+    var says = (name ? name + ": " : "") + flagWords(f);
+    return '<i class="pflag ' + f.level + '" role="img" aria-label="' + esc(says) +
+      '" title="' + esc(says) + '">' +
+      '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">' +
+      '<path d="M12 3.6 22 20.4H2Z"/>' +
+      '<path class="bang" d="M12 9.6v4.4" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>' +
+      '<circle class="bang" cx="12" cy="17.2" r="1.15"/></svg></i>';
+  }
+  // The same thing said in full, across the top of a player's sheet: what FPL
+  // says, and when it said it. The date is not decoration — a fortnight-old
+  // "knock" is a different thing from this morning's, and a flag quietly out
+  // of date would have somebody transfer out a man who trained on Friday.
+  function flagBanner(f) {
+    if (!f) return "";
+    var when = "";
+    if (f.since) {
+      var age = Date.now() - Date.parse(f.since);
+      if (age === age && age > 0) when = ' \u00b7 FPL said so ' + agoText(age);
+    }
+    return '<div class="pflagbar ' + f.level + '" role="status">' +
+      '<svg class="pfi" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">' +
+      '<path d="M12 3.6 22 20.4H2Z" fill="currentColor"/>' +
+      '<path d="M12 9.6v4.4" stroke="var(--pflag-ink)" stroke-width="2.1" stroke-linecap="round"/>' +
+      '<circle cx="12" cy="17.2" r="1.15" fill="var(--pflag-ink)"/></svg>' +
+      '<span class="pft">' + esc(f.news || flagWords(f)) + esc(when) + '</span></div>';
+  }
+
   // Two letters: one looks like a mistake and three do not fit.
   function initialsOf(name) {
     var p = String(name || "").split(/[\s.\-'\u2019]+/).filter(Boolean);
@@ -3878,11 +3920,20 @@
       footer = '<div class="ppts' + (ptsView ? (p.live ? ' live' : '') : ' alt') + '"' +
         (ptsView && p.live ? ' title="In play"' : '') + '>' + esc(metricOf(p, metric)) + '</div>';
     }
+    // Hurt, banned or a doubt: a mark in the corner and the name bar taking the
+    // colour of how bad it is, the way the official app does it, so a squad can
+    // be read for trouble at a glance without reading a word. A fit player
+    // draws nothing at all, which is nine cards in ten.
+    // The corner it sits in is the one nothing else wants: captain is top left,
+    // the top-scorer star and the price chip are top right, and the bottom of
+    // the shirt slot is empty on every card in every view. It also puts the
+    // mark against the name bar it tints, so the two read as one thing.
+    var flag = p.flag ? flagMark(p.flag, p.name) : "";
     return '<div class="pcell">' +
       (showPos ? '<div class="pposlbl">' + esc(p.pos) + '</div>' : '') +
       '<div class="pcard' + (p.inFor ? ' came' : '') + '" data-el="' + p.el + '" data-mult="' + (p.mult || 0) + '" role="button" tabindex="0">' + badge +
-        '<div class="pshirt">' + jersey(p.team, p.type) + facePic(p.el) + '</div>' +
-        '<div class="pname">' + esc(p.name) + '</div>' +
+        '<div class="pshirt">' + jersey(p.team, p.type) + facePic(p.el) + flag + '</div>' +
+        '<div class="pname' + (p.flag ? ' flagged ' + p.flag.level : '') + '">' + esc(p.name) + '</div>' +
         footer +
         // his selling price, when FPL would give back less than he now costs
         (metric === "val" && p.sell != null && p.sell !== p.price
