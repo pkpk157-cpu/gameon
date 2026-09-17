@@ -923,13 +923,14 @@ html, body { overscroll-behavior-y:contain; }
 .crest { width:18px; height:18px; object-fit:contain; vertical-align:-4px; flex:none; }
 .fx .fxs.l .crest { margin-right:6px; }
 .fx .fxs.r .crest { margin-left:6px; }
-/* A crest costs the club name twenty-five points, and this table already
-   carries eleven columns: on a phone the name loses letters for it, which is
-   the wrong way round. The crest joins the table where the table breathes —
-   the same width at which its padding loosens — and the fixtures list, which
-   has room for it at every size, keeps its own. */
-table.t.pltbl td.name .crest { display:none; }
-@media (min-width:560px) { table.t.pltbl td.name .crest { display:inline-block; margin-right:7px; } }
+/* This table carries eleven columns, so a crest here has to be paid for. It is
+   worth paying for: the crest is how a club is recognised before the name is
+   read. The width comes from the form run rather than the club name (see the
+   c-l5 rule below), and the crest itself is three points smaller until the
+   table's padding loosens at 560. */
+table.t.pltbl td.name .crest { width:15px; height:15px; margin-right:5px; vertical-align:-3px; }
+@media (min-width:560px) { table.t.pltbl td.name .crest { width:18px; height:18px; margin-right:7px;
+                                                          vertical-align:-4px; } }
 .bdname .crest { width:16px; height:16px; margin-right:5px; vertical-align:-3px; }
 @media (max-width:359px) { .fx .crest { width:16px; height:16px; margin-left:4px; margin-right:4px; } }
 
@@ -1695,10 +1696,12 @@ table.t.pltbl tr.plrow.drop td.pos { border-left-color:var(--bad); }
 @media (max-width:520px) {
   table.t.pltbl .c-gf, table.t.pltbl .c-ga { display:none; }
 }
-/* The form run only goes when the club names would start losing letters for
-   it — measured, not assumed: the name column carries the slack, so at 360 and
-   up it can give the run its 45px and still print every club in full. */
-@media (max-width:359px) {
+/* Club, crest and form run cannot all have the width on a narrow phone, so the
+   form run is the one that goes: the crest says which club it is at a glance
+   and the name stays whole. Measured, not assumed — at 430 and up the run fits
+   beside a crest with every club still printed in full, and below that
+   "Crystal Palace" is the first to start losing letters for it. */
+@media (max-width:429px) {
   table.t.pltbl .c-l5 { display:none; }
 }
 @media (min-width:560px) {
