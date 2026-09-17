@@ -5485,6 +5485,14 @@
     h += '<div class="note" style="margin-top:10px">Organiser tip: refresh once per gameweek, <b>Export</b>, and commit the file as <code>gameon/data.json</code>. Everyone else\'s app will load it automatically — no proxy load for 245 people.</div>';
     h += '</div></div>';
 
+    // Usage counter. GoatCounter cannot pick one person's visits back out of
+    // its totals — it keeps no identity — so the choice is about the visits
+    // still to come, and it lives on the phone, in the key count.js honours.
+    h += '<div class="card"><div class="hd"><h3>Usage counter</h3></div><div class="bd">';
+    h += '<div class="note" id="countNote">' + countNote() + '</div>';
+    h += '<div class="btnrow" style="margin-top:10px"><button class="btn" id="btnCount">' + countLabel() + '</button></div>';
+    h += '</div></div>';
+
     // Admin overrides
     h += '<div class="section-title"><h2>Admin — custom rules</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd">';
@@ -5507,7 +5515,20 @@
     return '<label class="field"><span class="lab">' + esc(lab) + '</span>' + control + '</label>';
   }
 
+  function countNote() {
+    return countingOff()
+      ? "This phone's visits are not counted in the usage stats. Visits counted before this was switched off stay in the totals."
+      : "This phone's visits are counted in the usage stats. Switch off on every phone you use to keep yourself out of the totals.";
+  }
+  function countLabel() { return countingOff() ? "Count my visits again" : "Stop counting my visits"; }
+
   function wireSettings(host) {
+    $("#btnCount", host).addEventListener("click", function () {
+      try { if (countingOff()) localStorage.removeItem(SKIP_KEY); else localStorage.setItem(SKIP_KEY, "t"); } catch (e) {}
+      $("#countNote", host).textContent = countNote();
+      $("#btnCount", host).textContent = countLabel();
+      toast(countingOff() ? "This phone is no longer counted" : "This phone is counted again");
+    });
     $("#saveLeague", host).addEventListener("click", function () {
       var classic = parseInt($("#cfgClassic", host).value, 10);
       var h2h = $("#cfgH2h", host).value.split(",").map(function (s) { return parseInt(s.trim(), 10); }).filter(function (n) { return !isNaN(n); });
@@ -5661,9 +5682,14 @@
   // (every profile is "/profile") so the dashboard reads as tabs, not as 245
   // manager names.
   var lastTracked = null;
+  // GoatCounter's own opt-out key: count.js drops every call while it is set,
+  // and the check here keeps that true whichever version of count.js loads.
+  var SKIP_KEY = "skipgc";
+  function countingOff() { try { return localStorage.getItem(SKIP_KEY) === "t"; } catch (e) { return false; } }
   function track(path, isEvent) {
     try {
       if (!window.goatcounter || typeof window.goatcounter.count !== "function") return;
+      if (countingOff()) return;
       if (!isEvent) {
         if (path === lastTracked) return;
         lastTracked = path;
