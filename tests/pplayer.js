@@ -194,20 +194,57 @@ async function open(b, hash, w, waitFor) {
     await ctx.close();
   }
 
-  /* --- the way in, from the sheet ---------------------------------------- */
+  /* --- the way in: a tap on a card, landing on that gameweek -------------
+     There used to be a sheet between the two, holding a points breakdown and a
+     season table — most of what this page does and less of it. The tap comes
+     straight here now, and because a card is a question about one gameweek,
+     it arrives with that gameweek already open. */
   {
     const { ctx, p, errs } = await open(b, "profile/" + ME, 390, ".pcard");
-    await p.evaluate(() => { const c = document.querySelector(".pcard[data-el]"); if (c) c.click(); });
-    await p.waitForTimeout(600);
-    const has = await p.evaluate(() => !!document.querySelector("#bdFull"));
-    chk(has, "the quick sheet offers a way to his page");
-    await p.click("#bdFull");
-    await p.waitForTimeout(800);
-    const where = await p.evaluate(() => ({ hash: location.hash,
+    const tapped = await p.evaluate(() => {
+      const c = document.querySelector(".pcard[data-el]");
+      const gw = c.closest("[data-bgw]").getAttribute("data-bgw");
+      c.click();
+      return { el: c.getAttribute("data-el"), gw: gw };
+    });
+    await p.waitForSelector(".pphead", { timeout: 15000 });
+    await p.waitForTimeout(700);
+    const where = await p.evaluate(() => ({
+      hash: location.hash,
       page: !!document.querySelector(".pphead"),
-      sheet: document.querySelector("#modalBack").classList.contains("show") }));
-    chk(/^#player\/\d+/.test(where.hash) && where.page, "which opens it", where.hash);
-    chk(!where.sheet, "and takes the sheet out of the way rather than stacking it");
+      sheet: document.querySelector("#modalBack").classList.contains("show"),
+      openGw: (document.querySelector("tr[data-ppgw].open") || {}).getAttribute
+        ? document.querySelector("tr[data-ppgw].open").getAttribute("data-ppgw") : null,
+      expanded: document.querySelectorAll(".ppexp").length
+    }));
+    chk(where.page && where.hash === "#player/" + tapped.el + "/" + tapped.gw,
+      "a tap on a card opens his page, carrying the gameweek it came from", where.hash);
+    chk(!where.sheet, "and no sheet is left over the top of it");
+    chk(where.openGw === tapped.gw && where.expanded === 1,
+      "with that gameweek already open, not left to be found again",
+      where.openGw + " / " + where.expanded + " open");
+    // and the breakdown shown is that gameweek's, not whichever was newest
+    const shown = await p.evaluate(() => {
+      const row = document.querySelector("tr[data-ppgw].open");
+      const exp = document.querySelector(".ppexp");
+      return { forGw: exp && exp.getAttribute("data-for"), rowGw: row && row.getAttribute("data-ppgw"),
+               total: exp ? (exp.querySelector(".bdtotal") || {}).textContent : null };
+    });
+    chk(shown.forGw === tapped.gw && shown.rowGw === tapped.gw,
+      "the breakdown belongs to the gameweek tapped", JSON.stringify(shown));
+    chk(!!shown.total && /pts/.test(shown.total), "and it totals", shown.total);
+    // coming back later must not keep reopening that row
+    await p.evaluate(() => { location.hash = "classic"; });
+    await p.waitForTimeout(500);
+    await p.evaluate((el) => { location.hash = "player/" + el; }, tapped.el);
+    await p.waitForSelector(".pphead", { timeout: 15000 });
+    await p.waitForTimeout(600);
+    chk(await p.evaluate(() => document.querySelectorAll(".ppexp").length) === 0,
+      "arriving without a gameweek opens nothing");
+    // the figures explain themselves
+    await p.click("#ppWhat");
+    await p.waitForTimeout(400);
+    chk(await p.evaluate(() => !!document.querySelector("#modalBack.show")), "and the page says what its figures mean");
     chk(errs.length === 0, "the way in: no page errors", errs.join(" | "));
     await ctx.close();
   }

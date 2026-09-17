@@ -360,168 +360,30 @@
 
   // The season behind it. Every gameweek, what he played and what it returned,
   // and each row opens that gameweek on the other tab.
-  function bdSeasonPanel(hist, cur) {
-    if (!hist || !hist.rows.length) {
-      return '<div class="callout">No gameweeks have been published yet.</div>';
-    }
-    var oppOf = function (r) {
-      if (r.blank) return '<span class="bdblank">no fixture</span>';
-      return r.fixtures.map(function (f) {
-        return esc(f.opp) + '<span class="bdha">' + (f.home ? "H" : "A") + '</span>';
-      }).join(" ");
-    };
-    var anyGo = hist.rows.some(function (r) { return r.go != null; });
-    var h = '<table class="t bdhist' + (anyGo ? ' wgo' : '') + '"><thead><tr>' +
-      '<th class="num">GW</th><th>Opponent</th>' +
-      (anyGo ? '<th class="num" aria-label="Share of Game On squads">GO</th>' : '') +
-      '<th class="num">Min</th><th class="num">Pts</th></tr></thead><tbody>';
-    h += hist.rows.map(function (r) {
-      var pts = r.ahead ? '<span class="bdblank">–</span>'
-        : (r.pts == null ? '<span class="bdblank">–</span>'
-          : '<b>' + num(r.pts) + '</b>' + (r.prov ? '<i class="bdprov" title="includes provisional bonus">*</i>' : ''));
-      return '<tr class="bdrow' + (r.gw === +cur ? ' on' : '') + '" data-bdgw="' + r.gw + '"' +
-        ' role="button" tabindex="0">' +
-        '<td class="num">' + r.gw + '</td><td>' + oppOf(r) + '</td>' +
-        (anyGo ? '<td class="num">' + (r.go == null ? '<span class="bdblank">–</span>'
-                                                    : r.go.toFixed(1) + '%') + '</td>' : '') +
-        '<td class="num">' + (r.blank || r.ahead ? '<span class="bdblank">–</span>' : num(r.mins)) + '</td>' +
-        '<td class="num">' + pts + '</td></tr>';
-    }).join("");
-    h += '<tr class="bdtotal"><td class="num"></td><td>Season</td>' +
-      (anyGo ? '<td class="num"></td>' : '') +
-      '<td class="num">' + num(hist.mins) + '</td>' +
-      '<td class="num"><b>' + num(hist.total) + '</b></td></tr>';
-    return h + '</tbody></table>';
-  }
-
-  /* The figures on this card come from three different places and mean three
-     different things. Worth reading once, which is what an information button
-     is for — rather than a line of small print under every table. */
-  function bdHelp() {
+  // What the page's figures mean, on the page rather than in a sheet over it.
+  function playerHelp() {
     var h = helpList("What he is today", [
       ["Price", "What he costs to buy now, and how far that has moved since the season " +
         "began. Prices only change overnight."],
-      ["FPL", "The share of every squad in the game that holds him — the game's own " +
-        "figure, as it stands today. FPL publishes no history of it, so it cannot be " +
-        "shown week by week."],
-      ["Game On", "The share of this league's squads that holds him now."]
+      ["Pnts/Match", "FPL's own points per match, and where that puts him among every " +
+        "player in his position."],
+      ["Form", "FPL's own form figure \u2014 its average over its own recent window, so this " +
+        "page agrees with the official app rather than arguing with it by a tenth."],
+      ["Owned by FPL", "The share of every squad in the game that holds him, as it stands " +
+        "today. FPL publishes no history of it, so it cannot be shown week by week."],
+      ["Game On", "How many of this league's squads hold him now \u2014 the one figure the " +
+        "official app cannot show you."]
     ]);
-    h += helpList("The season, week by week", [
-      ["GO", "The share of Game On squads that held him <b>that week</b>, counted from that " +
-        "week's own squads. This one is real history: it says whether the league was on him " +
-        "before he scored or piled in afterwards."],
-      ["Opponent", "Who his club met, <b>H</b> at home and <b>A</b> away. A dash means he " +
-        "had no fixture that gameweek."],
-      ["Min", "Minutes on the pitch. A dash means he did not feature, or the gameweek has " +
-        "not been played yet."],
-      ["Pts", "What he scored. A <b>*</b> means provisional bonus is still part of it, " +
+    h += helpList("What he has done, and what is ahead", [
+      ["Result", "His club's score, his side first."],
+      ["Points", "What he scored. A <b>*</b> means provisional bonus is still part of it, " +
         "because FPL has not confirmed the bonus for that fixture."],
-      ["Any row", "Tap it to see what that gameweek was made of."]
+      ["Any result row", "Tap it to see what that gameweek was made of."],
+      ["FDR", "FPL's fixture difficulty rating, 1 for a kind match and 5 for a brutal one. " +
+        "A dash means the rating had not been published when this data was taken."]
     ]);
     return h;
   }
-
-  function bdFact(label, value, sub) {
-    return '<div class="bdfact"><div class="k">' + esc(label) + '</div>' +
-      '<div class="v">' + esc(value) + '</div>' +
-      '<div class="s">' + esc(sub) + '</div></div>';
-  }
-
-  function showBreakdown(el, gw, mult) {
-    var ds = S.dataset();
-    if (!ds || !ds.elements || !ds.elements[el]) return;
-    var meta = ds.elements[el];
-    var name = meta[5] || meta[0], club = meta[2];
-    var hist = K.playerHistory(ds, el);
-    // Which gameweek the breakdown is showing, and whether the multiplier the
-    // card was tapped with still applies. Walk to another gameweek and it does
-    // not: he was not captained that week just because he is captained now.
-    var at = +gw, openedAt = +gw;
-
-    // Across the top, above the name, where the official app puts it.
-    var head = flagBanner(K.availability(ds, el, at)) +
-      '<div class="bdwho">' + faceBox(el, meta[0], "lg") +
-      '<div class="bdname"><b>' + esc(name) + '</b><span>' + crest(club) + esc(club) +
-      ' · ' + esc(PPOS_LBL[meta[1]] || "") + '</span></div>' +
-      '<button type="button" class="hinfo bdfull" id="bdFull" aria-label="Open his own page">' +
-      svg("open", 17) + '</button>' +
-      '<button type="button" class="hinfo bdinfo" id="bdWhat" aria-label="What these figures mean">' +
-      svg("info", 17) + '</button></div>';
-    // What he costs and who holds him, as of now. These sit outside the tabs
-    // because they belong to today rather than to any one gameweek: FPL
-    // publishes only its current ownership figure, and a price column would be
-    // honest only back to the day we started recording changes.
-    if (hist) {
-      var rise = Math.round((hist.price - hist.start) * 10) / 10;
-      head += '<div class="bdfacts">' +
-        bdFact("Price", psMoney(hist.price),
-          rise ? (rise > 0 ? "▲" : "▼") + Math.abs(rise).toFixed(1) +
-                 " on " + psMoney(hist.start)
-               : "unchanged all season") +
-        // The label stays short enough not to be cut off on a narrow phone;
-        // the line underneath is what says what is being owned.
-        bdFact("FPL", hist.owned.toFixed(1) + "%", "of every squad in the game") +
-        bdFact("Game On", hist.goOwned == null ? "–" : hist.goOwned.toFixed(1) + "%",
-          "of the league’s 245 squads") +
-        '</div>';
-    }
-    var many = hist && hist.rows.length > 1;
-    var box = modal(meta[0] + ' · ' + club,
-      head + (many ? '<div class="pseg sm bdtabs" role="tablist">' +
-        '<button type="button" role="tab" data-bdtab="gw" class="on" aria-selected="true"></button>' +
-        '<button type="button" role="tab" data-bdtab="all" aria-selected="false">Season</button>' +
-        '</div>' : '') + '<div id="bdPanel"></div>');
-
-    var tab = "gw";
-    var draw = function () {
-      var gwBtn = $('[data-bdtab="gw"]', box);
-      if (gwBtn) gwBtn.textContent = "Gameweek " + at;
-      $all("[data-bdtab]", box).forEach(function (b) {
-        var on = b.getAttribute("data-bdtab") === tab;
-        b.classList.toggle("on", on);
-        b.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      var info = $("#bdWhat", box);
-      if (info) info.classList.toggle("on", tab === "help");
-      fill("#bdPanel", box, tab === "help" ? bdHelp()
-        : tab === "all" ? bdSeasonPanel(hist, at)
-        : bdGwPanel(ds, el, at, at === openedAt ? mult : 1));
-    };
-    // The sheet answers what he scored; his own page answers whether to own
-    // him. This is the way through, and it takes the sheet out of the way
-    // rather than leaving it stacked over the page it opened.
-    var fullBtn = $("#bdFull", box);
-    if (fullBtn) {
-      fullBtn.addEventListener("click", function () {
-        closeModal(true);
-        navFromOverlay("player/" + el);
-      });
-    }
-    // A sheet cannot open another over itself without throwing this one away,
-    // so the explanation is a third panel and either tab brings you back.
-    var infoBtn = $("#bdWhat", box);
-    if (infoBtn) {
-      infoBtn.addEventListener("click", function () {
-        tab = tab === "help" ? "gw" : "help";
-        draw();
-      });
-    }
-
-    $all("[data-bdtab]", box).forEach(function (b) {
-      b.addEventListener("click", function () { tab = b.getAttribute("data-bdtab"); draw(); });
-    });
-    // A gameweek on the season tab opens that gameweek on the other one, which
-    // is the question anybody reading the list is about to ask anyway.
-    $("#bdPanel", box).addEventListener("click", function (e) {
-      var tr = e.target.closest && e.target.closest("tr[data-bdgw]");
-      if (!tr) return;
-      at = +tr.getAttribute("data-bdgw");
-      tab = "gw";
-      draw();
-    });
-    draw();
-  }
-
   function closeModal(fromPop) {
     var was = $("#modalBack").classList.contains("show");
     $("#modalBack").classList.remove("show");
@@ -1041,10 +903,10 @@
       fill("#psPanel", host, boards.map(function (b) { return psCard(b, list); }).join(""));
     };
     $("#psPos", host).addEventListener("change", function () { state.psPos = this.value; draw(); });
-    // Tap a player for the same points breakdown the pitch cards open.
+    // Tap a player for his own page, as the pitch cards do.
     $("#psPanel", host).addEventListener("click", function (e) {
       var tr = e.target.closest && e.target.closest("tr[data-el]");
-      if (tr) showBreakdown(+tr.getAttribute("data-el"), ds.pitchGw, 1);
+      if (tr) location.hash = "player/" + tr.getAttribute("data-el") + "/" + ds.pitchGw;
     });
     draw();
   }
@@ -1761,7 +1623,9 @@
       '<div class="ppwho"><div class="ppos">' + esc(P.pos) + '</div>' +
       '<h2>' + esc(P.full) + '</h2>' +
       '<div class="ppclub">' + crest(P.club) + esc((ds.teamNames || {})[P.club] || P.club) + '</div>' +
-      '</div></div>';
+      '</div>' +
+      '<button type="button" class="hinfo ppinfo" id="ppWhat" aria-label="What these figures mean">' +
+      svg("info", 17) + '</button></div>';
 
     // 2 — what he costs, and what that has done this season
     var moved = Math.round((P.price - P.start) * 10) / 10;
@@ -1800,6 +1664,9 @@
     var paint = function () {
       panel.innerHTML = tab === "fixtures" ? ppFixtures(P) : ppResults(ds, el, hist);
     };
+    $("#ppWhat", host).addEventListener("click", function () {
+      modal("What these mean", playerHelp());
+    });
     $all("[data-pp]", host).forEach(function (b) {
       b.addEventListener("click", function () {
         var want = b.getAttribute("data-pp");
@@ -1834,6 +1701,19 @@
       b.parentNode.insertBefore(row, b.nextSibling);
     });
     paint();
+
+    // The gameweek the reader tapped, opened and brought into view. Cleared
+    // once used: coming back here later should not keep reopening a row from a
+    // journey that is over.
+    if (state.playerGw) {
+      var want = panel.querySelector('[data-ppgw="' + state.playerGw + '"]');
+      state.playerGw = null;
+      if (want) {
+        want.click();
+        var card = want.closest(".card");
+        if (card) card.scrollIntoView({ block: "center", behavior: "instant" in window ? "instant" : "auto" });
+      }
+    }
   }
 
   // What he has done: every gameweek played, newest first, each opening its
@@ -2473,14 +2353,16 @@
       toast(r === "added" ? "Pinned as a rival" : "Rival unpinned");
       paintRivalPill();
     });
-    // Tap a player anywhere a pitch is drawn: the FPL-style points breakdown.
+    // Tap a player anywhere a pitch is drawn: his own page, opened on the
+    // gameweek that was tapped. There used to be a sheet here holding a points
+    // breakdown and a season table, which is most of what the page does and
+    // less of it — so the sheet went and the page took the tap.
     document.addEventListener("click", function (e) {
       var card = e.target.closest && e.target.closest(".pcard[data-el], .mrow[data-el], .mevrow[data-el]");
       if (!card) return;
       var host = card.closest("[data-bgw]");
       if (!host) return;
-      showBreakdown(+card.getAttribute("data-el"), +host.getAttribute("data-bgw"),
-                    +card.getAttribute("data-mult"));
+      location.hash = "player/" + card.getAttribute("data-el") + "/" + host.getAttribute("data-bgw");
     });
     $("#modalClose").addEventListener("click", function () { closeModal(); });
     window.addEventListener("popstate", function () {
@@ -2591,6 +2473,10 @@
     });
   }
 
+  // The address before this one, so a page opened from somewhere can go back to
+  // it. Only the player page uses it; everything else has a tab to return to.
+  var lastHash = null;
+
   function syncFromHash() {
     var h = (location.hash || "#classic").replace("#", "");
     var parts = h.split("/");
@@ -2609,6 +2495,16 @@
     // Remember only a place worth coming back to: the same list the back arrow
     // uses, so adding a sub-view can never make it point at itself.
     if (SUB_VIEWS.indexOf(view) === -1) state.backView = view;
+    // A player can be opened from a match, a leaderboard, a pitch or a price
+    // table, and back has to mean the page he was opened from. backView holds
+    // only the five tabs, so it would have dropped a reader arriving from a
+    // match onto Classic — which the sheet never did, being an overlay over
+    // the page rather than a page of its own.
+    if (view === "player" && state.view !== "player") {
+      state.playerFrom = (state.view === "pl" && state.plMatch)
+        ? "pl/" + state.plMatch.gw + "/" + state.plMatch.home + "-" + state.plMatch.away
+        : (lastHash || null);
+    }
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
@@ -2616,7 +2512,13 @@
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
     if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
     if (view === "vol" && parts[1]) state.volKey = parts[1];
-    if (view === "player") state.playerId = +parts[1] || null;
+    if (view === "player") {
+      state.playerId = +parts[1] || null;
+      // Arriving from a card means "what did he do in *that* gameweek", so the
+      // page opens with that row already open rather than making the reader
+      // find it again. Read once and cleared, so later taps are free.
+      state.playerGw = +parts[2] || null;
+    }
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
       state.plGw = +parts[1] || null;
@@ -2625,6 +2527,9 @@
     }
     state.rulesTopic = (view === "rules") ? (parts[1] || null) : state.rulesTopic;
     track(view === "rules" && parts[1] ? "/rules/" + parts[1] : "/" + view);
+    // Never remember a player page as somewhere to go back to, or two taps in
+    // a row would send the reader round in a circle.
+    if (view !== "player") lastHash = h;
     render();
   }
 
@@ -2764,6 +2669,13 @@
   function goBack() {
     // A match was opened from a list of fixtures; that is where back leads.
     if (state.view === "pl" && state.plMatch) { location.hash = "pl/" + state.plMatch.gw; return; }
+    // And a player was opened from wherever he was tapped.
+    if (state.view === "player" && state.playerFrom) {
+      var to = state.playerFrom;
+      state.playerFrom = null;
+      location.hash = to;
+      return;
+    }
     location.hash = state.backView || "classic";
   }
 

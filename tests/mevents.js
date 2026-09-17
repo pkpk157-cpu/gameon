@@ -181,7 +181,8 @@ const scoreOf = (tag) => { const [gw, pair] = tag.split("/"); const [h, a] = pai
     // tapping a row opens that player's breakdown, as a squad row does
     await p.click(".mevrow[data-el]");
     await p.waitForTimeout(600);
-    chk(await p.evaluate(() => !!document.querySelector("#modalBack.show")), "tapping an event opens the player breakdown");
+    chk(await p.evaluate(() => !!document.querySelector(".pphead") && /^#player\//.test(location.hash)),
+      "tapping an event opens that player's page");
     chk(errs.length === 0, "ownership: no page errors", errs.join(" | "));
     await ctx.close();
   }

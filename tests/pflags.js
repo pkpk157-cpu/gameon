@@ -153,36 +153,38 @@ let BROWSER = null;
     await ctx.close();
   }
 
-  /* --- the banner across the player's sheet ------------------------------ */
+  /* --- the banner across the top of his page ----------------------------- */
   {
     const { ctx, p, errs } = await open(390);
     await p.evaluate(() => { const f = document.querySelector(".pcard .pflag"); if (f) f.closest(".pcard").click(); });
-    await p.waitForTimeout(700);
+    await p.waitForSelector(".pphead", { timeout: 15000 });
+    await p.waitForTimeout(500);
     const bar = await p.evaluate(() => {
       const b = document.querySelector(".pflagbar");
       if (!b) return null;
-      const modal = b.closest("#modalBack") || document.querySelector("#modalBack");
-      const who = document.querySelector(".bdwho");
+      const who = document.querySelector(".pphead");
       return { level: ["out", "major", "minor"].filter(k => b.classList.contains(k))[0],
                text: b.textContent, hasIcon: !!b.querySelector("svg"),
                aboveName: !!who && (b.compareDocumentPosition(who) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
                fits: b.scrollWidth <= b.clientWidth + 1 };
     });
-    chk(!!bar, "the sheet opens with a banner across the top");
-    chk(bar && bar.aboveName, "above the player's name, where the official app puts it");
+    chk(!!bar, "his page opens with a banner across the top");
+    chk(bar && bar.aboveName, "above his name, where the official app puts it");
     chk(bar && bar.hasIcon && /\S/.test(bar.text), "carrying the mark and what FPL actually said", bar && bar.text);
     chk(bar && /FPL said so/.test(bar.text),
-      "and when FPL said it — a fortnight-old knock is not this morning's", bar && bar.text);
+      "and when FPL said it \u2014 a fortnight-old knock is not this morning's", bar && bar.text);
     chk(bar && bar.fits, "the banner does not overflow");
-    // a fit player's sheet has none
-    await p.evaluate(() => { const c = document.querySelector("#modalBack .mclose, #modalBack [aria-label='Close']"); if (c) c.click(); });
-    await p.waitForTimeout(400);
+    // a fit player's page has none
+    await p.evaluate(() => { document.querySelector("#barBack").click(); });
+    await p.waitForSelector(".pcard", { timeout: 15000 });
+    await p.waitForTimeout(500);
     await p.evaluate(() => {
       const cs = [...document.querySelectorAll(".pcard[data-el]")].filter(c => !c.querySelector(".pflag"));
       if (cs[0]) cs[0].click();
     });
-    await p.waitForTimeout(700);
-    chk(await p.evaluate(() => !document.querySelector(".pflagbar")), "a fit player's sheet has no banner");
+    await p.waitForSelector(".pphead", { timeout: 15000 });
+    await p.waitForTimeout(500);
+    chk(await p.evaluate(() => !document.querySelector(".pflagbar")), "a fit player's page has no banner");
     chk(errs.length === 0, "banner: no page errors", errs.join(" | "));
     await ctx.close();
   }

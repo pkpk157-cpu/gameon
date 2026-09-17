@@ -73,7 +73,7 @@ const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? 
     where = tag + " player card";
     await p.evaluate(() => location.hash = "#profile/1255976"); await p.waitForTimeout(900);
     await p.evaluate(() => { const c = document.querySelector(".pcard[data-el]"); c && c.click(); }); await p.waitForTimeout(600);
-    chk(await p.evaluate(() => !!document.querySelector("#modalBack.show")), where + ": a player card opens");
+    chk(await p.evaluate(() => !!document.querySelector(".pphead")), where + ": a player card opens his page");
     await p.evaluate(() => history.back()); await p.waitForTimeout(400);
     where = tag + " rivals";
     // the settings walk above blanks every field and saves, which clears the

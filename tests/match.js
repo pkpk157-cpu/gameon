@@ -129,16 +129,26 @@ function expect(home, away) {
     await p.evaluate(() => document.querySelector('[data-view="pl"] [data-metric="pts"]').click());
     await p.waitForTimeout(300);
 
-    // a row opens the breakdown modal for the right gameweek
-    const first = await p.evaluate(() => { const r = document.querySelector('[data-view="pl"] .mcol .mrow'); r.click(); return r.querySelector(".mn").textContent; });
-    await p.waitForTimeout(500);
-    const modal = await p.evaluate(() => ({
-      open: document.querySelector("#modalBack").classList.contains("show"),
-      title: document.querySelector("#modalTitle").textContent,
-      rows: document.querySelectorAll("#modalBody .bdtbl tbody tr").length }));
-    chk("row tap opens the breakdown", modal.open && modal.title.indexOf(first) >= 0 && modal.rows > 0, JSON.stringify(modal));
-    await p.evaluate(() => document.querySelector("#modalBack").click());
-    await p.waitForTimeout(300);
+    // a row opens his own page, on the gameweek this match belongs to
+    const first = await p.evaluate(() => {
+      const r = document.querySelector('[data-view="pl"] .mcol .mrow');
+      const gw = r.closest("[data-bgw]").getAttribute("data-bgw");
+      r.click();
+      return { name: r.querySelector(".mn").textContent, gw: gw, el: r.getAttribute("data-el") };
+    });
+    await p.waitForTimeout(900);
+    const page = await p.evaluate(() => ({
+      open: !!document.querySelector(".pphead"),
+      hash: location.hash,
+      title: (document.querySelector("#barTitle") || {}).textContent,
+      rows: document.querySelectorAll(".ppexp .bdtbl tbody tr").length }));
+    chk("row tap opens his page on this gameweek",
+        page.open && page.hash === "#player/" + first.el + "/" + first.gw && page.rows > 0,
+        JSON.stringify(page));
+    chk("and the bar names him", page.title === first.name, page.title + " vs " + first.name);
+    // back to the match
+    await p.evaluate(() => document.querySelector("#barBack").click());
+    await p.waitForTimeout(700);
 
     // back arrow returns to the gameweek's fixture list, not the previous view
     await p.evaluate(() => document.querySelector("#barBack").click());

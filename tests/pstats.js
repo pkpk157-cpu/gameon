@@ -221,17 +221,17 @@ function recount() {
     await page.selectOption("#psPos", "all");
     await page.waitForTimeout(400);
 
-    // a row opens the same breakdown the pitch cards use
+    // a row opens his own page, as a pitch card does
     await page.click("section.view.active table.psbtbl tbody tr");
-    await page.waitForTimeout(450);
+    await page.waitForTimeout(700);
     const md = await page.evaluate(() => ({
-      open: !!document.querySelector("#modalBack.show"),
-      title: (document.querySelector("#modalTitle") || {}).textContent }));
-    chk("a player opens his breakdown", md.open && !!md.title, JSON.stringify(md));
-    await page.click("#modalClose");
-    await page.waitForTimeout(350);
-    chk("and it closes again",
-        await page.evaluate(() => !document.querySelector("#modalBack.show")));
+      page: !!document.querySelector(".pphead"),
+      hash: location.hash,
+      sheet: !!document.querySelector("#modalBack.show") }));
+    chk("a player opens his own page", md.page && /^#player\//.test(md.hash), JSON.stringify(md));
+    chk("and no sheet over it", !md.sheet);
+    await page.evaluate(() => document.querySelector("#barBack").click());
+    await page.waitForTimeout(500);
 
     // and back to prices the same way
     await page.click("#barYou"); await page.waitForTimeout(400);
