@@ -1572,11 +1572,12 @@
     return '<span class="fdr f' + n + '" role="img" aria-label="Difficulty ' + n +
       ' of 5">' + n + '</span>';
   }
-  function profFigure(lab, val, f, suffix) {
-    var where = (f && f.rank && f.of)
-      ? '<span class="pfr">' + num(f.rank) + ' of ' + num(f.of) + '</span>' : '';
-    return '<div class="pfig"><div class="pfl">' + esc(lab) + '</div>' +
-      '<div class="pfv">' + esc(val) + (suffix || "") + '</div>' + where + '</div>';
+  // One box of the rail: what it is, the number, and the line that gives the
+  // number its meaning. The subtext is trusted markup, never a reader's text.
+  function ppBox(lab, val, sub) {
+    return '<div class="pprbox"><div class="pprl">' + esc(lab) + '</div>' +
+      '<div class="pprv">' + esc(val) + '</div>' +
+      '<div class="pprs">' + (sub || "") + '</div></div>';
   }
   // The six matches either side of now: what he did, then what is coming.
   function profStrip(hist, ahead) {
@@ -1627,24 +1628,29 @@
       '<button type="button" class="hinfo ppinfo" id="ppWhat" aria-label="What these figures mean">' +
       svg("info", 17) + '</button></div>';
 
-    // 2 — what he costs, and what that has done this season
+    // 2 — the four numbers, as a rail.
+    //
+    // They were three figures in a hard third-each grid with a price card above
+    // them. A third of a phone is about a hundred points, and "Owned by FPL" is
+    // a long label to put in it above a number and a rank: the labels crowded
+    // the dividers and the text ran into itself. A rail gives each box its own
+    // room and scrolls when four will not fit, which is the honest answer to
+    // not enough width — crushing them was not.
     var moved = Math.round((P.price - P.start) * 10) / 10;
-    h += '<div class="card ppprice"><span class="ppl">Price</span>' +
-      '<b>' + psMoney(P.price) + '</b>' +
-      '<span class="ppmv' + (moved > 0 ? " up" : moved < 0 ? " down" : "") + '">' +
-      (moved ? (moved > 0 ? "▲" : "▼") + Math.abs(moved).toFixed(1) + " this season"
-             : "unchanged all season") + '</span></div>';
-
-    // 3 — the three figures, and where they place him
-    h += '<div class="card ppfigs"><div class="pfrow">' +
-      profFigure("Pnts/Match", P.ppm.value == null ? "–" : P.ppm.value.toFixed(1), P.ppm) +
-      profFigure("Form", P.form.value == null ? "–" : P.form.value.toFixed(1), P.form) +
-      profFigure("Owned by FPL", P.selected.value.toFixed(1), P.selected, "%") +
-      '</div><div class="pfnote">Ranking for ' + esc(P.posPlural) + '</div>' +
-      // the one figure the official app cannot show
-      (P.goOwned == null ? '' :
-        '<div class="pfgo"><b>' + P.goOwned.toFixed(1) + '%</b> of our ' + num(P.managers) +
-        ' own him</div>') + '</div>';
+    h += '<div class="card pprail"><div class="pprwrap">' +
+      ppBox("Total points", P.points == null ? "\u2013" : num(P.points),
+        P.ppm.value == null ? "this season" : P.ppm.value.toFixed(1) + " per match") +
+      // Short subtexts on purpose: four boxes on a phone is ninety points each,
+      // and a sentence in there is what pushes the fourth off the screen.
+      ppBox("Price", psMoney(P.price),
+        moved ? '<b class="' + (moved > 0 ? "up" : "down") + '">' +
+                (moved > 0 ? "\u25b2" : "\u25bc") + Math.abs(moved).toFixed(1) + '</b> so far'
+              : "unchanged") +
+      ppBox("Owned by FPL", P.owned.toFixed(1) + "%", "of all squads") +
+      ppBox("Owned by Game On", P.goOwned == null ? "\u2013" : P.goOwned.toFixed(1) + "%",
+        P.goOwned == null ? "no squads yet"
+          : num(Math.round((P.goOwned / 100) * P.managers)) + " of " + num(P.managers)) +
+      '</div></div>';
 
     // 4 — recent form and what is coming
     h += profStrip(hist, P.ahead);

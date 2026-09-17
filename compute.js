@@ -2819,8 +2819,18 @@
         });
       });
 
+    // What he has scored all season, from our own per-gameweek record: FPL
+    // publishes a season total, but ours is the sum of the weeks this app
+    // actually holds, so the number agrees with the table underneath it.
+    var lp = ds.livePoints || {}, total = 0, any = false;
+    Object.keys(lp).forEach(function (g) {
+      var v = lp[g][el];
+      if (typeof v === "number") { total += v; any = true; }
+    });
+
     return {
       el: el, name: m[0], full: m[5] || m[0], club: club,
+      points: any ? total : null,
       pos: PROF_POS[type] || "", posPlural: PROF_POS_PL[type] || "",
       type: type,
       price: (m[3] || 0) / 10, start: (m[6] || 0) / 10,

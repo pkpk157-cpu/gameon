@@ -33,18 +33,23 @@ const EL = Object.keys(ds.elements).filter((k) => ds.elements[k][1] === 4)
 
 const look = (p) => p.evaluate(() => {
   const txt = (s) => { const e = document.querySelector(s); return e ? e.textContent.trim() : null; };
-  const fig = [...document.querySelectorAll(".pfig")].map(f => ({
-    label: f.querySelector(".pfl").textContent.trim(),
-    value: f.querySelector(".pfv").textContent.trim(),
-    rank: (f.querySelector(".pfr") || {}).textContent || null
+  const boxes = [...document.querySelectorAll(".pprbox")].map(x => ({
+    lab: x.querySelector(".pprl").textContent.replace(/\s+/g, " ").trim(),
+    val: x.querySelector(".pprv").textContent.trim(),
+    sub: x.querySelector(".pprs").textContent.replace(/\s+/g, " ").trim(),
+    // where the number sits, so four boxes can be checked for sitting level
+    valTop: Math.round(x.querySelector(".pprv").getBoundingClientRect().top),
+    clipped: [".pprl", ".pprv", ".pprs"].filter(sel => {
+      const e = x.querySelector(sel); return e && e.scrollWidth > e.clientWidth + 1; }).join(",")
   }));
   const head = document.querySelector(".pphead");
+  const rail = document.querySelector(".pprwrap");
   return {
     pos: txt(".ppos"), name: txt(".ppwho h2"), club: txt(".ppclub"),
     face: !!(head && head.querySelector(".face")),
     crest: !!(head && head.querySelector(".ppclub .crest")),
-    price: txt(".ppprice b"), move: txt(".ppmv"),
-    figs: fig, rankNote: txt(".pfnote"), go: txt(".pfgo"),
+    boxes: boxes,
+    railScrolls: !!rail && rail.scrollWidth > rail.clientWidth + 1,
     strip: [...document.querySelectorAll(".pstcell")].map(c => ({
       gw: c.querySelector(".pstgw").textContent, next: c.classList.contains("next"),
       fdr: !!c.querySelector(".fdr"), val: c.querySelector(".pstv").textContent.trim() })),
@@ -88,28 +93,38 @@ async function open(b, hash, w, waitFor) {
     chk(r.pos === "Forward", "his position", r.pos);
     chk(r.face && r.crest, "a face and a club crest");
     chk((r.club || "").indexOf((ds.teamNames || {})[meta[2]] || meta[2]) !== -1, "his club in full", r.club);
-    chk(r.price === "£" + (meta[3] / 10).toFixed(1), "the price the data holds", r.price);
-    chk(r.bar.title === meta[0] && /Forward/.test(r.bar.sub || ""), "the bar carries him, so the page never repeats it",
-      r.bar.title + " / " + r.bar.sub);
+    // the four numbers, each against the data behind it
+    const labs = ["Total points", "Price", "Owned by FPL", "Owned by Game On"];
+    chk(r.boxes.length === 4, "four boxes in the rail", JSON.stringify(r.boxes.map(x => x.lab)));
+    chk(r.boxes.map(x => x.lab).join("|") === labs.join("|"),
+      "in the order asked for", r.boxes.map(x => x.lab).join(" | "));
+    chk(r.bar.title === meta[0] && /Forward/.test(r.bar.sub || ""),
+      "the bar carries him, so the page never repeats it", r.bar.title + " / " + r.bar.sub);
     chk(r.bar.back, "and a way back");
-    chk(r.figs.length === 3, "three figures", JSON.stringify(r.figs));
-    chk(r.figs[0].value === (meta[9]).toFixed(1) && r.figs[1].value === (meta[8]).toFixed(1),
-      "points per match and form are FPL's own numbers, not ours",
-      JSON.stringify(r.figs.map(f => f.value)) + " vs " + meta[9] + "/" + meta[8]);
-    chk(r.figs[2].value === meta[4].toFixed(1) + "%", "and FPL's ownership", r.figs[2].value);
-    chk(/Ranking for Forwards/.test(r.rankNote || ""), "which position they rank him in", r.rankNote);
-    chk(/of our \d+ own him/.test(r.go || ""), "plus the figure the official app cannot show", r.go);
-
-    // the ranks, worked out here rather than read off the page
-    const peers = Object.keys(ds.elements).filter(k => ds.elements[k][1] === 4);
-    const rankBy = (slot) => {
-      const mine = ds.elements[EL][slot];
-      return peers.filter(k => ds.elements[k][slot] > mine).length + 1;
-    };
-    const want = [rankBy(9) + " of " + peers.length, rankBy(8) + " of " + peers.length, rankBy(4) + " of " + peers.length];
-    const got = r.figs.map(f => (f.rank || "").replace(/\s+/g, " ").trim());
-    chk(JSON.stringify(got) === JSON.stringify(want), "each rank is where he really stands among forwards",
-      JSON.stringify(got) + " vs " + JSON.stringify(want));
+    chk(r.boxes[1].val === "\u00a3" + (meta[3] / 10).toFixed(1), "the price the data holds", r.boxes[1].val);
+    chk(r.boxes[2].val === meta[4].toFixed(1) + "%" && r.boxes[2].sub === "of all squads",
+      "FPL's ownership", r.boxes[2].val + " / " + r.boxes[2].sub);
+    const sums = await p.evaluate((el) => {
+      const d = window.GO_STORE.dataset(), lp = d.livePoints || {};
+      let t = 0; Object.keys(lp).forEach(g => { const v = lp[g][el]; if (typeof v === "number") t += v; });
+      const own = window.GO_COMPUTE.leagueOwnership(d);
+      return { total: t, count: own ? (own.count[el] || 0) : 0, managers: own ? own.managers : 0,
+               goPct: own && own.pct[el] != null ? own.pct[el] : null };
+    }, +EL);
+    chk(r.boxes[0].val === String(sums.total), "total points is every gameweek we hold, added up",
+      r.boxes[0].val + " vs " + sums.total);
+    chk(r.boxes[0].sub === (meta[9]).toFixed(1) + " per match",
+      "with FPL's own points per match under it, not ours", r.boxes[0].sub);
+    chk(r.boxes[3].val === (sums.goPct == null ? "\u2013" : sums.goPct.toFixed(1) + "%"),
+      "how much of this league owns him", r.boxes[3].val);
+    chk(r.boxes[3].sub === sums.count + " of " + sums.managers,
+      "and how many that actually is", r.boxes[3].sub);
+    // the complaint that started this: crowded boxes, text running together
+    chk(r.boxes.every(x => !x.clipped), "nothing in a box is trimmed",
+      JSON.stringify(r.boxes.filter(x => x.clipped)));
+    chk(new Set(r.boxes.map(x => x.valTop)).size === 1,
+      "and all four numbers sit level, whatever the label above them did",
+      JSON.stringify(r.boxes.map(x => x.valTop)));
     chk(errs.length === 0, "no page errors", errs.join(" | "));
     await ctx.close();
   }
@@ -255,10 +270,12 @@ async function open(b, hash, w, waitFor) {
     const { ctx, p, errs } = await open(b, "player/" + EL);
     const r = await look(p);
     chk(!!r.name, "older data: the page still draws", r.name);
-    chk(r.figs.length === 3 && r.figs[0].value === "–" && r.figs[1].value === "–",
-      "older data: the two figures it cannot know say so rather than showing nought",
-      JSON.stringify(r.figs.map(f => f.value)));
-    chk(r.figs[2].value !== "–", "older data: the one it does know is still shown", r.figs[2].value);
+    chk(r.boxes.length === 4 && r.boxes[0].sub === "this season",
+      "older data: the box that cannot know its per-match figure says nothing rather than nought",
+      JSON.stringify(r.boxes.map(x => x.sub)));
+    chk(r.boxes[2].val !== "\u2013" && r.boxes[3].val !== "\u2013",
+      "older data: the two it does know are still shown",
+      r.boxes[2].val + " / " + r.boxes[3].val);
     await p.click('[data-pp="fixtures"]');
     await p.waitForTimeout(400);
     const rs = await rows(p);
