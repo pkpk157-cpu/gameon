@@ -1,5 +1,7 @@
 const GOENV = require("./lib/env.js");
-/* With a team picked, the You group appears in the right-hand sheet and works. */
+/* With a team picked, My profile appears in the right-hand sheet and works. It
+   stands on its own now, with no heading over it and no second compare row
+   beside it — comparing yourself with someone is what Head to head does. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8713;
@@ -27,9 +29,10 @@ let bad = 0; const ok = (c, m) => { if (!c) { bad++; console.log("  FAIL " + m);
              text: body.innerText };
   });
   console.log("groups: " + JSON.stringify(you.labels) + "  identity: " + you.who);
-  ok(you.labels.indexOf("You") !== -1, "the You group is there");
-  ok(you.labels.indexOf("League") !== -1, "so is League");
-  ok(you.hasMine && you.hasMyCompare, "My profile and Compare me are both offered");
+  ok(you.labels.indexOf("You") === -1, "no heading over a single row");
+  ok(you.labels.indexOf("League") !== -1, "League, which has several, keeps its heading");
+  ok(you.hasMine && !you.hasMyCompare, "My profile is offered, and nothing beside it");
+  ok(!/Compare me with someone/i.test(you.text), "the second compare row is gone");
   ok(!/Sections|Appearance|Gameweek status/.test(you.text), "and none of the burger's business");
   await p.evaluate(() => document.querySelector("#pfMine").click());
   await p.waitForTimeout(700);

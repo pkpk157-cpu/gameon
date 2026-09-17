@@ -102,10 +102,32 @@
   // A section's mark: the drawn tile, with the real badge laid over it. If the
   // picture is missing the tile is what stays, which is what the app looked
   // like before the badges arrived.
+  //
+  // The badges used to be seen arriving. A lazy <img> inside a drawer that is
+  // off screen is never fetched, so the first time the drawer opened the reader
+  // got the drawn glyph, and the real badge dropped over it a frame or two
+  // later — three little icons visibly changing their minds. Both halves of
+  // that are fixed here: the three badges are fetched and decoded at boot, and
+  // once one of them is ready its tile is drawn without the glyph underneath,
+  // so there is nothing left to swap out. Nothing is lost if a fetch fails or
+  // the drawer is opened inside the first moment — the glyph is still there,
+  // exactly as before.
+  var MARK_ART = ["pl-lion.webp", "logo-tile.webp", "logo-tile-inv.webp"];
+  var markReady = {};
+  function warmMarks() {
+    MARK_ART.forEach(function (src) {
+      try {
+        var im = new Image();
+        im.decoding = "async";
+        im.onload = function () { markReady[src] = 1; };
+        im.src = src;
+      } catch (e) {}
+    });
+  }
   function markTile(id, c1, c2, glyph, src) {
-    return '<span class="mi-mark">' + tile(id, c1, c2, glyph) +
+    return '<span class="mi-mark">' + tile(id, c1, c2, markReady[src] ? "" : glyph) +
       '<img class="mi-logo" src="' + src + '" alt="" width="30" height="30" ' +
-      'loading="lazy" decoding="async"></span>';
+      'decoding="async"></span>';
   }
   var G_TROPHY = '<path d="M10.2 8h9.6v2.4c0 2.65-2.15 4.8-4.8 4.8s-4.8-2.15-4.8-4.8Z" fill="#fff"/>' +
     '<path d="M10.2 8.9H8.3c0 1.9 1 3.1 2.4 3.5M19.8 8.9h1.9c0 1.9-1 3.1-2.4 3.5" fill="none" stroke="#fff" stroke-width="1.3"/>' +
@@ -536,12 +558,13 @@
         'Leave it empty to clear.</div></div>';
     }
 
-    // 2 — your things
+    // 2 — your things. One row wants no heading over it: "My profile" already
+    // says whose it is. Comparing yourself with someone used to be a second row
+    // here, which only ever meant Head to head with your own name already in the
+    // first box — so that is what Head to head does now, and one errand is one
+    // entry rather than two.
     if (me) {
-      h += '<div class="menu"><div class="lab-sm">You</div>' +
-        menuItem("pfMine", "person", "My profile") +
-        menuItem("pfMyCompare", "h2h", "Compare me with someone") +
-        '</div>';
+      h += '<div class="menu">' + menuItem("pfMine", "person", "My profile") + '</div>';
     }
 
     // 3 — the league
@@ -600,15 +623,20 @@
     function go(hash) { closeProfile(true); navFromOverlay(hash); }
     $("#pfStats").addEventListener("click", function () { go("stats"); });
     $("#pfWinnings").addEventListener("click", function () { go("winnings"); });
-    $("#pfCompare").addEventListener("click", function () { go("compare"); });
+    // Arriving from here, the first side is you — the comparison anyone opening
+    // this has in mind. Only the first: whoever you were looking at last is
+    // worth keeping in the second box, and if that was you, the page picks
+    // somebody else rather than sitting you opposite yourself. Reaching Head to
+    // head from a rival's page still fills in both names from that page.
+    $("#pfCompare").addEventListener("click", function () {
+      if (state.me) state.cmpA = state.me;
+      go("compare");
+    });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
     $("#pfPrices").addEventListener("click", function () { go("prices"); });
     $("#pfPlayers").addEventListener("click", function () { go("prices/stats"); });
     if (me) {
       $("#pfMine").addEventListener("click", function () { go("profile/" + state.me); });
-      $("#pfMyCompare").addEventListener("click", function () {
-        state.cmpA = state.me; go("compare");
-      });
       $("#pfEdit").addEventListener("click", function () { openProfile({ edit: !editing }); });
     }
     if (editing) {
@@ -1170,14 +1198,31 @@
     });
 
     // Every player is in the table, so nobody is unreachable by scrolling. But
-    // laying out 600 rows before the first paint cost more than two seconds on a
-    // slow phone, so the rows that fit go in first and the rest follow on the
-    // next frame — by which time the reader is still looking at the top of a
-    // list they can already scroll and sort.
-    var FIRST = 80, pending = 0, gen = 0;
+    // six hundred rows are six hundred rows of layout, and the browser will not
+    // paint a half-built table: the reader gets a screenful first and the rest
+    // arrives behind it, a hundred at a time, while they are already reading.
+    var FIRST = 24, CHUNK = 100, gen = 0, pendRaf = 0, pendTo = 0;
+    function stopFill() {
+      if (pendRaf) { cancelAnimationFrame(pendRaf); pendRaf = 0; }
+      if (pendTo) { clearTimeout(pendTo); pendTo = 0; }
+    }
+    // requestAnimationFrame runs *before* the frame it belongs to is styled,
+    // laid out and painted. Queueing the rest of the rows there put all six
+    // hundred into the same layout as the first batch, so the split bought
+    // nothing: the screen stayed empty for a second and a half and then the
+    // whole table appeared at once. A timeout started from inside that frame
+    // runs after it has been painted, which is what "the rest can follow" was
+    // meant to mean all along.
+    function afterPaint(fn) {
+      stopFill();
+      pendRaf = requestAnimationFrame(function () {
+        pendRaf = 0;
+        pendTo = setTimeout(function () { pendTo = 0; fn(); }, 0);
+      });
+    }
     var draw = function () {
       gen++;
-      if (pending) { cancelAnimationFrame(pending); pending = 0; }
+      stopFill();
       var list = rows.slice();
       if (state.prWho === "mine") list = mineSet ? list.filter(function (r) { return mineSet[r.id]; }) : [];
       if (state.prWho === "favs") list = list.filter(function (r) { return favSet[r.id]; });
@@ -1223,15 +1268,25 @@
           : '');
 
       if (list.length > FIRST) {
-        var mine = gen, body = $("tbody", panel);
-        pending = requestAnimationFrame(function () {
-          pending = 0;
+        var mine = gen, body = $("tbody", panel), at = FIRST;
+        var fill = function () {
           // A tap or a keystroke while this was queued has already redrawn the
           // table; appending the rest of a list nobody is looking at any more
-          // would mix two sorts together.
-          if (mine !== gen || !body.parentNode) return;
-          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked, scale, forward, favSet));
-        });
+          // would mix two sorts together. isConnected rather than parentNode
+          // because a replaced panel leaves its old table whole but detached,
+          // which the parent check could not tell from a live one.
+          if (mine !== gen || !body.isConnected) return;
+          // Views are kept rather than thrown away, so leaving this one for
+          // another would otherwise have left six hundred rows laying
+          // themselves out behind a page the reader had already moved on to.
+          // Stopping is safe: coming back here renders the table again.
+          if (!host.classList.contains("active")) return;
+          var end = Math.min(list.length, at + CHUNK);
+          body.insertAdjacentHTML("beforeend", priceRows(list.slice(at, end), tracked, scale, forward, favSet));
+          at = end;
+          if (at < list.length) afterPaint(fill);
+        };
+        afterPaint(fill);
       }
 
       var hit = function (th) {
@@ -2084,6 +2139,7 @@
   }
 
   function boot() {
+    warmMarks();
     setupPull();
     window.addEventListener("scroll", profileSpy, { passive: true });
     buildNav();
@@ -2186,6 +2242,10 @@
       }
       if (t && t.tagName === "IMG" && t.classList &&
           (t.classList.contains("crest") || t.classList.contains("mi-logo"))) {
+        // A section badge that has failed is not ready any more, whatever it
+        // managed at boot. Forgetting it here means the next time the drawer is
+        // drawn the glyph comes back underneath, rather than a bare tile.
+        if (t.classList.contains("mi-logo")) delete markReady[t.getAttribute("src")];
         if (t.parentNode) t.parentNode.removeChild(t);
       }
     }, true);
@@ -4934,6 +4994,9 @@
     // Defaults: you (or the leader) against the next manager in the table.
     var byRank = ds.managers.slice().sort(function (x, y) { return (x.rank || 1e9) - (y.rank || 1e9); });
     if (!state.cmpA) state.cmpA = state.me || (byRank[0] && byRank[0].id);
+    // Nobody is compared with himself: whoever the first side ends up being,
+    // the second has to be somebody else.
+    if (state.cmpB && +state.cmpB === +state.cmpA) state.cmpB = null;
     if (!state.cmpB) {
       var other = byRank.filter(function (m) { return +m.id !== +state.cmpA; })[0];
       state.cmpB = other && other.id;

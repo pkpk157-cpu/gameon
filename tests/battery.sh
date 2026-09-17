@@ -31,7 +31,7 @@ cd "$(dirname "$(readlink -f "$0")")" || exit 1
 LOG=${1:-bat.log}; JOBS=${2:-4}; shift 2 2>/dev/null
 TIMES=bat-times.txt; SEED=bat-times.seed.txt; PROG=bat.progress
 
-ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pltable pltcrests prsplit prnotoggle prmine prfavs lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills errsweep statesweep nullstack2"
+ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pltable pltcrests prsplit prnotoggle prmine prfavs prfill lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills menuart pfhead errsweep statesweep nullstack2"
 SUITES=${*:-$ALL}
 
 OUT=$(mktemp -d)
