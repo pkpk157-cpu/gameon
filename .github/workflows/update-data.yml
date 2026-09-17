@@ -48,14 +48,30 @@ jobs:
             echo "No data change"
             exit 0
           fi
-          git add data.json
-          git commit -m "Update FPL data ($(date -u +%Y-%m-%dT%H:%MZ))"
-          # main may have moved while we were fetching. Rebase and retry rather
-          # than failing the job, which would leave the new data unpublished.
+          # Two clocks poke this workflow, and now and then both land in the
+          # same second, so two runs fetch at once and race to push. The
+          # loser used to rebase into a conflict on data.json and fail five
+          # times over, one red run and one email per collision. Now each
+          # attempt starts again from whatever is live and only publishes if
+          # what it fetched is fresher than that; otherwise the other run
+          # already did the job and this one has nothing to add.
+          cp data.json /tmp/fresh.json
+          MSG="Update FPL data ($(date -u +%Y-%m-%dT%H:%MZ))"
+          stamp() { node -p 'try { JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).generatedAt || "" } catch (e) { "" }' "$1"; }
+          MINE=$(stamp /tmp/fresh.json)
           for i in 1 2 3 4 5; do
-            if git push; then exit 0; fi
-            echo "push rejected, rebasing (attempt $i)"
-            git pull --rebase --autostash origin main || true
+            git fetch -q --depth=1 origin main
+            git reset -q --hard origin/main
+            LIVE=$(stamp data.json)
+            if [ -n "$LIVE" ] && [ "$MINE" \< "$LIVE" ]; then
+              echo "a fresher data.json ($LIVE) is already live; nothing to publish"
+              exit 0
+            fi
+            cp /tmp/fresh.json data.json
+            git add data.json
+            git commit -q -m "$MSG"
+            if git push -q origin HEAD:main; then exit 0; fi
+            echo "push rejected, starting again from main (attempt $i)"
             sleep $((i * 3))
           done
           echo "could not push data.json after 5 attempts" >&2
