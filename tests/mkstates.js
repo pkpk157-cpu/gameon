@@ -100,6 +100,52 @@ const dmg = {
 };
 Object.keys(dmg).forEach(k => { const d = clone(base); dmg[k](d); out[k] = d; });
 
+// 22. After the draw: the group stage over (GW1-29 settled) and GW30 being
+// played, which is the only state in which the knockout bracket is actually
+// drawn. It used to be built by a second script that never got committed, so
+// the seven suites that sweep this directory quietly stopped covering the one
+// state that matters from GW30 to the end of the season — and passed while
+// doing it. One generator, one count.
+{
+  const d = clone(base); const ds = d.dataset;
+  ds.bootstrap.events.forEach((e) => {
+    if (e.id <= 29) { e.finished = true; e.data_checked = true; e.is_current = false; e.is_next = false; }
+    else if (e.id === 30) { e.finished = false; e.data_checked = false; e.is_current = true; }
+    else { e.finished = false; e.data_checked = false; e.is_current = false; }
+    if (e.id <= 29 && !(e.average > 0)) e.average = 50;
+  });
+  // A history row for every gameweek to 30, by repeating what the real data has.
+  ds.managers.forEach((m) => {
+    const h = ds.history[m.id] || {};
+    const seed = h[4] || h[3] || h[2] || h[1];
+    if (!seed) return;
+    let total = 0;
+    for (let g = 1; g <= 30; g++) {
+      if (!h[g]) h[g] = Object.assign({}, seed, { p: seed.p, h: 0 });
+      total += (h[g].p || 0) - (h[g].h || 0);
+      h[g].t = total;
+    }
+    ds.history[m.id] = h; m.total = total; m.eventTotal = h[30].p;
+  });
+  ds.managers.slice().sort((a, b) => b.total - a.total).forEach((m, i) => { m.rank = i + 1; });
+  ds.pitchGw = 30; ds.buysGw = 30;
+  ds.picks[30] = ds.picks["4"] || ds.picks["1"];
+  ds.livePoints[30] = ds.livePoints["4"] || ds.livePoints["1"];
+  if (ds.liveStats) ds.liveStats[30] = ds.liveStats["4"] || ds.liveStats["1"];
+  if (ds.breakdown) ds.breakdown[30] = ds.breakdown["4"] || ds.breakdown["1"];
+  ds.updatedAt = new Date().toISOString();
+  out["gw30-knockout-drawn"] = d;
+}
+
 fs.mkdirSync(GOENV.STATES, { recursive: true });
 Object.keys(out).forEach(k => fs.writeFileSync(GOENV.STATES + "/" + k + ".json", JSON.stringify(out[k])));
 console.log(Object.keys(out).length + " datasets written:", Object.keys(out).join(", "));
+
+// The sweeps read whatever is in this directory, so a state that quietly stops
+// being written costs coverage without failing anything. Say the number out
+// loud and refuse a short count.
+const EXPECTED = 22;
+if (Object.keys(out).length !== EXPECTED) {
+  console.error("expected " + EXPECTED + " datasets, wrote " + Object.keys(out).length);
+  process.exit(1);
+}
