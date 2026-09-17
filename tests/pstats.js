@@ -178,7 +178,11 @@ function recount() {
         const i = titles.indexOf(name);
         if (i < 0) return null;
         return [...cards[i].querySelectorAll("tbody tr")].map((tr) => {
-          const td = [...tr.querySelectorAll("td")].map((x) => x.textContent.trim());
+          // the move's direction is a class with a drawn triangle, not a glyph
+          const td = [...tr.querySelectorAll("td")].map((x) => {
+            const m = x.querySelector(".move");
+            return (m ? (m.classList.contains("up") ? "+" : m.classList.contains("down") ? "-" : "") : "") + x.textContent.trim();
+          });
           return td;
         });
       };
@@ -200,7 +204,7 @@ function recount() {
         claims.diff.every((r, i, a) => !i || +a[i - 1][2] >= +r[2]),
         claims.diff.map((r) => r[2]).join(","));
     chk("risers all rose and fallers all fell",
-        claims.rise.every((r) => /▲/.test(r[2])) && claims.fall.every((r) => /▼/.test(r[2])),
+        claims.rise.every((r) => /^\+/.test(r[2])) && claims.fall.every((r) => /^-/.test(r[2])),
         JSON.stringify([claims.rise[0], claims.fall[0]]));
     chk("most points runs highest first",
         claims.pts.every((r, i, a) => !i || +a[i - 1][2] >= +r[2]), claims.pts.map((r) => r[2]).join(","));

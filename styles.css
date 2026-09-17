@@ -128,6 +128,14 @@
 
 /* ---------- base ---------- */
 * { box-sizing:border-box; }
+/* Each phone flashes its own colour over a tapped element (grey on iOS, a
+   blue wash on Android). Neither is the design: the rows that should answer a
+   touch do it with :active, and that reads the same on both. */
+* { -webkit-tap-highlight-color:transparent; }
+/* Controls default to the engine's own control font, at its own size, and
+   the two engines do not agree on either. Every one inherits the page's. */
+button, input, select, textarea { font-family:inherit; }
+code, pre, kbd { font-family:var(--mono); }
 html,body { margin:0; padding:0; }
 /* iOS Safari inflates text on its own judgement unless told not to, which
    made the same tables set larger there than on Android. */
@@ -316,6 +324,16 @@ table.t td.num, table.t th.num { text-align:right; font-variant-numeric:tabular-
 table.t tbody tr:last-child td, table.t tr:last-child td { border-bottom:0; }
 table.t tr:hover td { background:var(--chip); }
 table.t td.name { white-space:normal; min-width:150px; }
+/* Up and down are drawn, not typed: the ▲▼ glyphs came from whichever symbol
+   font the phone fell back to, a different size and weight on each. A border
+   triangle is the same shape on every engine. */
+.move.up::before, .move.down::before, .mvu.up::before, .mvu.down::before,
+.pprs b.up::before, .pprs b.down::before {
+  content:""; display:inline-block; width:0; height:0; margin-right:.18em; vertical-align:.08em;
+  border-left:.34em solid transparent; border-right:.34em solid transparent;
+}
+.move.up::before, .mvu.up::before, .pprs b.up::before { border-bottom:.56em solid currentColor; }
+.move.down::before, .mvu.down::before, .pprs b.down::before { border-top:.56em solid currentColor; }
 table.t td .who { font-weight:600; }
 table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 .rankcell { display:inline-flex; align-items:center; gap:7px; }
@@ -679,6 +697,11 @@ select.in { background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www
 
 /* ---- clickable manager names ---- */
 td.name[data-entry] { cursor:pointer; }
+/* The whole row opens the manager, not just his name (see the tap handler).
+   iOS Safari only turns a tap into a click for a document-level handler when
+   something under the finger is marked clickable, and cursor:pointer is that
+   mark — without it the rank and points cells answered on Android only. */
+table.t tr:has(td.name[data-entry]), tr[data-entry] { cursor:pointer; }
 td.name[data-entry] .who { text-decoration:underline; text-decoration-color:var(--line-strong); text-underline-offset:2px; text-decoration-thickness:1px; }
 td.name[data-entry]:hover .who { color:var(--accent); text-decoration-color:var(--accent); }
 
@@ -965,6 +988,16 @@ tr[data-ppgw].open .ppmore { transform:rotate(45deg); color:var(--accent); }
   box-shadow:0 1px 3px rgba(0,0,0,.45); }
 .pb.cap, .pb.vice { left:2px; background:#37003c; color:#fff; }
 .pb.star { right:2px; background:#00ff87; color:#0a3d24; font-size:9px; }
+.pb.star svg { width:10px; height:10px; fill:currentColor; display:block; margin:3px auto 0; }
+.cmppitch .pb.star svg { width:8px; height:8px; margin-top:2px; }
+/* the winners' marks: a trophy or a medal in the metal it stands for */
+.wmark { display:inline-flex; vertical-align:-3px; margin-right:4px; }
+.wmark svg { width:14px; height:14px; }
+.wmark.gold { color:var(--gold); } .wmark.silver { color:#8e8e9c; } .wmark.bronze { color:#b46a3a; }
+:root[data-theme="dark"] .wmark.silver { color:#c9c9d6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wmark.silver { color:#c9c9d6; } }
+.champcrown { color:var(--gold); display:flex; justify-content:center; }
+.champcrown svg { width:40px; height:40px; }
 
 /* How close a player's price is to moving, in the corner of his card. Only in
    the value view, only on the newest pitch, and only for the players actually
@@ -1294,7 +1327,10 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .pchipsbar .tabrow { margin-bottom:0; }
 details.pfold summary { list-style:none; cursor:pointer; }
 details.pfold summary::-webkit-details-marker { display:none; }
-details.pfold summary .caret { flex:none; font-size:14px; color:var(--ink-faint); transition:transform .18s; }
+details.pfold summary .caret { flex:none; display:inline-flex; align-items:center; width:14px; height:14px;
+  justify-content:center; color:var(--ink-faint); transition:transform .18s; }
+details.pfold summary .caret::before { content:""; width:0; height:0;
+  border-left:4.5px solid transparent; border-right:4.5px solid transparent; border-top:6px solid currentColor; }
 details.pfold[open] summary .caret { transform:rotate(180deg); }
 details.pfold summary .chip { white-space:nowrap; }
 details.pfold summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:8px; }
@@ -2037,7 +2073,8 @@ svg.evcard.r rect { fill:#d1483a; }
   color:var(--ink-soft); user-select:none;
 }
 .mrest summary::-webkit-details-marker { display:none; }
-.mrest summary::after { content:" ▾"; }
+.mrest summary::after { content:""; display:inline-block; width:0; height:0; margin-left:5px; vertical-align:1px;
+  border-left:4px solid transparent; border-right:4px solid transparent; border-top:5px solid currentColor; }
 .mrest[open] summary::after { content:" ▴"; }
 .mrest[open] summary { border-bottom:1px solid var(--line); }
 @media (max-width: 359px) {
@@ -2059,6 +2096,7 @@ svg.evcard.r rect { fill:#d1483a; }
   font-size: 11px; font-weight: 800; line-height: 20px; text-align: center;
   background: var(--bad-wash); color: var(--bad);
 }
+.gwmark svg { width:12px; height:12px; display:block; margin:4px auto; stroke-width:2.6; }
 .gwstep.on .gwmark { background: var(--good-wash); color: var(--good); }
 .gwlab { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; }
 .gwwhen { display: block; font-size: 11px; font-weight: 600; color: var(--ink-faint);

@@ -58,6 +58,12 @@
     bank: '<path d="M3 9.6 12 4.2l9 5.4"/><path d="M5.5 11v7.5M10 11v7.5M14 11v7.5M18.5 11v7.5"/><path d="M3 20.4h18"/>',
     steady: '<path d="M4 12h16"/><path d="M7.5 9.4v5.2M12 8.6v6.8M16.5 9.4v5.2"/>',
     shield: '<path d="M12 3.4 5.2 6.2v5.6c0 4 2.7 7.2 6.8 8.6 4.1-1.4 6.8-4.6 6.8-8.6V6.2Z"/>',
+    // The winners' marks used to be emoji, which every phone draws from its
+    // own emoji font, so the same card wore Apple's trophy on one phone and
+    // Google's on the next. Drawn here, they are the same picture everywhere.
+    crown: '<path d="M4 8.5 8 12l4-6 4 6 4-3.5-1.5 9.5h-13Z"/><path d="M6 20.5h12"/>',
+    cross: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    medal: '<circle cx="12" cy="15" r="5.2"/><path d="M8.6 10.8 6 3.5h4.2L12 8.4l1.8-4.9H18l-2.6 7.3"/>',
     ball: '<circle cx="12" cy="12" r="8.4"/><path d="m12 8.2 3.1 2.3-1.2 3.7h-3.8l-1.2-3.7Z"/>' +
           '<path d="M12 8.2V3.6M15.1 10.5l4.4-1.4M13.9 14.2l2.7 3.6M10.1 14.2l-2.7 3.6M8.9 10.5 4.5 9.1"/>',
     assist: '<circle cx="17.2" cy="12" r="4.2"/><path d="M2.6 12h7.2M7.1 8.6 10.5 12l-3.4 3.4"/>',
@@ -749,8 +755,7 @@
   function psGo(r) { return r.goOwned == null ? "–" : r.goOwned.toFixed(1) + "%"; }
   function psSigned(v) {
     if (!v) return '<span class="move flat">–</span>';
-    return '<span class="move ' + (v > 0 ? "up" : "down") + '">' +
-      (v > 0 ? "▲" : "▼") + Math.abs(v).toFixed(1) + '</span>';
+    return '<span class="move ' + (v > 0 ? "up" : "down") + '">' + Math.abs(v).toFixed(1) + '</span>';
   }
   function psTop(list, cmp) { return list.slice().sort(cmp).slice(0, PS_TOP); }
 
@@ -1639,8 +1644,7 @@
       // Short subtexts on purpose: four boxes on a phone is ninety points each,
       // and a sentence in there is what pushes the fourth off the screen.
       ppBox("Price", psMoney(P.price),
-        moved ? '<b class="' + (moved > 0 ? "up" : "down") + '">' +
-                (moved > 0 ? "\u25b2" : "\u25bc") + Math.abs(moved).toFixed(1) + '</b> so far'
+        moved ? '<b class="' + (moved > 0 ? "up" : "down") + '">' + Math.abs(moved).toFixed(1) + '</b> so far'
               : "unchanged") +
       ppBox("Owned by FPL", P.owned.toFixed(1) + "%", "of all squads") +
       ppBox("Owned by GO", P.goOwned == null ? "\u2013" : P.goOwned.toFixed(1) + "%",
@@ -1793,7 +1797,7 @@
         (when.kind === "expected" ? "Expected " : "") + esc(whenText(when.at)) + '</span>';
     }
     return '<div class="gwstep' + (on ? ' on' : '') + '">' +
-      '<i class="gwmark" aria-hidden="true">' + (on ? "\u2713" : "\u2715") + '</i>' +
+      '<i class="gwmark" aria-hidden="true">' + sicon(on ? "check" : "cross") + '</i>' +
       '<span class="gwlab">' + esc(st.t) + line + '</span>' +
       '<span class="gwyn">' + (on ? "Done" : "Not yet") + '</span></div>';
   }
@@ -2744,7 +2748,7 @@
         ? 'League ID is set. Pull the latest data from FPL to populate every tab.'
         : 'First, add your <b>Classic League ID</b> in Settings, then refresh.') + '</p>' +
       '<div class="btnrow" style="justify-content:center;margin-top:16px">' +
-      (hasId ? '<button class="btn primary" id="emptyRefresh">↻ Refresh from FPL</button>' : '') +
+      (hasId ? '<button class="btn primary" id="emptyRefresh">' + svg("refresh", 16) + 'Refresh from FPL</button>' : '') +
       '<button class="btn" id="emptyCta">Open Settings</button>' +
       '</div></div>';
   }
@@ -2822,8 +2826,8 @@
       // that column was the fifth of six and never made it onto a phone
       // screen, so the table scrolled sideways to reach a number that fits
       // in ten points under the one it describes. No line at all for no move.
-      var mv = r.move > 0 ? '<div class="mvu up">▲' + r.move + '</div>'
-             : r.move < 0 ? '<div class="mvu down">▼' + Math.abs(r.move) + '</div>'
+      var mv = r.move > 0 ? '<div class="mvu up">' + r.move + '</div>'
+             : r.move < 0 ? '<div class="mvu down">' + Math.abs(r.move) + '</div>'
              : '';
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
       // Managers still level after months won share the place and the XP,
@@ -2935,7 +2939,7 @@
 
     if (lms.champion) {
       h += '<div class="card" style="margin-top:14px;border-color:var(--gold)"><div class="bd" style="text-align:center">' +
-        '<div style="font-size:34px">👑</div><h3 style="margin:6px 0">' + esc(lms.champion.name) + '</h3>' +
+        '<div class="champcrown">' + svg("crown", 40) + '</div><h3 style="margin:6px 0">' + esc(lms.champion.name) + '</h3>' +
         '<div class="note">The Last Manager Standing</div></div></div>';
     }
 
@@ -3000,12 +3004,13 @@
       var cls = r.eliminated === null ? "" : (r.eog === 1 ? "champ" : "now");
       var elim = r.eliminated === null ? '<span class="note">' + r.expected + '</span>' : '<b>' + r.eliminated + '</b>';
       return '<tr class="' + cls + '"><td>GW' + r.gw + '</td><td class="num">' + r.sog + '</td>' +
-        '<td class="num">' + elim + '</td><td class="num">' + (r.eog === 1 ? '🏆 1' : r.eog) + '</td></tr>';
+        '<td class="num">' + elim + '</td><td class="num">' + (r.eog === 1 ? '<span class="wmark gold">' + sicon("trophy") + '</span>1' : r.eog) + '</td></tr>';
     }).join("");
     return '<div class="card"><div class="tablewrap"><table class="t"><thead><tr><th>GW</th><th class="num">SOG</th><th class="num">Out</th><th class="num">EOG</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
-  function prizeTile(label, amount, cls) {
-    return '<div class="stat"><div class="k">' + xpa(amount) + '</div><div class="l">' + esc(label) + '</div></div>';
+  function prizeTile(label, amount, icon, tone) {
+    return '<div class="stat"><div class="k">' + xpa(amount) + '</div><div class="l">' +
+      (icon ? '<span class="wmark ' + (tone || "") + '">' + sicon(icon) + '</span>' : '') + esc(label) + '</div></div>';
   }
 
   function lmsGwTable(g, opts) {
@@ -3782,7 +3787,7 @@
   }
   function lmsPrizeCard(cfg) {
     var p = cfg.lms.prizes;
-    return '<div class="grid cols-3">' + prizeTile("🏆 Champion", p.champion) + prizeTile("🥈 Runner-up", p.runnerUp) + prizeTile("🥉 3rd place", p.third) + '</div>';
+    return '<div class="grid cols-3">' + prizeTile("Champion", p.champion, "trophy", "gold") + prizeTile("Runner-up", p.runnerUp, "medal", "silver") + prizeTile("3rd place", p.third, "medal", "bronze") + '</div>';
   }
   function h2hPrizeCard(cfg) {
     var p = cfg.h2h.prizes;
@@ -4040,7 +4045,7 @@
         '</div></div>';
     }
     var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
-    if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star">★</i>';
+    if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6 6.6 1-4.8 4.6 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6L2.5 9.6l6.6-1Z"/></svg></i>';
     // How close his price is to moving, in the corner the top-scorer star
     // leaves free in this view. Filled means it goes tonight, outlined means he
     // is drifting that way; the percent sign is dropped because the arrow and
@@ -4550,7 +4555,7 @@
     return '<details class="pfold" id="ps-' + key + '" data-ps="' + esc(label) + '">' +
       '<summary><div class="section-title"><h2>' + esc(label) + '</h2><div class="rule"></div>' +
       (hint ? '<span class="chip">' + esc(hint) + '</span>' : '') +
-      '<span class="caret" aria-hidden="true">\u25be</span></div></summary>' +
+      '<span class="caret" aria-hidden="true"></span></div></summary>' +
       '<div class="pfoldbody">' + inner + '</div></details>' +
       // A closed <details> hides everything inside it, so the row it still
       // shows lives next to it and steps aside when the section opens.
@@ -5472,9 +5477,9 @@
     h += '<div class="note">' + (ds ? ('Loaded ' + ds.managers.length + ' managers · updated ' + new Date(ds.updatedAt).toLocaleString()) : 'No data loaded yet.') + '</div>';
     h += '<div id="refreshBox" style="margin:12px 0"></div>';
     h += '<div class="btnrow">' +
-      '<button class="btn primary" id="btnDoRefresh">↻ Refresh from FPL</button>' +
-      '<button class="btn" id="btnExport">⬇ Export data.json</button>' +
-      '<button class="btn" id="btnImport">⬆ Import bundle</button>' +
+      '<button class="btn primary" id="btnDoRefresh">' + svg("refresh", 16) + 'Refresh from FPL</button>' +
+      '<button class="btn" id="btnExport">' + svg("download", 16) + 'Export data.json</button>' +
+      '<button class="btn" id="btnImport">' + svg("upload", 16) + 'Import bundle</button>' +
       '<input type="file" id="fileImport" accept="application/json" style="display:none">' +
       '</div>';
     h += '<div class="note" style="margin-top:10px">Organiser tip: refresh once per gameweek, <b>Export</b>, and commit the file as <code>gameon/data.json</code>. Everyone else\'s app will load it automatically — no proxy load for 245 people.</div>';
