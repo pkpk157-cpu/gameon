@@ -111,6 +111,42 @@ const sweep = ({ taps, src, flags }) => {
     chk(errs.length === 0, name + ": no JS errors", errs.slice(0, 2).join(" | "));
     await ctx.close();
   }
+  // The same pages with wider digits. San Francisco's numerals run about
+  // six per cent wider than Roboto's and wider still at heavy weight, which
+  // is how a row of headline figures fitted here and spilled on an iPhone.
+  // DejaVu Sans is wider than either, so what fits under it fits under both.
+  const WIDE = ["profile/" + ds.managers[0].id, "stats", "winnings", "compare", "player/" + EL, "classic"];
+  for (const name of ["iPhone SE", "iPhone 12"]) {
+    const dev = devices[name];
+    const ctx = await b.newContext({ ...dev, serviceWorkers: "block" });
+    const p = await ctx.newPage();
+    await p.addInitScript(() => { document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.setProperty("--sans", '"DejaVu Sans"'); }); });
+    const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+    await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    await p.waitForFunction(() => document.querySelector("section.view.active table.t tbody tr"), null, { timeout: 15000 }).catch(() => {});
+    const bad = [];
+    for (const v of WIDE) {
+      await p.evaluate((x) => { location.hash = "#" + x; }, v);
+      await p.waitForTimeout(700);
+      // the profile's money row is the one that spilled
+      if (v.indexOf("profile/") === 0) { await p.click('button[data-metric="val"]').catch(() => {}); await p.waitForTimeout(400); }
+      const m = await p.evaluate(sweep, { taps: TAPS, src: GLYPH.source, flags: GLYPH.flags }).catch((e) => ({ err: e.message }));
+      const probs = [];
+      if (m.err) probs.push("sweep threw " + m.err);
+      if (m.wide > 1) probs.push("page " + m.wide + "px wider than the screen");
+      if (m.spill && m.spill.length) probs.push("off the screen: " + m.spill.join(", "));
+      // a headline figure must stay inside its own box
+      const clipped = await p.evaluate(() => [...document.querySelectorAll(".pstat .v, .hcard .hv, .stat .k, .pprv, .cmphead .sc")]
+        .filter((e) => e.getBoundingClientRect().width > 0 && e.scrollWidth > e.clientWidth + 1)
+        .map((e) => e.className + " " + e.textContent.trim()).slice(0, 3));
+      if (clipped.length) probs.push("figure wider than its box: " + clipped.join(", "));
+      if (probs.length) bad.push(v + ": " + probs.join("; "));
+    }
+    console.log("  " + name.padEnd(10) + "wide digits  " + WIDE.length + " views" + (bad.length ? "" : "  clean"));
+    chk(bad.length === 0, name + " with wide digits: every figure fits its box and the page its screen", bad.length ? "\n         " + bad.join("\n         ") : "");
+    chk(errs.length === 0, name + " with wide digits: no JS errors", errs.slice(0, 2).join(" | "));
+    await ctx.close();
+  }
   await b.close(); srv.close();
   console.log(fails ? "\nFAILS: " + fails : "\nall phones agree");
   process.exit(fails ? 1 : 0);

@@ -728,6 +728,16 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 /* three stats: Average | Total Pts | Highest */
 .pstats { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; margin-bottom:14px; }
 .pstat { text-align:center; }
+/* The money row: three "£102.2m"s at headline size are wider than an iPhone,
+   and SF's digits run wider than Roboto's, so on iOS the middle one spilled
+   out of its tile and the row pushed the page sideways under the fixed bar.
+   The columns are fractions that cannot outgrow the card, and each value is
+   sized to its own tile: 20.5% of the tile's width per em holds seven heavy
+   characters. Engines without container units keep the plain sizes. */
+.pstats.money { grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr); }
+.pstats.money .pstat { min-width:0; container-type:inline-size; }
+.pstats.money .pstat .v { white-space:nowrap; font-size:min(26px, 20.5cqw); }
+.pstats.money .pstat.main .v { font-size:min(30px, 20.5cqw); }
 .pstat .v { font-size:26px; font-weight:800; line-height:1.05; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
 .pstat .l { font-size:11.5px; font-weight:600; color:var(--ink-faint); margin-top:2px; }
 .pstat.main { min-width:104px; padding:10px 16px; border-radius:var(--radius-s);

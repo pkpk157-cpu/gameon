@@ -4148,7 +4148,7 @@
     var rightOpen = hiId
       ? '<div class="pstat hi" data-entry="' + hiId + '" role="button" tabindex="0">'
       : '<div class="pstat">';
-    return '<div class="pstats">' +
+    return '<div class="pstats' + (metric === "val" ? ' money' : '') + '">' +
       '<div class="pstat"><div class="v">' + esc(left) + '</div><div class="l">' + leftLabel + '</div></div>' +
       '<div class="pstat main"><div class="v">' + esc(mid) + '</div>' +
         (midSub ? '<div class="sub">' + esc(midSub) + '</div>' : '') +
