@@ -1794,6 +1794,62 @@ button.chipgo { cursor:pointer; font:inherit; font-size:12px; border:1px solid v
 
 /* a Premier League fixture opened: the two squads side by side */
 .fx.tap { cursor:pointer; }
+/* ---------- match events ----------
+   Two columns under the score, mirroring it: the home side's doings on the
+   left, the away side's on the right, reading outwards from the middle the way
+   the scoreline does. No timeline down the centre, because FPL publishes no
+   minute to put on one. */
+.mev { padding:0; overflow:hidden; }
+.mevhd {
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px;
+  color:var(--ink-faint); padding:10px 12px 8px; border-bottom:1px solid var(--line-strong);
+}
+.mevcols { display:grid; grid-template-columns:1fr 1fr; }
+.mevside { min-width:0; padding:4px 0; }
+.mevside + .mevside { border-left:1px solid var(--line); }
+.mevrow {
+  display:flex; align-items:center; gap:6px; padding:6px 10px; min-width:0; cursor:pointer;
+}
+.mevside.r .mevrow { flex-direction:row-reverse; }
+.mevrow:active { background:var(--glass-hi); }
+.mevi { flex:none; display:flex; color:var(--ink-soft); }
+.mevi svg { display:block; }
+.mevrow.g .mevi { color:var(--ink); }
+.mevrow.og .mevi, .mevrow.pm .mevi { color:var(--bad); }
+.mevrow.ps .mevi { color:var(--good); }
+/* Neither half may be trimmed to nonsense. "pen saved" cut to "pen sa\u2026" is
+   useless, and so is "Calafiori" cut to "C\u2026" \u2014 so the name holds a floor and
+   the qualifier drops to its own line rather than eating into it. */
+.mevn {
+  display:flex; align-items:baseline; gap:4px; flex-wrap:wrap; min-width:0; flex:1 1 auto;
+  font-size:12.5px; font-weight:600; line-height:1.3;
+}
+.mevn > .who { min-width:6em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mevside.r .mevn { flex-direction:row-reverse; }
+.mevrow.mine .mevn { color:var(--accent); font-weight:800; }
+/* a multiplier and a qualifier: small, muted, and never the thing read first */
+.mevx, .mevt { flex:none; font-style:normal; font-size:10.5px; font-weight:700; color:var(--ink-faint); white-space:nowrap; }
+.mevt { font-weight:600; }
+.mevo {
+  flex:none; font-size:10.5px; font-weight:700; color:var(--ink-faint);
+  font-variant-numeric:tabular-nums; background:var(--chip); border-radius:6px; padding:1px 5px;
+}
+.mevnone { padding:6px 10px; font-size:12.5px; color:var(--dash); }
+.mevside.r .mevnone { text-align:right; }
+.mevnote { padding:8px 12px 10px; border-top:1px solid var(--line); margin:0; }
+/* the two cards are the one place a fill says it faster than an outline */
+svg.evcard rect { stroke:rgba(0,0,0,.28); stroke-width:1.2; }
+svg.evcard.y rect { fill:#e8b400; }
+svg.evcard.r rect { fill:#d1483a; }
+@media (max-width:359px) {
+  .mevrow { gap:4px; padding:6px 7px; }
+  .mevn { font-size:12px; }
+}
+@media (min-width:560px) {
+  .mevrow { padding:7px 12px; }
+  .mevn { font-size:13.5px; }
+}
+
 .mhead { padding:0; overflow:hidden; }
 .mcols { display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:start; }
 .mcol, .mcols > .card + .card { margin:0; padding:0; overflow:hidden; min-width:0; }

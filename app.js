@@ -58,6 +58,9 @@
     bank: '<path d="M3 9.6 12 4.2l9 5.4"/><path d="M5.5 11v7.5M10 11v7.5M14 11v7.5M18.5 11v7.5"/><path d="M3 20.4h18"/>',
     steady: '<path d="M4 12h16"/><path d="M7.5 9.4v5.2M12 8.6v6.8M16.5 9.4v5.2"/>',
     shield: '<path d="M12 3.4 5.2 6.2v5.6c0 4 2.7 7.2 6.8 8.6 4.1-1.4 6.8-4.6 6.8-8.6V6.2Z"/>',
+    ball: '<circle cx="12" cy="12" r="8.4"/><path d="m12 8.2 3.1 2.3-1.2 3.7h-3.8l-1.2-3.7Z"/>' +
+          '<path d="M12 8.2V3.6M15.1 10.5l4.4-1.4M13.9 14.2l2.7 3.6M10.1 14.2l-2.7 3.6M8.9 10.5 4.5 9.1"/>',
+    assist: '<circle cx="17.2" cy="12" r="4.2"/><path d="M2.6 12h7.2M7.1 8.6 10.5 12l-3.4 3.4"/>',
     medal: '<circle cx="12" cy="14.9" r="5.5"/><path d="M8.3 9.6 5.2 3.5h13.6l-3.1 6.1"/>',
     flame: '<path d="M12 4.4c4.2 3.4 6.4 6.4 6.4 9.6a6.4 6.4 0 0 1-12.8 0c0-2 1-3.7 2.3-5 .25 1.8 1.25 2.9 2.25 2.9 1.35 0 1.85-1.45 1.35-3.6-.25-1.45-1.1-2.85-1.5-3.9Z"/>',
     crown: '<path d="M4 18.4h16"/><path d="M4 16 3 7.2l4.6 3.2L12 4.4l4.4 6 4.6-3.2L20 16Z"/>',
@@ -1546,6 +1549,7 @@
 
     var h = '<div class="card mhead"><div class="fxwrap"><div class="fxgrp">' +
       plFixtureRow(f, full, null) + '</div></div></div>';
+    h += matchEventsHtml(ds, m.gw, m.home, m.away);
     h += '<div class="psegrow"><div class="pseg sm">' + Object.keys(METRICS).map(function (k) {
       return '<button type="button"' + (metric === k ? ' class="on"' : '') +
         ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
@@ -1600,6 +1604,69 @@
       state.plMetric = b.getAttribute("data-metric");
       renderMatch(host, ds);
     });
+  }
+
+  /* ---- what happened in the match ----------------------------------------
+     Who scored, who set them up, who was booked — FPL's own per-fixture
+     record, so a double gameweek puts each goal in the match it belongs to
+     rather than in whichever of the two came first.
+
+     It is deliberately not a timeline. FPL publishes no minute against any
+     event, no substitutions and no half-time marker, so the shape most match
+     pages use — a clock running down the middle — could only be drawn by
+     making the times up. What it does have that no other FPL app does is how
+     many of our own 245 owned the man, which is the reason anyone in this
+     league cares who scored.                                              */
+  var EV_TAG = { g: "", a: "assist", pm: "pen missed", ps: "pen saved", y: "", r: "" };
+  function evMark(e) {
+    if (e.k === "y" || e.k === "r") {
+      return '<svg class="evcard ' + e.k + '" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
+        '<rect x="7.5" y="3.5" width="9" height="17" rx="2.2"/></svg>';
+    }
+    if (e.k === "a") return svg("assist", 15);
+    if (e.k === "ps") return svg("shield", 15);
+    return svg("ball", 15);
+  }
+  function evRow(e, mgrs) {
+    var tag = e.own ? "o.g." : EV_TAG[e.k];
+    var what = e.own ? "Own goal" : e.k === "g" ? "Goal" : e.k === "a" ? "Assist"
+             : e.k === "y" ? "Yellow card" : e.k === "r" ? "Red card"
+             : e.k === "pm" ? "Penalty missed" : "Penalty saved";
+    var says = what + (e.n > 1 ? " \u00d7" + e.n : "") + " \u2014 " + e.name +
+      (e.count ? ", owned by " + e.count + " of " + mgrs : "") + (e.mine ? ", in your squad" : "");
+    return '<div class="mevrow ' + e.k + (e.own ? ' og' : '') + (e.mine ? ' mine' : '') +
+      '" data-el="' + e.el + '" role="button" tabindex="0" aria-label="' + esc(says) + '">' +
+      '<span class="mevi">' + evMark(e) + '</span>' +
+      '<span class="mevn"><span class="who">' + esc(e.name) + '</span>' +
+      (e.n > 1 ? '<i class="mevx">\u00d7' + e.n + '</i>' : '') +
+      (tag ? '<i class="mevt">' + esc(tag) + '</i>' : '') + '</span>' +
+      (e.count ? '<span class="mevo" aria-hidden="true">' + num(e.count) + '</span>' : '') +
+      '</div>';
+  }
+  function matchEventsHtml(ds, gw, home, away) {
+    var ev = K.matchEvents(ds, gw, home, away, state.me);
+    if (!ev) return "";
+    var side = function (list) {
+      return list.length
+        ? list.map(function (e) { return evRow(e, ev.managers); }).join("")
+        : '<div class="mevnone">\u2013</div>';
+    };
+    var note = "FPL publishes who, not when \u2014 there are no minutes in its data. " +
+      "The number is how many of our " + ev.managers + " owned him.";
+    // Counting the names under a score and getting a different number is the
+    // kind of thing that makes a reader stop trusting the whole page, so say
+    // which way it is rather than leaving them to wonder.
+    if (ev.tallies === false) {
+      note = (ev.done
+        ? "These do not add up to the score yet \u2014 FPL's record of the match is still settling. "
+        : "The scoreline moves before the record behind it, so a goal can appear here a few minutes late. ")
+        + note;
+    }
+    return '<div class="card mev" data-bgw="' + gw + '">' +
+      '<div class="mevhd">Match events</div>' +
+      '<div class="mevcols"><div class="mevside">' + side(ev.home) + '</div>' +
+      '<div class="mevside r">' + side(ev.away) + '</div></div>' +
+      '<div class="note mevnote">' + esc(note) + '</div></div>';
   }
 
   /* ---- gameweek status ---------------------------------------------------
@@ -2185,7 +2252,7 @@
     });
     // Tap a player anywhere a pitch is drawn: the FPL-style points breakdown.
     document.addEventListener("click", function (e) {
-      var card = e.target.closest && e.target.closest(".pcard[data-el], .mrow[data-el]");
+      var card = e.target.closest && e.target.closest(".pcard[data-el], .mrow[data-el], .mevrow[data-el]");
       if (!card) return;
       var host = card.closest("[data-bgw]");
       if (!host) return;

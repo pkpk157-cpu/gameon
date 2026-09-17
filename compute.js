@@ -2746,6 +2746,96 @@
     };
   };
 
+  /* ---- what happened in a match -------------------------------------------
+     FPL publishes a stats block against each fixture, split into the home
+     side's players and the away side's. That split is the only record that
+     survives a double gameweek: a club playing twice in one week has one set
+     of gameweek totals and two matches, and nothing in the totals says which
+     goal belonged to which. Working events out from a player's club and his
+     club's fixture would put both in whichever match came first.
+
+     What FPL does not publish, anywhere, is when. There is no minute against
+     any of it, no substitutions and no half-time marker. So this answers what
+     happened and cannot answer when, and it does not pair an assist to a goal
+     either — the two are separate totals, and inventing the pairing would be
+     inventing it.
+
+     An own goal is credited by FPL to the man who put it in, who plays for the
+     other side. It is listed here under the side it counted for, so the names
+     under a score add up to that score, and it carries its own mark so nobody
+     reads it as a transfer.                                                */
+  var EV_RANK = { g: 0, a: 1, ps: 2, pm: 3, y: 4, r: 5 };
+
+  C.matchEvents = function (ds, gw, home, away, me) {
+    if (!ds || !ds.gwFixtures || !ds.gwEvents) return null;
+    gw = +gw;
+    var fixtures = ds.gwFixtures[gw] || [], idx = -1;
+    for (var i = 0; i < fixtures.length; i++) {
+      if (fixtures[i][0] === home && fixtures[i][1] === away) { idx = i; break; }
+    }
+    if (idx === -1) return null;
+    // Events are stored positionally against the fixtures of the same publish,
+    // so a shorter list means an older shape rather than a match without them.
+    var perGw = ds.gwEvents[gw];
+    if (!perGw || !perGw.length) return null;
+    var raw = perGw[idx];
+    if (!raw || !raw.length) return null;
+
+    var els = ds.elements || {}, f = fixtures[idx];
+    var own = C.leagueOwnership(ds, gw);
+    var mine = {};
+    if (me) {
+      var pk = picksAt(ds, gw), sq = pk && pk[+me];
+      if (sq && sq.p) sq.p.forEach(function (t) { mine[t[0]] = 1; });
+    }
+
+    var sides = { h: [], a: [] };
+    raw.forEach(function (e) {
+      if (!e || e.length < 3) return;
+      var kind = e[1], el = +e[2], n = +e[3] || 1, m = els[el];
+      if (!EV_RANK.hasOwnProperty(kind === "o" ? "g" : kind)) return;
+      var scoredFor = e[0] === 0 ? "h" : "a";
+      if (kind === "o") scoredFor = scoredFor === "h" ? "a" : "h";
+      sides[scoredFor].push({
+        k: kind === "o" ? "g" : kind,
+        own: kind === "o",
+        el: el,
+        name: m ? m[0] : "Unknown player",
+        n: n,
+        count: own ? (own.count[el] || 0) : null,
+        pct: own ? (own.pct[el] || 0) : null,
+        mine: !!mine[el]
+      });
+    });
+    var order = function (x, y) {
+      return (EV_RANK[x.k] - EV_RANK[y.k]) ||
+             (x.own === y.own ? 0 : x.own ? 1 : -1) ||
+             (x.name < y.name ? -1 : x.name > y.name ? 1 : 0);
+    };
+    sides.h.sort(order); sides.a.sort(order);
+    if (!sides.h.length && !sides.a.length) return null;
+
+    // The names under a score should add up to it. When they do not — which
+    // happens honestly while a match is in play, because the scoreline moves
+    // before the stats behind it do — the page says so rather than letting a
+    // reader count the names and doubt the app.
+    var goalsIn = function (list) {
+      var t = 0;
+      list.forEach(function (x) { if (x.k === "g") t += x.n; });
+      return t;
+    };
+    var gh = goalsIn(sides.h), ga = goalsIn(sides.a);
+    var known = f[4] != null && f[5] != null;
+
+    return {
+      home: sides.h, away: sides.a,
+      goals: { home: gh, away: ga },
+      tallies: known ? (gh === +f[4] && ga === +f[5]) : null,
+      done: !!(f[3] || f[8]),
+      managers: own ? own.managers : 0
+    };
+  };
+
   /* ---- where everyone landed ---------------------------------------------
      The league's season totals as a distribution rather than a ladder. A
      table of 245 rows says who is where; this says what the field looks like,

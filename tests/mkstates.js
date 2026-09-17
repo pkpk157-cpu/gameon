@@ -137,6 +137,65 @@ Object.keys(dmg).forEach(k => { const d = clone(base); dmg[k](d); out[k] = d; })
   out["gw30-knockout-drawn"] = d;
 }
 
+// --- match events -------------------------------------------------------
+// The base data predates gwEvents, and every other state here is therefore
+// also a test that the match page is fine without it. This one has them, and
+// each scoring fixture is given a different shape to answer for: bookings and
+// both kinds of penalty, an own goal on the side it counted for, a brace, and
+// one finished match deliberately left a goal short so the "these do not add
+// up" line has something to appear over. Everywhere else the names under a
+// score add up to it, which is what the suite checks.
+{
+  const d = clone(base); const ds = d.dataset;
+  const clubOf = (el) => (ds.elements[el] || [])[2];
+  // whoever actually played for a club that week, best first, so the names are
+  // real players rather than whoever sits first in the element list
+  const squadOf = (gw, club) => Object.keys(ds.elements)
+    .filter(el => clubOf(el) === club)
+    .sort((a, b) => ((ds.livePoints[gw] || {})[b] || 0) - ((ds.livePoints[gw] || {})[a] || 0))
+    .map(Number);
+  const gws = Object.keys(ds.gwFixtures || {})
+    .filter(gw => (ds.gwFixtures[gw] || []).some(f => f[3] && f[4] != null))
+    .sort((a, b) => +a - +b);
+  if (!gws.length) { console.error("no finished gameweek to hang match events on"); process.exit(1); }
+  ds.gwEvents = {};
+  let k = -1;                                   // which scoring fixture this is
+  gws.forEach((gw) => {
+    ds.gwEvents[gw] = (ds.gwFixtures[gw] || []).map((f) => {
+      const hs = f[4], as = f[5];
+      if (!f[2] || hs == null || as == null || (!hs && !as)) return 0;
+      const home = squadOf(gw, f[0]), away = squadOf(gw, f[1]);
+      if (home.length < 3 || away.length < 3) return 0;
+      k++;
+      const ev = [], done = !!(f[3] || f[8]);
+      const brace = k === 3 && hs >= 2;
+      const og = k === 1 && hs >= 1;
+      const short = k === 2 && done && hs >= 1;  // one home goal withheld
+      let want = hs - (short ? 1 : 0);
+      if (brace) {
+        ev.push([0, "g", home[0], want]);        // one man, the lot
+      } else {
+        for (let g = 0; g < want; g++) {
+          // an own goal is stored against the man who put it in, who plays for
+          // the other side; it still counts for the home score here
+          if (og && g === 0) ev.push([1, "o", away[away.length - 1], 1]);
+          else ev.push([0, "g", home[g % home.length], 1]);
+        }
+      }
+      for (let g = 0; g < as; g++) ev.push([1, "g", away[g % away.length], 1]);
+      if (hs > 1 && !brace) ev.push([0, "a", home[home.length - 1], 1]);
+      if (k === 0) {
+        ev.push([0, "y", home[1], 1]);
+        ev.push([1, "r", away[1], 1]);
+        ev.push([1, "pm", away[2], 1]);
+        ev.push([0, "ps", home[2], 1]);
+      }
+      return ev.length ? ev : 0;
+    });
+  });
+  out["match-events"] = d;
+}
+
 fs.mkdirSync(GOENV.STATES, { recursive: true });
 Object.keys(out).forEach(k => fs.writeFileSync(GOENV.STATES + "/" + k + ".json", JSON.stringify(out[k])));
 console.log(Object.keys(out).length + " datasets written:", Object.keys(out).join(", "));
@@ -144,7 +203,7 @@ console.log(Object.keys(out).length + " datasets written:", Object.keys(out).joi
 // The sweeps read whatever is in this directory, so a state that quietly stops
 // being written costs coverage without failing anything. Say the number out
 // loud and refuse a short count.
-const EXPECTED = 22;
+const EXPECTED = 23;
 if (Object.keys(out).length !== EXPECTED) {
   console.error("expected " + EXPECTED + " datasets, wrote " + Object.keys(out).length);
   process.exit(1);

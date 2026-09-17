@@ -927,7 +927,27 @@ async function h2hAll(id) {
   // every run, so the flags, scores and minutes track the afternoon. A
   // postponed fixture with no gameweek yet is left out until FPL reschedules
   // it — it would have nothing to say and no page to sit on.
-  let gwFixtures = {};
+  // What happened in each of those matches, from the same response. FPL
+  // carries a stats block per fixture, split into the home side's players and
+  // the away side's — which is the only record that survives a double
+  // gameweek. A club playing twice in one week has one set of gameweek totals
+  // and two matches, and nothing in the totals says which goal belonged to
+  // which; this does.
+  //
+  // What FPL does not publish, anywhere, is when. No minute against any of it,
+  // no substitutions, no half-time. So this is what happened, not when.
+  //
+  // Stored alongside gwFixtures and aligned to it by position — both are built
+  // from the same array in the same pass, so a fixture and its events cannot
+  // drift apart. Each entry is [side, kind, element, count], side 0 for home
+  // and 1 for away, and a match with nothing to report stores 0 rather than an
+  // empty array.
+  const EV_KIND = {
+    goals_scored: "g", own_goals: "o", assists: "a",
+    yellow_cards: "y", red_cards: "r",
+    penalties_missed: "pm", penalties_saved: "ps"
+  };
+  let gwFixtures = {}, gwEvents = {};
   try {
     const fx = await getJSON("/fixtures/");
     (fx || []).forEach((f) => {
@@ -937,11 +957,34 @@ async function h2hAll(id) {
          f.team_h_score == null ? null : +f.team_h_score,
          f.team_a_score == null ? null : +f.team_a_score,
          +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0]);
+      const ev = [];
+      (f.stats || []).forEach((st) => {
+        const kind = EV_KIND[st.identifier];
+        if (!kind) return;
+        [["h", 0], ["a", 1]].forEach(([key, sideNo]) => {
+          (st[key] || []).forEach((x) => {
+            const n = +x.value || 0;
+            if (!n || !x.element) return;
+            ev.push([sideNo, kind, +x.element, n]);
+          });
+        });
+      });
+      (gwEvents[f.event] = gwEvents[f.event] || []).push(ev.length ? ev : 0);
     });
     const gws = Object.keys(gwFixtures);
     console.log(gws.reduce((n, k) => n + gwFixtures[k].length, 0) +
       " real fixtures published across " + gws.length + " gameweeks");
-  } catch (e) { console.log("  gw fixtures failed (non-fatal): " + e.message); }
+    const withEv = Object.keys(gwEvents).reduce(
+      (n, k) => n + gwEvents[k].filter((e) => e !== 0).length, 0);
+    console.log("  match events for " + withEv + " of them");
+  } catch (e) {
+    console.log("  gw fixtures failed (non-fatal): " + e.message);
+    // The fixtures themselves already survive a failed fetch as an empty
+    // object, which the app reads as "no scoreboard yet". Events are worth
+    // keeping instead: they are a record of matches already played, and
+    // dropping them would empty every past match page until the next run.
+    gwEvents = prev.gwEvents || {};
+  }
 
   /* ---- when each milestone actually landed ------------------------------
      The published data says whether a step has happened, never when. These
@@ -1025,7 +1068,7 @@ async function h2hAll(id) {
     historyCarried: carried.length ? { ids: carried, from: prev.updatedAt || null } : null,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, moves: moves || {},
-    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps,
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps, gwEvents,
     faceHide, pending
   };
   // Refuse to publish something clearly worse than what is already live: a

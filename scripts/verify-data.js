@@ -8,7 +8,10 @@
 // trips); a disagreement is shouted into the Action log as a warning.
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const ROOT = path.join(__dirname, "..");
-const ds = JSON.parse(fs.readFileSync(path.join(ROOT, "data.json"), "utf8")).dataset;
+// A path can be passed in to check a file other than the published one, which
+// is how the suites point this at a dataset built to be wrong on purpose.
+const FILE = process.argv[2] || path.join(ROOT, "data.json");
+const ds = JSON.parse(fs.readFileSync(FILE, "utf8")).dataset;
 const cx = { window: {}, console,
              localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
              document: { documentElement: { setAttribute() {} } } };
@@ -143,6 +146,43 @@ if (ds.buys && ds.buysGw && (ds.picks || {})[ds.buysGw]) {
   console.log("purchase prices: " + priced + " squads priced, " + budgetOk +
     " untouched squads reconcile with the opening budget" +
     (missing ? ", " + missing + " incomplete" : ""));
+}
+
+// ---- match events reconcile with the scoreline --------------------------
+// The one inference in the whole feature is which side an own goal counts for:
+// FPL credits it to the man who put it in, who plays for the other team. Six
+// real own goals in this season's data all say so, and the arithmetic below is
+// what would notice if FPL ever filed them the other way round — before anyone
+// reads a match page with a goal under the wrong club.
+//
+// Only settled fixtures are judged. While a match is in play the scoreline
+// moves before the record behind it, and disagreeing then is normal.
+if (ds.gwEvents && ds.gwFixtures) {
+  let seen = 0, ogs = 0, off = [];
+  Object.keys(ds.gwEvents).forEach((gw) => {
+    const fx = ds.gwFixtures[gw] || [], ev = ds.gwEvents[gw] || [];
+    ev.forEach((list, i) => {
+      const f = fx[i];
+      if (!list || !f || !f[3] || f[4] == null || f[5] == null) return;
+      let h = 0, a = 0;
+      list.forEach((e) => {
+        if (e[1] === "g") { if (e[0] === 0) h += e[3]; else a += e[3]; }
+        // an own goal counts for the side the scorer does not play for
+        if (e[1] === "o") { if (e[0] === 0) a += e[3]; else h += e[3]; ogs++; }
+      });
+      seen++;
+      if (h !== +f[4] || a !== +f[5]) {
+        off.push("GW" + gw + " " + f[0] + " " + f[4] + "-" + f[5] + " " + f[1] +
+                 " but the events say " + h + "-" + a);
+      }
+    });
+  });
+  if (off.length) {
+    flag("match events: " + off.length + " settled fixture(s) do not add up to their score");
+    off.slice(0, 5).forEach((t) => console.log("    " + t));
+  }
+  console.log("match events: " + seen + " settled fixture(s) checked, " + ogs +
+    " own goal(s), " + (off.length ? off.length + " disagreeing" : "all add up to their score"));
 }
 
 console.log("verified: " + mgrChecked + " h2h records across " +
