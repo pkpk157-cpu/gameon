@@ -19,11 +19,19 @@
 # Results print in the canonical order however they finish, each with the time
 # it took, so a slow suite is visible instead of suspected. bat.progress carries
 # them as they land, for watching a run that is still going.
+#
+# The per-suite timeout is deliberately far above what the slowest one needs.
+# It was 420s while statesweep took 407, and the next thing added to the app
+# tipped it over — a suite failing because it is near its own budget, rather
+# than because anything is wrong, is the worst kind of red. The guard is there
+# to catch a hang, not to police how long a matrix takes; run time is visible
+# in the log either way. It does not cost wall time: the suites run in
+# parallel and the run is bounded by the longest one finishing, not by this.
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 LOG=${1:-bat.log}; JOBS=${2:-4}; shift 2 2>/dev/null
 TIMES=bat-times.txt; SEED=bat-times.seed.txt; PROG=bat.progress
 
-ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pltable pltcrests prsplit prnotoggle prmine lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills errsweep statesweep nullstack2"
+ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook overlap twosheets youme younull drawer drawerfit drawertheme livecard match bdtabs pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pltable pltcrests prsplit prnotoggle prmine prfavs lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills errsweep statesweep nullstack2"
 SUITES=${*:-$ALL}
 
 OUT=$(mktemp -d)
@@ -55,7 +63,7 @@ run_one() {
   local s=$1 t0 out rc secs line
   if [ ! -f "$s.js" ]; then printf "=== %-13s MISSING\n" "$s" > "$OUT/$s"; return; fi
   t0=$(date +%s)
-  out=$(timeout 420 node "$s.js" 2>&1); rc=$?
+  out=$(timeout 900 node "$s.js" 2>&1); rc=$?
   secs=$(( $(date +%s) - t0 ))
   if [ $rc -eq 0 ] && ! echo "$out" | grep -q "FAIL"; then
     line=$(printf "=== %-13s PASS  %3ss" "$s" "$secs")

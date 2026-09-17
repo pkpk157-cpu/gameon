@@ -6,6 +6,7 @@
 
   var S = window.GO_STORE, K = window.GO_COMPUTE;
   var ME_KEY = "go12.me", THEME_KEY = "go12.theme", RIVALS_KEY = "go12.rivals", RIVALS_MAX = 2;
+  var FAVS_KEY = "go12.favs";
   var state = { view: "classic", me: lsGet(ME_KEY), monthKey: null, seasonKey: null, group: null, h2hComp: "UCL" };
 
   /* Minimal line icons (24px, currentColor). */
@@ -201,6 +202,23 @@
     if (at !== -1) { r.splice(at, 1); lsSet(RIVALS_KEY, r); return "removed"; }
     if (r.length >= RIVALS_MAX) return "full";
     r.push(id); lsSet(RIVALS_KEY, r); return "added";
+  }
+  // Starred players, kept on this device only. Unlike rivals there is no cap:
+  // a watchlist is the reader's own business and fifteen or fifty are both
+  // reasonable. Ids are held as numbers so a star survives the player being
+  // renamed, and a player who leaves the game simply stops appearing in a
+  // table that no longer lists him.
+  function favs() {
+    var v = lsGet(FAVS_KEY);
+    return Array.isArray(v) ? v.map(Number).filter(function (x) { return x > 0; }) : [];
+  }
+  function isFav(el) { return favs().indexOf(+el) !== -1; }
+  // Returns "added" or "removed".
+  function toggleFav(el) {
+    el = +el;
+    var f = favs(), at = f.indexOf(el);
+    if (at !== -1) { f.splice(at, 1); lsSet(FAVS_KEY, f); return "removed"; }
+    f.push(el); lsSet(FAVS_KEY, f); return "added";
   }
   function ordinal(n) { var s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); }
   function monthLabel(m) {
@@ -781,17 +799,31 @@
       '<b class="lw">' + DUE_LONG[i] + '</b><b class="sw">' + DUE_SHORT[i] + '</b></span>';
   }
 
-  function priceRows(rows, tracked, scale, forward) {
+  function starSvg() {
+    return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">' +
+      '<path d="M12 3.7l2.54 5.15 5.68.83-4.11 4.01.97 5.66L12 16.68l-5.08 2.67.97-5.66' +
+      '-4.11-4.01 5.68-.83Z"/></svg>';
+  }
+  // A face on the left the way the leaderboards have one, and a star on the
+  // right. The star is the only control in the row, so it takes the click; the
+  // photograph is decoration and the browser is told so.
+  function priceRows(rows, tracked, scale, forward, favSet) {
     return rows.map(function (r) {
       var dir = progressCell(r, scale);
-      return '<tr><td class="name"><span class="who">' + esc(r.name) + '</span>' +
-        '<div class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</div></td>' +
+      var starred = !!(favSet && favSet[r.id]);
+      return '<tr><td class="name"><span class="nwrap">' + faceBox(r.id, r.name, "sm") +
+        '<span class="ntxt"><span class="who">' + esc(r.name) + '</span>' +
+        '<span class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + '</span></span>' +
+        '<button type="button" class="favstar' + (starred ? ' on' : '') + '" data-fav="' + r.id +
+        '" aria-pressed="' + (starred ? 'true' : 'false') +
+        '" aria-label="' + (starred ? 'Unstar ' : 'Star ') + esc(r.name) + '">' + starSvg() + '</button>' +
+        '</span></td>' +
         '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
-        '<td class="num">' + r.owned.toFixed(1) + '%</td>' +
+        '<td class="num c-fpl">' + r.owned.toFixed(1) + '%</td>' +
         '<td class="num">' + (r.goOwned == null ? '\u2013'
             : '<b>' + r.goOwned.toFixed(1) + '%</b>') + '</td>' +
         (tracked ? '<td class="num">' + dir + '</td>' : '') +
-        (forward ? '<td class="num">' + rateCell(r) + '</td>' +
+        (forward ? '<td class="num c-rate">' + rateCell(r) + '</td>' +
                    '<td class="num">' + dueCell(r) + '</td>' : '') + '</tr>';
     }).join("");
   }
@@ -1014,7 +1046,10 @@
         cmp: function (a, b) { return COLL.compare(a.name, b.name); } },
       { k: "price", t: "Price", s: "\u00a3", num: 1, first: -1,
         cmp: function (a, b) { return a.price - b.price; } },
-      { k: "owned", t: "FPL",     num: 1, first: -1,
+      // Stands down on a phone so the name can carry a face and a star; every
+      // other FPL app shows this number, and GO beside it is the one that does
+      // not exist anywhere else.
+      { k: "owned", t: "FPL",     num: 1, first: -1, cls: "c-fpl",
         cmp: function (a, b) { return a.owned - b.owned; } },
       { k: "go",    t: "Game On", s: "GO", num: 1, first: -1,
         cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
@@ -1027,7 +1062,10 @@
     // never had them.
     var forward = told && rows.some(function (r) { return r.perHour != null || r.dueIn != null; });
     if (forward) {
-      COLS.push({ k: "rate", t: "Per hr", s: "/hr", num: 1, first: -1,
+      // Also stands down on a phone. Progress says how far along he is and Time
+      // says when it lands; the hourly rate is the arithmetic between them, and
+      // it is the one of the three a thumb can do without.
+      COLS.push({ k: "rate", t: "Per hr", s: "/hr", num: 1, first: -1, cls: "c-rate",
         cmp: function (a, b) { return (a.perHour || 0) - (b.perHour || 0); } });
       // soonest first, and everyone FPL does not expect to move sits behind them
       COLS.push({ k: "due", t: "Time", num: 1, first: 1,
@@ -1050,14 +1088,17 @@
     // whether anything they own is about to move tonight. This narrows the
     // table rather than navigating anywhere, so it belongs on the page in a
     // way the old Prices/Stats toggle did not.
-    if (state.prMine !== true) state.prMine = false;
+    if (["all", "mine", "favs"].indexOf(state.prWho) === -1) state.prWho = "all";
     var poss = { all: "All", 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
-    var h = '<div class="pseg psegwide" role="tablist" id="prWho">' +
-      '<button type="button" role="tab" data-mine="0"' +
-        (state.prMine ? ' aria-selected="false"' : ' class="on" aria-selected="true"') + '>All players</button>' +
-      '<button type="button" role="tab" data-mine="1"' +
-        (state.prMine ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>My team</button>' +
-      '</div>' +
+    var WHO = [["all", "All players", "All"], ["mine", "My team", "Mine"], ["favs", "Favourites", "Starred"]];
+    var h = '<div class="pseg psegwide three" role="tablist" id="prWho">' +
+      WHO.map(function (t) {
+        // Two wordings, the short one for a phone that cannot hold three full
+        // labels without squeezing them into nonsense.
+        return '<button type="button" role="tab" data-who="' + t[0] + '"' +
+          (state.prWho === t[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') +
+          '><span class="lw">' + esc(t[1]) + '</span><span class="sw">' + esc(t[2]) + '</span></button>';
+      }).join("") + '</div>' +
       '<div class="pickrow">' +
       '<select class="in narrow" id="prPos">' + Object.keys(poss).map(function (k) {
         return '<option value="' + k + '"' + (k === state.pricePos ? ' selected' : '') + '>' + esc(poss[k]) + '</option>';
@@ -1066,35 +1107,66 @@
     h += '<div id="prPanel"></div>';
     host.innerHTML = h;
 
+    // An empty table has several reasons now, and naming the wrong one reads as
+    // a fault rather than a filter doing its job.
     function emptyWhy() {
-      if (state.prMine && !mineSet) return "We do not have your squad yet. It arrives with the next sync after a deadline.";
-      if (state.prMine) return "Nobody in your team matches that.";
-      return "No player matches that search.";
+      var q = $("#prSearch", host) && $("#prSearch", host).value.trim();
+      if (state.prWho === "mine" && !mineSet) return "We do not have your squad yet. It arrives with the next sync after a deadline.";
+      if (state.prWho === "favs" && !favSet.n) return "No players starred yet. Tap the star beside a name in All players to keep an eye on him.";
+      if (state.prWho === "mine") return "Nobody in your team matches that.";
+      if (state.prWho === "favs") return "None of your starred players matches that.";
+      return q ? "No player matches that search." : "No players to show.";
     }
 
-    // Whoever he is today. Read once per render rather than per keystroke.
+    // Whoever he is today, and whoever he is watching. Read once per render
+    // rather than once per keystroke.
     var mineSet = null;
     if (state.me) {
       var mineIds = K.mySquadIds(ds, state.me);
       if (mineIds) { mineSet = {}; mineIds.forEach(function (e) { mineSet[e] = 1; }); }
     }
-    $all('[data-mine]', host).forEach(function (b) {
+    var favSet = { n: 0 };
+    var readFavs = function () {
+      favSet = { n: 0 };
+      favs().forEach(function (e) { favSet[e] = 1; favSet.n++; });
+    };
+    readFavs();
+
+    $all('[data-who]', host).forEach(function (b) {
       b.addEventListener("click", function () {
-        var want = b.getAttribute("data-mine") === "1";
-        if (want && !state.me) {
+        var want = b.getAttribute("data-who");
+        if (want === "mine" && !state.me) {
           toast("Pick your team first");
           openProfile({ edit: true });
           return;
         }
-        if (want === state.prMine) return;
-        state.prMine = want;
-        $all('[data-mine]', host).forEach(function (x) {
-          var on = (x.getAttribute("data-mine") === "1") === want;
+        if (want === state.prWho) return;
+        state.prWho = want;
+        $all('[data-who]', host).forEach(function (x) {
+          var on = x.getAttribute("data-who") === want;
           x.classList.toggle("on", on);
           x.setAttribute("aria-selected", on ? "true" : "false");
         });
         draw();
       });
+    });
+
+    // Starring is one row's business: repaint that star rather than the six
+    // hundred rows around it, which would cost the reader their place in the
+    // list. The exception is the starred list itself, where the row he just
+    // unstarred has to leave.
+    $("#prPanel", host).addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-fav]");
+      if (!btn) return;
+      var el = +btn.getAttribute("data-fav");
+      var was = toggleFav(el);
+      readFavs();
+      if (state.prWho === "favs") { draw(); return; }
+      var on = was === "added";
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.setAttribute("aria-label", (on ? "Unstar " : "Star ") +
+        btn.getAttribute("aria-label").replace(/^(Un)?[Ss]tar /, ""));
     });
 
     // Every player is in the table, so nobody is unreachable by scrolling. But
@@ -1107,7 +1179,8 @@
       gen++;
       if (pending) { cancelAnimationFrame(pending); pending = 0; }
       var list = rows.slice();
-      if (state.prMine && mineSet) list = list.filter(function (r) { return mineSet[r.id]; });
+      if (state.prWho === "mine") list = mineSet ? list.filter(function (r) { return mineSet[r.id]; }) : [];
+      if (state.prWho === "favs") list = list.filter(function (r) { return favSet[r.id]; });
       if (state.pricePos !== "all") list = list.filter(function (r) { return String(r.type) === state.pricePos; });
       // Search all 600-odd players, not just the ones on screen. Filtering the
       // rendered rows used to hide anyone the current sort had pushed down.
@@ -1128,7 +1201,7 @@
         // Two wordings where a header has a short one, so a narrow screen can
         // drop to it rather than push the last column off the edge. The full
         // name is the label either way, so what is read out never shortens.
-        return '<th class="sortable' + (c.num ? " num" : "") + (on ? " sorted" : "") +
+        return '<th class="sortable' + (c.num ? " num" : "") + (c.cls ? " " + c.cls : "") + (on ? " sorted" : "") +
           '" data-sort="' + c.k + '" role="button" tabindex="0" aria-label="' + esc(c.t) +
           '" aria-sort="' + (on ? (dir === 1 ? "ascending" : "descending") : "none") + '">' +
           (c.s ? '<span class="lw">' + esc(c.t) + '</span><span class="sw">' + esc(c.s) + '</span>'
@@ -1141,7 +1214,7 @@
       // and wins on order, which left the rows unreachable by any gesture even
       // though scrollTop still moved them from script.
       panel.innerHTML = '<div class="freeze"><table class="t pricetbl"><thead><tr>' +
-        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale, forward) + '</tbody></table></div>' +
+        head + '</tr></thead><tbody>' + priceRows(list.slice(0, FIRST), tracked, scale, forward, favSet) + '</tbody></table></div>' +
         (list.length ? '' : '<div class="callout nohits">' + esc(emptyWhy()) + '</div>') +
         (tracked && !told && !thr.measured
           ? '<div class="koline">Pressure orders who is being bought and sold hardest. ' +
@@ -1157,7 +1230,7 @@
           // table; appending the rest of a list nobody is looking at any more
           // would mix two sorts together.
           if (mine !== gen || !body.parentNode) return;
-          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked, scale, forward));
+          body.insertAdjacentHTML("beforeend", priceRows(list.slice(FIRST), tracked, scale, forward, favSet));
         });
       }
 

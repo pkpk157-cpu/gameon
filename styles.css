@@ -1351,12 +1351,33 @@ table.t.pricetbl th { font-size:9px; letter-spacing:.2px; }
 table.t.pricetbl td.num { font-size:12.5px; }
 table.t.pricetbl .move { font-size:11.5px; white-space:nowrap; }
 /* A long surname must give way rather than push the last column off the edge —
-   the position and club underneath still say who this is. */
-table.t.pricetbl td.name { min-width:0; max-width:76px; white-space:nowrap; }
+   the position and club underneath still say who this is. The cell now carries
+   a face and a star as well, so the cap is what is left after those, and the
+   FPL ownership column stands down on a phone to pay for them: it is the one
+   number here that every other FPL app already shows, where GO — how many of
+   our own 245 hold him — is the one that is only here. */
+table.t.pricetbl td.name { min-width:0; max-width:112px; white-space:nowrap; }
 table.t.pricetbl td.name .who,
 table.t.pricetbl td.name .mgr { display:block; overflow:hidden; text-overflow:ellipsis; }
 table.t.pricetbl td.name .who { font-size:13px; }
 table.t.pricetbl td.name .mgr { font-size:10px; }
+table.t.pricetbl td.name .nwrap { gap:7px; }
+table.t.pricetbl td.name .ntxt { flex:1 1 auto; }
+table.t.pricetbl td.name .face.sm { width:24px; height:24px; }
+@media (max-width:429px) { table.t.pricetbl .c-fpl, table.t.pricetbl .c-rate { display:none; } }
+
+/* The star: the only control in the row, so it takes a proper tap target while
+   drawing as something small. Off it is an outline, on it is filled gold — the
+   two states have to differ in shape as well as colour, since a colour alone is
+   not a state to everyone. */
+.favstar { flex:none; appearance:none; background:none; border:0; cursor:pointer;
+  padding:4px; margin:-4px -2px -4px 0; line-height:0; border-radius:8px; color:var(--ink-faint); }
+.favstar svg { display:block; fill:none; stroke:currentColor; stroke-width:1.6;
+  stroke-linejoin:round; }
+.favstar.on { color:var(--gold); }
+.favstar.on svg { fill:currentColor; stroke:currentColor; }
+.favstar:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+@media (hover:hover) { .favstar:hover { color:var(--gold); } }
 
 /* How fast, and when. The rate takes the same up/down colours as the bar, so a
    glance down the two columns tells one story rather than two. */
@@ -1382,6 +1403,12 @@ table.t.pricetbl .due.soon { color:var(--due-soon); font-weight:800; }
    reader announces is ever the abbreviation. */
 table.t.pricetbl .lw { display:none; }
 table.t.pricetbl .sw { display:inline; }
+/* Three labels where there were two: the short wording until the bar is wide
+   enough for the full one, so "Favourites" never squeezes the other two. */
+.pseg.three .lw { display:none; }
+.pseg.three .sw { display:inline; }
+@media (min-width:420px) { .pseg.three .lw { display:inline; } .pseg.three .sw { display:none; } }
+.pseg.psegwide.three { max-width:360px; }
 
 /* Tap a header to sort by it; tap again to reverse. The arrow only shows on
    the column actually in use, and it reserves its width either way so the
@@ -1400,7 +1427,9 @@ table.t th.sortable .sarrow:empty { display:none; }
    gives up more of itself, and "Tomorrow" becomes "Tmrw" rather than the last
    column falling off the edge. */
 @media (max-width:360px) {
-  table.t.pricetbl td.name { max-width:62px; }
+  table.t.pricetbl td.name { max-width:104px; }
+  table.t.pricetbl td.name .face.sm { width:21px; height:21px; }
+  table.t.pricetbl td.name .nwrap { gap:5px; }
   table.t.pricetbl th, table.t.pricetbl td { padding:9px 2px; }
   table.t.pricetbl th { font-size:8.5px; letter-spacing:0; }
   table.t.pricetbl td.num { font-size:11.5px; }
@@ -1414,14 +1443,15 @@ table.t th.sortable .sarrow:empty { display:none; }
    good deal wider than the screen, the card being inset either side. */
 @media (min-width:400px) {
   table.t.pricetbl th, table.t.pricetbl td { padding:10px 5px; }
-  table.t.pricetbl td.name { max-width:96px; }
+  table.t.pricetbl td.name { max-width:132px; }
   table.t.pricetbl td.num { font-size:13px; }
   table.t.pricetbl th { font-size:9.5px; }
 }
 
 @media (min-width:640px) {
   table.t.pricetbl th, table.t.pricetbl td { padding:10px 7px; }
-  table.t.pricetbl td.name { max-width:150px; }
+  table.t.pricetbl td.name { max-width:190px; }
+  table.t.pricetbl td.name .face.sm { width:28px; height:28px; }
   table.t.pricetbl td.name .who { font-size:14px; }
   table.t.pricetbl td.num, table.t.pricetbl .move { font-size:13.5px; }
   table.t.pricetbl th { font-size:10px; letter-spacing:.3px; }

@@ -1,7 +1,9 @@
 const GOENV = require("./lib/env.js");
 /* Sorting by tapping a column header, and the theme control sitting last in
-   the drawer. Every sort state has to keep all five columns on a 320px screen,
-   because the arrow moves between columns as you tap. */
+   the drawer. Whatever columns a screen carries have to stay on it in every
+   sort state, because the arrow moves between them as you tap — and a phone
+   carries fewer than a desk does: FPL ownership and the hourly rate stand down
+   below 430 so the name can hold a face and a star. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const F = require("./fixture.js");
@@ -99,7 +101,11 @@ const cells = (p, i) => p.evaluate((i) =>
     ["go",    3, "Game On", "num"],
     ["move",  4, "Progress",  "skip"]
   ];
-  for (const [key, idx, label, kind] of plan) {
+  // FPL ownership and the hourly rate stand down below 430, so a phone cannot
+  // tap them; they are covered on a wide screen further down. Cell indices do
+  // not shift, because a hidden column is still in the DOM.
+  const phonePlan = plan.filter(([key]) => ["owned", "rate"].indexOf(key) === -1);
+  for (const [key, idx, label, kind] of phonePlan) {
     await p.click('th[data-sort="' + key + '"]'); await p.waitForTimeout(450);
     const first = await cells(p, idx);
     const st1 = await p.evaluate((k) => {
@@ -147,6 +153,33 @@ const cells = (p, i) => p.evaluate((i) =>
     chk(label + ": still fits a 390px screen", st1.right <= st1.vw + 1, st1.right + "/" + st1.vw);
   }
 
+  // --- the two columns a phone does not carry, on a screen that does -------
+  {
+    const ctxW = await b.newContext({ viewport: { width: 900, height: 900 }, serviceWorkers: "block" });
+    const pw = await ctxW.newPage();
+    pw.on("pageerror", (e) => errs.push("JS(900): " + e.message));
+    await pw.goto("http://localhost:9907/index.html#prices", { waitUntil: "domcontentloaded" });
+    await pw.waitForSelector('[data-view="prices"] tbody tr'); await pw.waitForTimeout(900);
+    // Only FPL here. The hourly rate and Time are drawn from what FPL publishes
+    // about a price move being due, which this fixture deliberately does not
+    // carry — it is built for the five columns that exist without it.
+    console.log("\nat 900px, the columns a phone stands down:");
+    for (const [key, idx, label] of [["owned", 2, "FPL"]]) {
+      const th = await pw.$('th[data-sort="' + key + '"]');
+      chk(label + " (wide): the column is there to sort", !!th && await th.isVisible());
+      if (!th) continue;
+      await pw.click('th[data-sort="' + key + '"]'); await pw.waitForTimeout(450);
+      const first = (await cells(pw, idx)).map(num);
+      await pw.click('th[data-sort="' + key + '"]'); await pw.waitForTimeout(450);
+      const second = (await cells(pw, idx)).map(num);
+      console.log("   " + label.padEnd(8) + " top: " + JSON.stringify(first.slice(0, 3)) +
+        " then " + JSON.stringify(second.slice(0, 3)));
+      chk(label + " (wide): biggest first", desc(first), JSON.stringify(first.slice(0, 3)));
+      chk(label + " (wide): then smallest first", asc(second), JSON.stringify(second.slice(0, 3)));
+    }
+    await ctxW.close();
+  }
+
   // --- and the same on the narrowest phone -------------------------------
   const ctx2 = await b.newContext({ viewport: { width: 320, height: 568 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true, serviceWorkers: "block" });
@@ -154,8 +187,11 @@ const cells = (p, i) => p.evaluate((i) =>
   p2.on("pageerror", (e) => errs.push("JS(320): " + e.message));
   await p2.goto("http://localhost:9907/index.html#prices", { waitUntil: "domcontentloaded" });
   await p2.waitForTimeout(1600);
+  // Only the columns a 320px screen actually has. Sorting by the two that
+  // stand down there is covered by the wide pass above.
+  const narrowPlan = phonePlan;
   console.log("\nat 320px, in each sort state:");
-  for (const [key, , label] of plan) {
+  for (const [key, , label] of narrowPlan) {
     for (const pass of [1, 2]) {
       await p2.click('th[data-sort="' + key + '"]'); await p2.waitForTimeout(350);
       const fit = await p2.evaluate(() => {

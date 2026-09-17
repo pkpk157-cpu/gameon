@@ -19,7 +19,7 @@ const NAMES = SQUAD.map((e) => (ds.elements[e] || [])[0]).filter(Boolean).sort()
 const open = (p) => p.evaluate(() => ({
   rows: [...document.querySelectorAll("table.pricetbl tbody tr")].length,
   names: [...document.querySelectorAll("table.pricetbl tbody tr td.name .who")].map((x) => x.textContent.trim()),
-  on: (document.querySelector("#prWho .on") || {}).textContent,
+  on: (document.querySelector("#prWho .on") || {}).getAttribute ? document.querySelector("#prWho .on").getAttribute("data-who") : null,
   tabs: document.querySelectorAll("#prWho button").length,
   empty: (document.querySelector(".nohits") || {}).textContent || ""
 }));
@@ -38,13 +38,13 @@ const open = (p) => p.evaluate(() => ({
     await p.waitForTimeout(700);
 
     let r = await open(p);
-    chk(r.tabs === 2 && /All players/.test(r.on), w + ": opens on All players", r.on + " / " + r.tabs + " tabs");
+    chk(r.tabs === 3 && r.on === "all", w + ": opens on All players, three tabs now", r.on + " / " + r.tabs + " tabs");
     const all = r.rows;
     chk(all > 100, w + ": the whole list is there to begin with", String(all));
 
-    await p.click('#prWho [data-mine="1"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="mine"]'); await p.waitForTimeout(600);
     r = await open(p);
-    chk(/My team/.test(r.on), w + ": the toggle moves", r.on);
+    chk(r.on === "mine", w + ": the toggle moves", r.on);
     chk(r.rows === SQUAD.length, w + ": exactly the fifteen he owns", r.rows + " of " + SQUAD.length);
     chk(r.names.slice().sort().join("|") === NAMES.join("|"), w + ": and they are the right fifteen",
       r.names.slice().sort().join(", "));
@@ -67,9 +67,9 @@ const open = (p) => p.evaluate(() => ({
     await p.fill("#prSearch", ""); await p.waitForTimeout(500);
 
     // back to all
-    await p.click('#prWho [data-mine="0"]'); await p.waitForTimeout(600);
+    await p.click('#prWho [data-who="all"]'); await p.waitForTimeout(600);
     r = await open(p);
-    chk(r.rows === all && /All players/.test(r.on), w + ": and back to the whole list", r.rows + " vs " + all);
+    chk(r.rows === all && r.on === "all", w + ": and back to the whole list", r.rows + " vs " + all);
     chk(errs.length === 0, w + ": no JS errors", errs.join(" | "));
     await ctx.close();
   }
@@ -82,18 +82,18 @@ const open = (p) => p.evaluate(() => ({
     await p.waitForSelector("table.pricetbl tbody tr", { timeout: 9000 });
     await p.waitForTimeout(600);
     const before = (await open(p)).rows;
-    await p.click('#prWho [data-mine="1"]'); await p.waitForTimeout(700);
+    await p.click('#prWho [data-who="mine"]'); await p.waitForTimeout(700);
     const r = await p.evaluate(() => ({
       sheet: document.querySelector("#youBack").classList.contains("show"),
       toast: (document.querySelector("#toast") || {}).textContent || "",
       toastShown: !!(document.querySelector("#toast") || {}).classList &&
                   document.querySelector("#toast").classList.contains("show"),
-      on: (document.querySelector("#prWho .on") || {}).textContent,
+      on: (document.querySelector("#prWho .on") || {}).getAttribute ? document.querySelector("#prWho .on").getAttribute("data-who") : null,
       rows: document.querySelectorAll("table.pricetbl tbody tr").length
     }));
     chk(/Pick your team/i.test(r.toast) && r.toastShown, "unset: it says to pick a team first", r.toast);
     chk(r.sheet, "unset: and opens the place to do it");
-    chk(/All players/.test(r.on) && r.rows === before, "unset: the table is left alone", r.on + " / " + r.rows);
+    chk(r.on === "all" && r.rows === before, "unset: the table is left alone", r.on + " / " + r.rows);
     chk(errs.length === 0, "unset: no JS errors", errs.join(" | "));
     await ctx.close();
   }

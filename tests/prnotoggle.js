@@ -3,7 +3,8 @@ const GOENV = require("./lib/env.js");
    carries a toggle TO THE OTHER any more — and each still opens the right page
    with its own title, and back still leaves. A control that filters the page
    you asked for is a different thing and is allowed: Price changes has one for
-   narrowing to your own squad. What is forbidden is a control that navigates. */
+   narrowing to your own squad or your starred players. What is forbidden is a
+   control that navigates. */
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8783;
