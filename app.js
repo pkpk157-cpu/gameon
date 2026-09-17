@@ -69,10 +69,12 @@
       'aria-hidden="true">' + SICONS[name] + '</svg>';
   }
 
+  // Both sets are drawn on the same 24-square grid, so a name missing from the
+  // drawer's own set can be taken from the small one rather than copied into it.
   function svg(name, size) {
     return '<svg viewBox="0 0 24 24" width="' + (size || 24) + '" height="' + (size || 24) +
       '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
-      (ICONS[name] || "") + '</svg>';
+      (ICONS[name] || SICONS[name] || "") + '</svg>';
   }
 
   /* ---- iOS-style colored 3D tile icons for the tab bar ------------------ */
@@ -136,8 +138,6 @@
   var G_COINS = '<ellipse cx="15" cy="10.4" rx="7.2" ry="2.8" fill="#fff"/>' +
     '<path d="M7.8 10.4v3c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>' +
     '<path d="M7.8 15.6v3c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>';
-  var G_CHART = '<path d="M8.3 20.6l4.3-4.5 3 2.4 5.8-6.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-    '<path d="M17.7 11.9h3.7v3.7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
   var TILE = {
     classic: tile("cl", "#ffd76a", "#e6a417", G_TROPHY),
     monthly: tile("mo", "#5db4ff", "#2f7bf0", G_CAL),
@@ -534,7 +534,15 @@
       menuItem("pfRules", "book", "Game rules") +
       '</div>';
 
-    // 4 — admin, for whoever runs the league
+    // 4 — the footballers, as two errands rather than one page with a toggle:
+    // a price check and a look at form are different questions, and asking
+    // either took a tab hop through the other.
+    h += '<div class="menu"><div class="lab-sm">Players</div>' +
+      menuItem("pfPrices", "tag", "Price changes") +
+      menuItem("pfPlayers", "chart", "Player stats") +
+      '</div>';
+
+    // 5 — admin, for whoever runs the league
     if (admin) {
       h += '<div class="menu"><div class="lab-sm">Admin</div>' +
         menuItem("pfRefresh", "refresh", "Refresh from FPL") +
@@ -545,7 +553,7 @@
         '</div>';
     }
 
-    // 5 — where the numbers came from
+    // 6 — where the numbers came from
     // During a live gameweek, say plainly whether the two-minute feed is
     // answering. Without this a dead proxy looks exactly like a quiet
     // afternoon — both simply show the last publish, growing older.
@@ -576,6 +584,8 @@
     $("#pfWinnings").addEventListener("click", function () { go("winnings"); });
     $("#pfCompare").addEventListener("click", function () { go("compare"); });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
+    $("#pfPrices").addEventListener("click", function () { go("prices"); });
+    $("#pfPlayers").addEventListener("click", function () { go("prices/stats"); });
     if (me) {
       $("#pfMine").addEventListener("click", function () { go("profile/" + state.me); });
       $("#pfMyCompare").addEventListener("click", function () {
@@ -1653,10 +1663,11 @@
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: markTile("mgo", "#ffd76a", "#e6a417", G_TROPHY, "logo-tile.webp") },
       { k: "vol", go: "vol", t: "Game On Voluntary", s: "Five side leagues and prizes",
-        i: markTile("mvo", "#ff9f4a", "#d1521c", G_COINS, "logo-tile-inv.webp") },
-      { k: "prices", go: "prices", t: "Player stats", s: "Prices, ownership and form",
-        i: tile("mpr", "#41c98a", "#178f56", G_CHART) }
+        i: markTile("mvo", "#ff9f4a", "#d1521c", G_COINS, "logo-tile-inv.webp") }
     ];
+    // Prices and player stats are not a section of the league — they are
+    // reference, about footballers rather than managers — so they live in the
+    // profile sheet with the other lookups instead of here.
     var inLeague = here !== "prices" && here !== "pl" && here !== "vol";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
@@ -2198,7 +2209,10 @@
     profile: { t: "Profile" },
     compare: { t: "Head to head" },
     stats:   { t: "Stats & highlights" },
-    prices:  { t: "Player stats" },
+    // Two errands on one view: the bar names whichever is open, so arriving
+    // from either item in the profile sheet lands on a page that agrees with
+    // the thing that was tapped.
+    prices:  { t: "Price changes" },
     pl:      { t: "Premier League" },
     winnings:{ t: "Winnings" },
     gwstatus:{ t: "Gameweek status" },
@@ -2217,6 +2231,7 @@
       // a manager's own name — escaped, it is not ours to trust as markup
       if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
+    if (state.view === "prices" && state.prTab === "stats") title = "Player stats";
     // How old the numbers are belongs on every page, not just the competition
     // tabs: a table is only as true as its last sync, and the page that says
     // so cannot be the one page you happen not to be on. Competition tabs also
@@ -3715,7 +3730,7 @@
       // league. Comparing the two without this line has already confused one
       // reader, and 245 will read it.
       (metric === "eo" ? '<div class="note" style="margin:2px 2px 8px">Ownership here is within ' +
-        'Game On\u2019s 245 managers. FPL-wide ownership is in Player stats.</div>' : '');
+        'Game On\u2019s 245 managers. FPL-wide ownership is in Price changes.</div>' : '');
   }
 
   /* The squad a manager will own next gameweek, rebuilt from the transfers he
