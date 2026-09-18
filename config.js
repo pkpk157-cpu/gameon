@@ -38,6 +38,14 @@
 
     fplBase: "https://fantasy.premierleague.com/api",
 
+    /* ---- Usage counter --------------------------------------------------
+       The league's own counter: which tabs are opened and how long the app
+       is on screen, kept in a Cloudflare Worker + D1 you own (see
+       usage-worker.mjs for the one-time setup). Empty means nothing is
+       sent. The organiser reads the totals on the worker's own page, behind
+       a key; nothing in the app shows them. */
+    usageUrl: "",
+
     /* ---- League identity -------------------------------------------------
        Fill these in Settings once. classicLeagueId drives the whole roster
        (all 245 managers). h2hGroupLeagueIds is one FPL H2H league id per

@@ -3544,6 +3544,11 @@
       '<div class="note" style="line-height:1.7;margin-top:12px">' +
       'Player and scoring data \u00a9 the Fantasy Premier League. ' +
       'Not affiliated with, endorsed by, or connected to the Premier League or FPL.' +
+      '</div>' +
+      '<div class="note" style="line-height:1.7;margin-top:10px">' +
+      'The app counts which tabs are opened and how long it is on screen, and where a phone has ' +
+      '"Highlight my team" set, the organiser can see who uses it and when. ' +
+      'Switch it off for your phone under Settings \u2192 Usage counter.' +
       '</div></div></div>';
     return h;
   }
@@ -5786,12 +5791,15 @@
   function countingOff() { try { return localStorage.getItem(SKIP_KEY) === "t"; } catch (e) { return false; } }
   function track(path, isEvent) {
     try {
-      if (!window.goatcounter || typeof window.goatcounter.count !== "function") return;
       if (countingOff()) return;
       if (!isEvent) {
         if (path === lastTracked) return;
         lastTracked = path;
+        // the league's own counter takes tab changes, whether or not
+        // GoatCounter's script ever arrived
+        try { if (window.GO_USAGE) window.GO_USAGE.view(path); } catch (e) {}
       }
+      if (!window.goatcounter || typeof window.goatcounter.count !== "function") return;
       window.goatcounter.count({ path: path, event: !!isEvent });
     } catch (e) {}
   }
