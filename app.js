@@ -4166,19 +4166,18 @@
     // busiest line can carry: a 3-5-2 with five across otherwise drew a
     // midfield of narrower cards than the two men in front of it. The bench
     // takes the same width so the whole team reads as one set of cards.
-    var across = pit.lines.reduce(function (m, ln) {
-      return Math.max(m, ln.players.length);
-    }, Math.min(pit.bench.length, 4) || 1);
-    // Five in a line is the only formation that cannot hold a full-size card on
-    // a phone, so that is the one that buys width back out of the gap.
-    var geom = '--across:' + across + ';--pgap:' + (across >= 5 ? 6 : 8) + 'px';
+    // Each row is sized for itself: five in a line is the only row that cannot
+    // hold a full-size card on a phone, and it alone gives ground, buying a
+    // little back out of its gap; the rows above and below stay full size.
+    var geom = '--across:' + (Math.min(pit.bench.length, 4) || 1);
     var h = '<div class="pitch" style="' + geom + '"><div class="pmark">' + turfSvg() +
       '<div class="phoard"><img src="logo-tile.webp" alt="" width="128" height="128" decoding="async">' +
       '<img src="logo-tile.webp" alt="" width="128" height="128" decoding="async"></div>' +
       '<div class="pgoal"></div></div>';
     h += pit.lines.map(function (ln) {
       if (!ln.players.length) return "";
-      return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false, metric, swapped); }).join("") + '</div>';
+      return '<div class="prow' + (ln.players.length >= 5 ? ' five' : '') + '" style="--across:' + ln.players.length + '">' +
+        ln.players.map(function (p) { return pp(p, false, metric, swapped); }).join("") + '</div>';
     }).join("");
     h += '</div>';
     if (pit.bench.length) {

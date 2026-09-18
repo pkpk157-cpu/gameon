@@ -100,9 +100,13 @@ const CASES = [
     m.pitches.forEach((pi, i) => {
       console.log("   pitch " + (i + 1) + " " + pi.w + "x" + pi.h + "  rows: " +
         pi.rows.map((r) => r.n + "@" + r.w[0] + (r.gap != null ? " gap" + r.gap : "")).join(", "));
-      const all = pi.rows.flatMap((r) => r.w);
-      chk(label + ": every card on a pitch is the same width",
-          Math.max(...all) - Math.min(...all) <= 1, JSON.stringify(all));
+      // cards in a row match; a row of four or fewer keeps the full-size card
+      // whatever another row has to do, and only a row of five gives ground
+      const full = Math.max(...pi.rows.flatMap((r) => r.w));
+      pi.rows.forEach((r) => {
+        chk(label + ": a row of " + r.n + " has cards of one width", Math.max(...r.w) - Math.min(...r.w) <= 1, JSON.stringify(r.w));
+        if (r.n <= 4) chk(label + ": a row of " + r.n + " keeps the full-size card", r.w[0] >= full - 1, r.w[0] + " vs " + full);
+      });
       pi.rows.forEach((r) => {
         chk(label + ": a row of " + r.n + " stays inside the touchline",
             r.left >= pi.left - 1 && r.right <= pi.right + 1,
