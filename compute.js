@@ -879,6 +879,54 @@
     };
   };
 
+  /* The season in one card: the figures a manager asks about first. Points
+     and position come from the classic table, so they are live when a
+     gameweek is; the rest is read off the per-gameweek history. Anything the
+     dataset lacks comes back null and the page leaves that tile out. */
+  C.snapshot = function (ds, id) {
+    id = +id;
+    if (!ds || !ds.managers || !ds.managers.length) return null;
+    var rows = C.classic(ds), me = null, idx = -1;
+    rows.forEach(function (r, i) { if (+r.id === id) { me = r; idx = i; } });
+    if (!me || typeof me.total !== "number") return null;
+    var counted = rows.filter(function (r) { return typeof r.eventTotal === "number"; });
+    var avg = counted.length
+      ? Math.round(counted.reduce(function (s, r) { return s + r.eventTotal; }, 0) / counted.length) : null;
+    var H = (ds.history && ds.history[id]) || null;
+    var gws = H ? Object.keys(H).map(Number).filter(function (g) { return H[g] && typeof H[g].p === "number"; })
+                    .sort(function (a, b) { return a - b; }) : [];
+    var sum = function (k) { return gws.reduce(function (s, g) { return s + (+H[g][k] || 0); }, 0); };
+    var last = gws.length ? H[gws[gws.length - 1]] : null, prev = gws.length > 1 ? H[gws[gws.length - 2]] : null;
+    var best = null;
+    gws.forEach(function (g) { if (best === null || H[g].p > H[best].p) best = g; });
+    // The nearest manager strictly above, so a tie reads as shared rather
+    // than "0 off"; and the first strictly below, for how far a leader leads.
+    var above = null, below = null;
+    for (var i = idx - 1; i >= 0; i--) { if (rows[i].total > me.total) { above = rows[i]; break; } }
+    for (var j = idx + 1; j < rows.length; j++) { if (rows[j].total < me.total) { below = rows[j]; break; } }
+    var chips = C.managerChips(ds, id).filter(function (c) { return c.used; });
+    var plays = chips.reduce(function (s, c) { return s + c.gws.length; }, 0);
+    return {
+      total: me.total,
+      gwPoints: typeof me.eventTotal === "number" ? me.eventTotal : null,
+      gw: C.currentGw(ds), leagueAvg: avg,
+      rank: me.computedRank, tied: me.tiedWith > 1, move: me.move || 0,
+      overall: last && typeof last.r === "number" ? last.r : null,
+      overallMove: last && prev && typeof last.r === "number" && typeof prev.r === "number" ? prev.r - last.r : null,
+      played: gws.length,
+      hits: gws.length ? sum("h") : null, transfers: gws.length ? sum("tr") : null,
+      bench: gws.length ? sum("b") : null,
+      best: best === null ? null : { gw: best, points: H[best].p },
+      leading: above === null,
+      lead: above === null && below ? me.total - below.total : null,
+      behindLeader: rows[0].total - me.total,
+      above: above ? { rank: above.computedRank, gap: above.total - me.total } : null,
+      chipPlays: plays, chipNames: chips.map(function (c) { return c.label; }).join(", "),
+      value: last && typeof last.v === "number" ? last.v : null,
+      bank: last && typeof last.bk === "number" ? last.bk : null
+    };
+  };
+
   /* ---- squads -----------------------------------------------------------
      Squads are stored per gameweek (picksV 2). Older datasets held only the
      current gameweek in a flat map, so both shapes are read here. */

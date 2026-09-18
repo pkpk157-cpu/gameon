@@ -4319,17 +4319,15 @@
     // repeated here. One compact card per competition.
     // Compare and Rival now sit in the bar beside his name; this page keeps
     // only the note that says when it is your own.
-    var h = isMe(id) ? '<div class="youline"><span class="pill gold">This is you</span></div>' : "";
-    // What they have done this season, as chips; on your own page an empty
-    // row says what the first one takes, on anyone else's it just is not there.
+    // The season in one card comes first; then, on your own page, your
+    // rivals if you have pinned any; then everything else.
+    var h = snapshotHtml(ds, id);
+    if (isMe(id)) h += rivalsHtml(ds, id);
+    if (isMe(id)) h += '<div class="youline"><span class="pill gold">This is you</span></div>';
     // Badges are won, not listed: with none there is nothing to say, so
     // nothing is said.
     var B = K.badges(ds, id);
     if (B.length) h += '<div class="badges">' + B.map(badgeHtml).join("") + '</div>';
-
-    // Your rivals, on your own page: where each stands against you this
-    // gameweek and this season. Pinned from their profiles; kept on the phone.
-    if (isMe(id)) h += rivalsHtml(ds, id);
 
     // One section per competition, and how near the places each one is.
     var W = K.winnings(ds, id);
@@ -4508,6 +4506,51 @@
   // The rivals strip on your own profile. Each row is the rival against you:
   // the gap this gameweek and the gap on the season, in your favour when
   // positive. Live numbers come from the same rows the Classic table draws.
+  // The season in one card, at the top of every profile: the figures a
+  // manager asks about first, in the order they ask. Ranks are never written
+  // with an "=" — a shared place says so in words underneath.
+  function snapshotHtml(ds, id) {
+    var S = K.snapshot(ds, id);
+    if (!S) return "";
+    var mv = function (d) {
+      return d > 0 ? ' <b class="move up">' + num(d) + '</b>' : d < 0 ? ' <b class="move down">' + num(-d) + '</b>' : '';
+    };
+    var h = '<div class="card snap">';
+    h += '<div class="snaphead">' +
+      '<div class="snapstat"><div class="v">' + num(S.total) + '</div><div class="l">Total points</div></div>' +
+      '<div class="snapstat"><div class="v">' + (S.gwPoints == null ? "\u2013" : num(S.gwPoints)) + '</div>' +
+        '<div class="l">' + (S.gw ? "GW" + S.gw : "This week") +
+        (S.leagueAvg == null ? '' : ' \u00b7 avg ' + num(S.leagueAvg)) + '</div></div>' +
+      '</div>';
+    // Two lines, FPL's rank first: the label, the number, and how it moved
+    // since last gameweek. No arrow when it did not move.
+    var rank = function (k, v, d) {
+      return '<div class="snaprank"><span class="k">' + k + '</span><b class="n">' + v + '</b>' + mv(d) + '</div>';
+    };
+    h += '<div class="snapranks">' +
+      (S.overall == null ? '' : rank("Overall", num(S.overall), S.overallMove || 0)) +
+      rank("GO", ordinal(S.rank), S.move) +
+      '</div>';
+    var tiles = [];
+    if (S.hits != null) {
+      tiles.push(pcard("Hits", S.hits ? "\u2212" + num(S.hits) : "0",
+        S.transfers === 1 ? "1 transfer" : num(S.transfers) + " transfers"));
+    }
+    if (S.bench != null) tiles.push(pcard("On the bench", num(S.bench), "points left there"));
+    if (S.best) tiles.push(pcard("Best week", num(S.best.points), "GW" + S.best.gw));
+    if (S.leading) {
+      tiles.push(pcard("Off the top", "Leading", S.tied ? "shared 1st" : (S.lead == null ? "" : "by " + num(S.lead))));
+    } else {
+      tiles.push(pcard("Off the top", num(S.behindLeader),
+        S.tied ? "shared " + ordinal(S.rank)
+               : (S.above && S.above.rank > 1 ? num(S.above.gap) + " off " + ordinal(S.above.rank) : ordinal(S.rank) + " place")));
+    }
+    tiles.push(pcard("Chips", S.chipPlays ? num(S.chipPlays) + " played" : "None yet", S.chipPlays ? S.chipNames : "all in hand"));
+    if (S.value != null) tiles.push(pcard("Squad", mval(S.value), S.bank == null ? "" : mval(S.bank) + " in the bank"));
+    h += '<div class="snapgrid">' + tiles.join("") + '</div></div>';
+    return h;
+  }
+
   function rivalsHtml(ds, meId) {
     // The section exists only once a rival is pinned; before that the
     // button on other people's profiles is the whole feature.
