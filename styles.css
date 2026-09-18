@@ -1567,7 +1567,25 @@ table.t.prizetbl .mgr { font-size:10.5px; }
    column but the player is centred: they are short readings of one thing each,
    and centring keeps six of them evenly spaced across a narrow screen where
    right-alignment would bunch them against their neighbours. */
-table.t.pricetbl { width:100%; table-layout:auto; }
+/* Fixed layout, with each column's share set here: an auto-laid table
+   re-balances every column around whatever its rows hold, so the rest of the
+   list landing under the first two dozen rows — a "Tmrw" where the top of the
+   list had only dashes — nudged every column a few pixels. Now no row can move
+   a column. The shares are what the auto layout settled on with a full list,
+   so nothing looks different; the player takes what is left. */
+table.t.pricetbl { width:100%; table-layout:fixed; }
+table.t.pricetbl th.c-price { width:11%; }
+table.t.pricetbl th.c-go { width:15.5%; }
+table.t.pricetbl th.c-move { width:15%; }
+table.t.pricetbl th.c-due { width:15.5%; }
+@media (min-width:430px) {
+  table.t.pricetbl th.c-price { width:9%; }
+  table.t.pricetbl th.c-fpl { width:12%; }
+  table.t.pricetbl th.c-go { width:12%; }
+  table.t.pricetbl th.c-move { width:11%; }
+  table.t.pricetbl th.c-rate { width:11%; }
+  table.t.pricetbl th.c-due { width:11%; }
+}
 table.t.pricetbl th, table.t.pricetbl td { padding:9px 3px; }
 table.t.pricetbl td.num, table.t.pricetbl th.num { text-align:center; }
 .freeze table.t.pricetbl th:first-child, .freeze table.t.pricetbl td:first-child { padding-left:9px; }

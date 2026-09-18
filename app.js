@@ -733,13 +733,13 @@
         '" aria-pressed="' + (starred ? 'true' : 'false') +
         '" aria-label="' + (starred ? 'Unstar ' : 'Star ') + esc(r.name) + '">' + starSvg() + '</button>' +
         '</span></td>' +
-        '<td class="num"><b>' + r.price.toFixed(1) + '</b></td>' +
+        '<td class="num c-price"><b>' + r.price.toFixed(1) + '</b></td>' +
         '<td class="num c-fpl">' + r.owned.toFixed(1) + '%</td>' +
-        '<td class="num">' + (r.goOwned == null ? '\u2013'
+        '<td class="num c-go">' + (r.goOwned == null ? '\u2013'
             : '<b>' + r.goOwned.toFixed(1) + '%</b>') + '</td>' +
-        (tracked ? '<td class="num">' + dir + '</td>' : '') +
+        (tracked ? '<td class="num c-move">' + dir + '</td>' : '') +
         (forward ? '<td class="num c-rate">' + rateCell(r) + '</td>' +
-                   '<td class="num">' + dueCell(r) + '</td>' : '') + '</tr>';
+                   '<td class="num c-due">' + dueCell(r) + '</td>' : '') + '</tr>';
     }).join("");
   }
 
@@ -958,18 +958,18 @@
     var COLS = [
       { k: "name",  t: "Player",  first: 1,
         cmp: function (a, b) { return COLL.compare(a.name, b.name); } },
-      { k: "price", t: "Price", s: "\u00a3", num: 1, first: -1,
+      { k: "price", t: "Price", s: "\u00a3", num: 1, first: -1, cls: "c-price",
         cmp: function (a, b) { return a.price - b.price; } },
       // Stands down on a phone so the name can carry a face and a star; every
       // other FPL app shows this number, and GO beside it is the one that does
       // not exist anywhere else.
       { k: "owned", t: "FPL",     num: 1, first: -1, cls: "c-fpl",
         cmp: function (a, b) { return a.owned - b.owned; } },
-      { k: "go",    t: "Game On", s: "GO", num: 1, first: -1,
+      { k: "go",    t: "Game On", s: "GO", num: 1, first: -1, cls: "c-go",
         cmp: function (a, b) { return (a.goOwned || 0) - (b.goOwned || 0); } }
     ];
     if (tracked) COLS.push({ k: "move", t: (told || thr.measured) ? "Progress" : "Pressure",
-      s: (told || thr.measured) ? "Prog" : "", num: 1, first: -1,
+      s: (told || thr.measured) ? "Prog" : "", num: 1, first: -1, cls: "c-move",
       cmp: function (a, b) { return (a.pressure || 0) - (b.pressure || 0); } });
     // Only FPL's own figures carry a rate and a projection; our measured model
     // has neither, and empty columns would say we had lost them rather than
@@ -982,7 +982,7 @@
       COLS.push({ k: "rate", t: "Per hr", s: "/hr", num: 1, first: -1, cls: "c-rate",
         cmp: function (a, b) { return (a.perHour || 0) - (b.perHour || 0); } });
       // soonest first, and everyone FPL does not expect to move sits behind them
-      COLS.push({ k: "due", t: "Time", num: 1, first: 1,
+      COLS.push({ k: "due", t: "Time", num: 1, first: 1, cls: "c-due",
         cmp: function (a, b) {
           return (a.dueIn == null ? 99 : a.dueIn) - (b.dueIn == null ? 99 : b.dueIn);
         } });

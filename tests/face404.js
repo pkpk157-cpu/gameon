@@ -50,6 +50,12 @@ const ENTRY = fs.readFileSync(GOENV.FIXTURES + "/faces-entry.txt", "utf8").trim(
     // --- the pitch ---
     await page.goto("http://127.0.0.1:8621/#profile/" + ENTRY, { waitUntil: "networkidle" });
     await page.waitForTimeout(1400);
+    // The photos load lazily, and the season card above the squad now puts the
+    // lower rows out of the browser's fetch margin — bring the pitch into view
+    // so every photo is asked for, and let the 404s come back.
+    await page.evaluate(() => { const p = document.querySelector(".pitch"); if (p) p.scrollIntoView({ block: "start" }); });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(600);
     const pitch = await page.evaluate(() => {
       const cards = [...document.querySelectorAll(".pcard")];
       const r = cards.length ? cards[0].getBoundingClientRect() : null;
