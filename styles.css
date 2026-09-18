@@ -1267,7 +1267,6 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .topbar .bartitle { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* ---- profile: compact competition cards ------------------------------- */
-.youline { margin-bottom:2px; }
 
 /* ---------- profile snapshot ---------- */
 /* Two figures side by side at the same size, position pills under them, and
@@ -1335,6 +1334,8 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .barpill:hover { border-color:var(--pl-green); color:var(--pl-green); }
 .barpill.on { background:var(--pl-green); border-color:var(--pl-green); color:#06231a; }
 .barpill.on:hover { color:#06231a; }
+/* your own page: not a control, just the word, in the gold the badges use */
+.barpill.you { cursor:default; color:#ffd76a; border-color:rgba(255,215,106,.55); background:rgba(255,215,106,.14); }
 /* On a phone the bar has to hold a back arrow, the burger, the name, these
    two and the person icon. The pills give up what they can so the name keeps
    as many letters as possible. */

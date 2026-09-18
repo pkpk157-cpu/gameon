@@ -28,7 +28,10 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
         title: document.querySelector("#barTitle").textContent }; });
     chk(!(await pills()).shown, w + ": no pills on the Classic table");
     await go("profile/1255976", 1200);
-    chk(!(await pills()).shown, w + ": none on your own page either");
+    // your own page carries the one word that says so, and neither control
+    const own = await p.evaluate(() => { const y = document.querySelector("#youPill");
+      return { you: !!y.offsetParent && y.textContent.trim() === "This is you", cmp: !!document.querySelector("#cmpMe").offsetParent, rv: !!document.querySelector("#rvToggle").offsetParent }; });
+    chk(own.you && !own.cmp && !own.rv, w + ": on your own page the bar says This is you, with no Compare or Rival", JSON.stringify(own));
     // a long name, to see what the bar does when it is squeezed
     await go("profile/1273065", 1200);
     let s = await pills();

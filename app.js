@@ -2656,12 +2656,19 @@
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
     else { info.style.display = "none"; info.removeAttribute("data-rules"); }
 
-    // Compare and Rival belong to somebody else's page, beside his name.
+    // Beside the name: Compare and Rival on somebody else's page, and on
+    // your own the one word that says so.
     var pills = $("#barPills");
-    var onOther = state.view === "profile" && state.profileId && !isMe(state.profileId) &&
-                  !!(S.dataset() || {}).managers;
-    pills.style.display = onOther ? "" : "none";
+    var onProfile = state.view === "profile" && state.profileId && !!(S.dataset() || {}).managers;
+    var onOther = onProfile && !isMe(state.profileId);
+    pills.style.display = onProfile ? "" : "none";
+    $("#cmpMe").style.display = onOther ? "" : "none";
+    $("#rvToggle").style.display = onOther ? "" : "none";
+    $("#youPill").style.display = onProfile && !onOther ? "" : "none";
     if (onOther) paintRivalPill();
+    // The pill row makes the bar taller, and the sticky strips below sit on
+    // the bar's measured height — so measure again whenever it may have changed.
+    measureChrome();
   }
   // The rival pill carries its own state: lit while he is one of yours.
   function paintRivalPill() {
@@ -4372,7 +4379,6 @@
     // rivals if you have pinned any; then everything else.
     var h = snapshotHtml(ds, id);
     if (isMe(id)) h += rivalsHtml(ds, id);
-    if (isMe(id)) h += '<div class="youline"><span class="pill gold">This is you</span></div>';
     // Badges are won, not listed: with none there is nothing to say, so
     // nothing is said.
     var B = K.badges(ds, id);
