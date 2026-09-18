@@ -4091,6 +4091,55 @@
       '</div></div>';
   }
 
+  /* The turf, seen from behind the near goal the way the official app draws
+     it. Every figure is a per-mille of the pitch's width or height, measured
+     off that app's pitch: the far touchline 7.3% down spanning 82% of the
+     width, the touchlines meeting the sides 47% down, the 18-yard box 66% of
+     the width and 8.5% deep, the six-yard box 35% and 3.7%, the goal 17% of
+     the width standing from 2.2% down to the line, halfway at 60%, the circle
+     40% wide and 19% tall. Stretched over the pitch, so the same picture at
+     any size; the strokes do not stretch with it. The hoarding along the far
+     end is HTML, not part of the drawing, so the crests on it keep their
+     shape; the goal is HTML too, so it can stand in front of the board. */
+  var TURF = null;
+  function turfSvg() {
+    if (TURF) return TURF;
+    var T0 = 73;
+    var hw = function (y) { return 410 + 0.2267 * (y - T0); };
+    var trap = function (f, y1, y2) {
+      return "M" + (500 - hw(y1) * f) + " " + y1 + " L" + (500 - hw(y2) * f) + " " + y2 +
+             " L" + (500 + hw(y2) * f) + " " + y2 + " L" + (500 + hw(y1) * f) + " " + y1 + " Z";
+    };
+    // mowing bands, each a little deeper than the one beyond it
+    var edges = [73, 150, 232, 325, 425, 530, 640, 760, 885, 1000], bands = "";
+    for (var k = 0; k + 1 < edges.length; k += 2) {
+      bands += '<rect x="0" y="' + edges[k] + '" width="1000" height="' + (edges[k + 1] - edges[k]) + '" fill="rgba(0,0,0,.055)"/>';
+    }
+    TURF = '<svg class="pturf" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">' +
+      '<defs>' +
+        '<linearGradient id="turfgrass" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0" stop-color="#1e9349"/><stop offset=".55" stop-color="#27a957"/>' +
+          '<stop offset=".86" stop-color="#31b965"/><stop offset="1" stop-color="#eef8f2"/></linearGradient>' +
+        '<linearGradient id="turffade" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0" stop-color="#eef8f2" stop-opacity="0"/><stop offset="1" stop-color="#eef8f2"/></linearGradient>' +
+      '</defs>' +
+      '<rect x="0" y="0" width="1000" height="1000" fill="url(#turfgrass)"/>' + bands +
+      '<g fill="none" stroke="rgba(255,255,255,.72)" stroke-width="2.2" vector-effect="non-scaling-stroke">' +
+        '<path d="M' + (500 - hw(T0)) + ' ' + T0 + ' L' + (500 - hw(1000)) + ' 1000 M' + (500 + hw(T0)) + ' ' + T0 +
+          ' L' + (500 + hw(1000)) + ' 1000 M' + (500 - hw(T0)) + ' ' + T0 + ' L' + (500 + hw(T0)) + ' ' + T0 + '"/>' +
+        '<path class="box18" d="' + trap(0.66, T0, 158) + '"/>' +
+        '<path class="box6" d="' + trap(0.35, T0, 110) + '"/>' +
+        '<path d="M372 158 A128 27 0 0 0 628 158"/>' +
+        '<path class="halfway" d="M' + (500 - hw(603)) + ' 603 L' + (500 + hw(603)) + ' 603"/>' +
+        '<ellipse class="circle" cx="500" cy="603" rx="198" ry="97"/>' +
+      '</g>' +
+      '<ellipse cx="500" cy="150" rx="5" ry="3" fill="rgba(255,255,255,.75)"/>' +
+      '<ellipse cx="500" cy="603" rx="5" ry="3" fill="rgba(255,255,255,.75)"/>' +
+      '<rect x="0" y="880" width="1000" height="120" fill="url(#turffade)"/>' +
+      '</svg>';
+    return TURF;
+  }
+
   function pitchHtml(pit, metric, swapped) {
     // Every card on a pitch is the same size, and the size is whatever the
     // busiest line can carry: a 3-5-2 with five across otherwise drew a
@@ -4102,10 +4151,10 @@
     // Five in a line is the only formation that cannot hold a full-size card on
     // a phone, so that is the one that buys width back out of the gap.
     var geom = '--across:' + across + ';--pgap:' + (across >= 5 ? 8 : 14) + 'px';
-    var h = '<div class="pitch" style="' + geom + '"><div class="pmark">' +
-      '<span class="goal"></span><span class="box18"></span><span class="box6"></span>' +
-      '<span class="spot"></span><span class="arc"></span><span class="halfway"></span>' +
-      '<span class="circle"></span></div>';
+    var h = '<div class="pitch" style="' + geom + '"><div class="pmark">' + turfSvg() +
+      '<div class="phoard"><img src="logo-tile.webp" alt="" width="128" height="128" decoding="async">' +
+      '<img src="logo-tile.webp" alt="" width="128" height="128" decoding="async"></div>' +
+      '<div class="pgoal"></div></div>';
     h += pit.lines.map(function (ln) {
       if (!ln.players.length) return "";
       return '<div class="prow">' + ln.players.map(function (p) { return pp(p, false, metric, swapped); }).join("") + '</div>';
