@@ -4150,7 +4150,7 @@
     }, Math.min(pit.bench.length, 4) || 1);
     // Five in a line is the only formation that cannot hold a full-size card on
     // a phone, so that is the one that buys width back out of the gap.
-    var geom = '--across:' + across + ';--pgap:' + (across >= 5 ? 8 : 14) + 'px';
+    var geom = '--across:' + across + ';--pgap:' + (across >= 5 ? 6 : 8) + 'px';
     var h = '<div class="pitch" style="' + geom + '"><div class="pmark">' + turfSvg() +
       '<div class="phoard"><img src="logo-tile.webp" alt="" width="128" height="128" decoding="async">' +
       '<img src="logo-tile.webp" alt="" width="128" height="128" decoding="async"></div>' +

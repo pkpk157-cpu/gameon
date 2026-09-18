@@ -763,8 +763,11 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pseg button.on { background:var(--glass-hi); color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.14); }
 
 /* the pitch itself */
-.pitch { position:relative; border-radius:14px 14px 0 0; padding:58px 6px 30px; overflow:hidden;
-  display:flex; flex-direction:column; gap:14px; min-height:556px; background:#27a957; }
+/* Sized to the official app's pitch: the keeper's card straddles the goal
+   line, the rows have real grass between them, and the near end runs out
+   under the forwards. */
+.pitch { position:relative; border-radius:14px 14px 0 0; padding:26px 6px 36px; overflow:hidden;
+  display:flex; flex-direction:column; gap:14px; min-height:596px; background:#27a957; }
 /* The turf is one drawing stretched over the pitch (see turfSvg in app.js);
    the hoarding along the far end sits over it, 82% of the width like the
    far touchline it stands behind, in the crest's own purple so the two tiles
@@ -785,7 +788,7 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
     rgba(0,0,0,.3); }
 .cmppitch .pgoal { border-width:2px; }
 .pitch > .prow { position:relative; z-index:1; display:flex; justify-content:center;
-  gap:var(--pgap, 14px); flex:1; align-items:center; }
+  gap:var(--pgap, 8px); flex:1; align-items:center; }
 
 /* One player. Every card is the same size whatever the formation: sharing the
    row out instead made a four-man midfield wider and squatter than the three
@@ -793,8 +796,10 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
    them. Fixed width and a real gap, and the row centres itself — but they can
    still give ground, so a Bench Boost XI (up to six across) shrinks to fit
    rather than spilling over the touchline. */
-.pcell { width:calc((100% - (var(--across, 4) - 1) * var(--pgap, 14px)) / var(--across, 4));
-  max-width:72px; min-width:0; }
+/* The card is the official app's size — 57 points wide, 75 tall — rather
+   than the wider one it used to be, so the pitch shows through between them. */
+.pcell { width:calc((100% - (var(--across, 4) - 1) * var(--pgap, 8px)) / var(--across, 4));
+  max-width:56px; min-width:0; }
 .pitch > .prow > .pcell { flex:0 1 auto; }
 .pposlbl { text-align:center; font-size:10px; font-weight:800; letter-spacing:.6px;
   color:var(--ink-faint); text-transform:uppercase; margin-bottom:4px; }
@@ -805,8 +810,8 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 /* content-box, because the height here is the jersey's own and the padding
    sits around it; under the page's border-box default the padding would eat
    the height and the floated picture would land on the name bar. */
-.pshirt { display:block; padding:10px 0 6px; height:var(--shirt-h); box-sizing:content-box; }
-.pshirt { --shirt-w:42px; --shirt-h:40px; }
+.pshirt { display:block; padding:6px 0 4px; height:var(--shirt-h); box-sizing:content-box; }
+.pshirt { --shirt-w:36px; --shirt-h:34px; }
 /* The photograph is not the jersey and need not be its size. The jersey sets
    the height of the slot and so the height of the card, which is why it does
    not move; the photograph is absolutely positioned inside that slot, so it
@@ -814,7 +819,7 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
    crop of a head and shoulders, and it was sitting small in a card with ten
    points of air above it. These fill more of that air: wider than the jersey,
    taller, and starting higher, while still clearing the name bar. */
-.pshirt { --face-w:48px; --face-h:46px; --face-top:6px; --face-gut:6px; }
+.pshirt { --face-w:44px; --face-h:41px; --face-top:3px; --face-gut:4px; }
 /* The jersey now floats in the slot exactly as the photograph does, at the
    photograph's size, so a player without a picture is not drawn smaller than
    the men beside him. The slot's height is set on .pshirt by hand instead. */
@@ -826,8 +831,8 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pname { background:#fff; color:#2b0b34; font-size:10px; font-weight:700; line-height:1.3;
   letter-spacing:-.2px; padding:3px 2px; text-align:center;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ppts { background:#37003c; color:#fff; font-size:11.5px; font-weight:800; line-height:1.3;
-  padding:3px 3px; text-align:center; font-variant-numeric:tabular-nums; }
+.ppts { background:#37003c; color:#fff; font-size:11px; font-weight:800; line-height:1.3;
+  padding:2px 3px; text-align:center; font-variant-numeric:tabular-nums; }
 /* his match is in play: the points bar lights up, the official app's pink-to-orange */
 .ppts.live { background:linear-gradient(90deg, #e4004f, #ec5a12); }
 /* the opponent, shown in the points slot until kick-off */
@@ -1028,7 +1033,7 @@ tr[data-ppgw].open .ppmore { transform:rotate(45deg); color:var(--accent); }
 .pmv.soon.down { background:var(--prog-drop); color:var(--prog-drop-ink); box-shadow:0 1px 3px rgba(0,0,0,.45); }
 
 /* bench strip */
-.pbench { display:flex; justify-content:center; gap:var(--pgap, 14px); padding:14px 8px 12px;
+.pbench { display:flex; justify-content:center; gap:var(--pgap, 8px); padding:14px 8px 12px;
   border-radius:0 0 12px 12px; background:linear-gradient(180deg, #eef8f2, #f7fcf9); }
 .pbench .pcard { background:#2a8a55; }
 /* the bench strip is always light, so its labels stay dark in both themes */
