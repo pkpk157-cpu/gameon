@@ -232,8 +232,11 @@ async function open(b, hash, w, waitFor) {
     const tapped = await p.evaluate(() => {
       const c = document.querySelector(".pcard[data-el]");
       const gw = c.closest("[data-bgw]").getAttribute("data-bgw");
+      // tapped from the squad, some way down the page
+      document.querySelector(".pitch").scrollIntoView({ block: "start" });
+      const y = window.scrollY;
       c.click();
-      return { el: c.getAttribute("data-el"), gw: gw };
+      return { el: c.getAttribute("data-el"), gw: gw, y: y };
     });
     await p.waitForSelector(".pphead", { timeout: 15000 });
     await p.waitForTimeout(700);
@@ -261,6 +264,17 @@ async function open(b, hash, w, waitFor) {
     chk(shown.forGw === tapped.gw && shown.rowGw === tapped.gw,
       "the breakdown belongs to the gameweek tapped", JSON.stringify(shown));
     chk(!!shown.total && /pts/.test(shown.total), "and it totals", shown.total);
+    // back lands where he was tapped, not at the top of the profile
+    await p.evaluate(() => document.querySelector("#barBack").click());
+    await p.waitForTimeout(700);
+    const backAt = await p.evaluate(() => ({ hash: location.hash, y: window.scrollY,
+      pitchTop: document.querySelector(".pitch").getBoundingClientRect().top, vh: window.innerHeight }));
+    chk(backAt.hash === "#profile/" + ME, "back returns to the profile", backAt.hash);
+    chk(tapped.y > 200 && Math.abs(backAt.y - tapped.y) <= 40 && backAt.pitchTop < backAt.vh && backAt.pitchTop > -200,
+      "and to the squad, where he was tapped, not the top", "tapped at " + tapped.y + ", back at " + backAt.y + ", pitch top " + Math.round(backAt.pitchTop));
+    await p.evaluate((el) => { location.hash = "player/" + el; }, tapped.el);
+    await p.waitForSelector(".pphead", { timeout: 15000 });
+    await p.waitForTimeout(500);
     // coming back later must not keep reopening that row
     await p.evaluate(() => { location.hash = "classic"; });
     await p.waitForTimeout(500);

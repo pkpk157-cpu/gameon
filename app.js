@@ -2510,7 +2510,13 @@
       state.playerFrom = (state.view === "pl" && state.plMatch)
         ? "pl/" + state.plMatch.gw + "/" + state.plMatch.home + "-" + state.plMatch.away
         : (lastHash || null);
+      // and how far down that page he was tapped, so back lands there and
+      // not at the top of it
+      state.playerFromY = window.scrollY || 0;
     }
+    // Coming back from a player to the page he was opened from — by the bar's
+    // arrow or the phone's own back — returns to the spot he was tapped at.
+    var backFromPlayer = state.view === "player" && state.playerFrom && h === state.playerFrom ? state.playerFromY : null;
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
@@ -2537,6 +2543,10 @@
     // a row would send the reader round in a circle.
     if (view !== "player") lastHash = h;
     render();
+    if (backFromPlayer) {
+      try { window.scrollTo(0, backFromPlayer); } catch (e) {}
+      state.playerFromY = 0;
+    }
   }
 
   // Fill mode sizes the wrap to the screen and lets one table scroll inside it.
@@ -2684,9 +2694,8 @@
     if (state.view === "pl" && state.plMatch) { location.hash = "pl/" + state.plMatch.gw; return; }
     // And a player was opened from wherever he was tapped.
     if (state.view === "player" && state.playerFrom) {
-      var to = state.playerFrom;
-      state.playerFrom = null;
-      location.hash = to;
+      // the origin stays set until the hash sync has used it for the scroll
+      location.hash = state.playerFrom;
       return;
     }
     location.hash = state.backView || "classic";
