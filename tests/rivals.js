@@ -35,7 +35,8 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
   chk(strip.length === 3, "three rows: me and two rivals");
   chk(await p.evaluate(() => !!document.querySelector('#profChips [data-go="ps-rivals"]')), "and a Rivals chip in the section row");
   chk(JSON.stringify(strip) === JSON.stringify(exp), "rows are in Classic order with the Classic numbers, me marked, a compare button on each rival", JSON.stringify(strip));
-  chk(await p.evaluate(() => [...document.querySelectorAll(".rvtbl thead th")].map(t => t.textContent.trim()).join(" ").trim()) === "# Team GW4 Total", "headings: #, Team, GW4, Total");
+  const liveGw = await p.evaluate(() => window.GO_COMPUTE.currentGw(window.GO_STORE.dataset()));
+  chk(await p.evaluate(() => [...document.querySelectorAll(".rvtbl thead th")].map(t => t.textContent.trim()).join(" ").trim()) === "# Team GW" + liveGw + " Total", "headings: #, Team, GW" + liveGw + ", Total");
   await p.screenshot({ path: "rivals-phone.png", clip: { x: 0, y: 0, width: 390, height: 520 } });
   // compare button goes to compare with the pair set; row tap opens the profile
   const firstRival = strip.find(r => !r.me);

@@ -50,11 +50,15 @@ async function pull(cdp, x, from, to, steps, release) {
   chk(/^Updated$/.test(s.toast), "an older-but-different publish still counts as an update", s.toast);
   await pull(cdp, 195, 200, 420, 10, true); await p.waitForTimeout(2000); s = await state();
   chk(/^Nothing new published — not synced for 50m$/.test(s.toast), "stale and unchanged: 'Nothing new published — not synced for 50m'", s.toast);
-  // scrolled down: no pull
-  await p.evaluate(() => window.scrollTo(0, 300)); await p.waitForTimeout(200);
+  // scrolled down: no pull. Classic is a fill-mode view whose table scrolls
+  // inside its own frame, so the page itself never moves there; the stats
+  // page is a plain scroller, and is where a scrolled page can be had.
+  await p.evaluate(() => { location.hash = "#stats"; }); await p.waitForTimeout(800);
+  const sy = await p.evaluate(() => { window.scrollTo(0, 300); return window.scrollY; });
+  await p.waitForTimeout(200);
   await pull(cdp, 195, 400, 600, 8, true); await p.waitForTimeout(200); s = await state();
-  chk(!s.show && !s.busy, "no gesture when the page is scrolled down");
-  await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(200);
+  chk(sy > 0 && !s.show && !s.busy, "no gesture when the page is scrolled down", "scrollY " + sy + " " + JSON.stringify(s));
+  await p.evaluate(() => { window.scrollTo(0, 0); location.hash = "#classic"; }); await p.waitForTimeout(800);
   // a sheet open: no pull
   await p.click("#barMenu"); await p.waitForTimeout(400);
   await pull(cdp, 300, 200, 420, 8, true); await p.waitForTimeout(200); s = await state();

@@ -4819,6 +4819,364 @@
       (note ? '<div class="note" style="margin-top:6px">' + esc(note) + '</div>' : '') + '</div>';
   }
 
+  /* ---- the gameweek as a picture ------------------------------------------
+     One image of the league's gameweek, drawn to look like the app so it can
+     go straight into the group chat: the template XI on the pitch, who was
+     captained, who the differentials were, what moved, and the week's
+     headlines. Drawn on a canvas rather than photographed from the page,
+     because a screenshot of a phone is a screenshot of a phone — this is the
+     same picture on every device, and the faces, crests and logo are our own
+     files so the canvas stays clean enough to save.                         */
+  var SHARE_W = 540, SHARE_H = 960;   // drawn at 2x for a 1080 by 1920 picture
+
+  // The theme's own colours, read from the page so the picture follows the
+  // theme the phone is showing rather than a copy of it kept here.
+  function shareTheme() {
+    var cs = getComputedStyle(document.documentElement);
+    var v = function (k, fb) { var x = cs.getPropertyValue(k); x = x && x.trim(); return x || fb; };
+    var dark = cs.getPropertyValue("color-scheme").trim() === "dark";
+    return {
+      dark: dark,
+      ink: v("--ink", "#191922"), soft: v("--ink-soft", "#54545f"), faint: v("--ink-faint", "#5f5f6d"),
+      head: v("--head-ink", "#37003c"), accent: v("--accent", "#d0004f"), gold: v("--gold", "#a9791a"),
+      glass: dark ? "rgba(38,38,52,.62)" : "rgba(255,255,255,.62)",
+      border: dark ? "rgba(255,255,255,.14)" : "rgba(255,255,255,.8)",
+      line: v("--line", "rgba(20,20,45,.10)"), chip: v("--chip", "rgba(20,20,45,.05)"),
+      font: v("--sans", "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif")
+    };
+  }
+
+  function shareImg(src) {
+    return new Promise(function (res) {
+      var im = new Image();
+      var done = false, fin = function (ok) { if (done) return; done = true; res(ok ? im : null); };
+      im.onload = function () { fin(true); }; im.onerror = function () { fin(false); };
+      setTimeout(function () { fin(false); }, 6000);
+      im.src = src;
+    });
+  }
+
+  // Everything the picture says, gathered first so drawing is one pass with
+  // no choices left in it. Null when the gameweek has nothing to picture.
+  function shareModel(ds, gw) {
+    var H = K.highlights(ds, gw);
+    if (!H || !H.squads) return null;
+    var sq = H.squads, g = H.gwStats, n = sq.managers || 0;
+    var pct = function (c) { return n ? Math.round((c / n) * 100) + "%" : ""; };
+    var cols = [];
+    if (sq.mostCaptained.length) {
+      cols.push({ title: "Most captained", rows: sq.mostCaptained.map(function (x) {
+        return { name: x.name, val: pct(x.caps) }; }) });
+    }
+    if (sq.differentials.length) {
+      cols.push({ title: "Differentials", note: "under 10% owned", rows: sq.differentials.map(function (x) {
+        return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) }; }) });
+    } else if (sq.ownershipLeaders.length) {
+      cols.push({ title: "Effective ownership", rows: sq.ownershipLeaders.map(function (x) {
+        return { name: x.name, tag: x.team, val: x.eo + "%" }; }) });
+    }
+    if (sq.movedIn && sq.movedIn.length) {
+      cols.push({ title: "Brought in", rows: sq.movedIn.map(function (x) {
+        return { name: x.name, val: num(x.count) }; }) });
+    } else if (sq.topScorers.length && sq.topScorers[0].pts > 0) {
+      cols.push({ title: "Top scorers owned", rows: sq.topScorers.map(function (x) {
+        return { name: x.name, tag: x.team, val: num(x.pts) }; }) });
+    } else if (sq.mostOwned.length) {
+      cols.push({ title: "Most owned", rows: sq.mostOwned.map(function (x) {
+        return { name: x.name, tag: x.team, val: x.ownedPct + "%" }; }) });
+    }
+    cols = cols.slice(0, 3);
+
+    // The headline tiles, most telling first; a gameweek that has not kicked
+    // off has no scores yet and says what it can instead.
+    var tiles = [];
+    var scored = g && g.top && g.top.p > 0;
+    if (H.potw) tiles.push({ l: "Top player", v: num(H.potw.pts), w: H.potw.name });
+    if (scored) tiles.push({ l: "Top score", v: num(g.top.p), w: g.top.name });
+    if (scored) tiles.push({ l: "League average", v: num(g.average), w: n + " managers" });
+    if (sq.bestCaptain && sq.bestCaptain.pts > 0) {
+      tiles.push({ l: "Best captain", v: num(sq.bestCaptain.pts * 2), w: sq.bestCaptain.name });
+    }
+    var chipKeys = Object.keys(sq.chips || {});
+    var chipN = chipKeys.reduce(function (s, c) { return s + sq.chips[c]; }, 0);
+    tiles.push({ l: "Chips played", v: num(chipN), w: chipN
+      ? chipKeys.map(function (c) { return sq.chips[c] + " " + (CHIP_NAME[c] || c); }).join(", ") : "none this week" });
+    if (tiles.length < 4) tiles.push({ l: "Different captains", v: num(sq.distinctCaptains), w: "across the league" });
+    if (tiles.length < 4 && g) tiles.push({ l: "Transfers", v: num(g.transfersTotal), w: g.hitTotal ? ("−" + num(g.hitTotal) + " in hits") : "no hits taken" });
+    tiles = tiles.slice(0, 4);
+
+    var ev = ((ds.bootstrap || {}).events || []).filter(function (e) { return +e.id === +gw; })[0];
+    var status = ev && ev.finished && ev.data_checked ? "Final"
+      : (H.live ? (scored ? "Live" : "Deadline passed") : "");
+    return { gw: gw, gwName: H.gwName, league: (ds.league && ds.league.name) || "Game On",
+             n: n, status: status, xi: sq.templateXi, cols: cols, tiles: tiles };
+  }
+
+  // Draws the picture. Resolves with the canvas.
+  function shareDraw(ds, gw) {
+    var M = shareModel(ds, gw);
+    if (!M) return Promise.reject(new Error("nothing to draw"));
+    var T = shareTheme();
+    var players = [];
+    (M.xi || []).forEach(function (ln) { ln.players.forEach(function (p) { players.push(p); }); });
+    var loads = [shareImg("logo-tile.webp")].concat(players.map(function (p) {
+      var code = faceCode(p.el);
+      return (!code || faceHidden(code)) ? Promise.resolve(null) : shareImg("photos/p" + code + ".webp");
+    }));
+    return Promise.all(loads).then(function (imgs) {
+      var logo = imgs[0], faces = {};
+      players.forEach(function (p, i) { faces[p.el] = imgs[i + 1]; });
+      var cv = document.createElement("canvas");
+      cv.width = SHARE_W * 2; cv.height = SHARE_H * 2;
+      var c = cv.getContext("2d");
+      c.scale(2, 2);
+      sharePaint(c, M, T, logo, faces);
+      return cv;
+    });
+  }
+
+  function sharePaint(c, M, T, logo, faces) {
+    var W = SHARE_W, H = SHARE_H, PAD = 16;
+    var F = function (w, s) { return w + " " + s + "px " + T.font; };
+    var rr = function (x, y, w, h, r) {
+      c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+    };
+    var fit = function (s, max) {
+      s = String(s == null ? "" : s);
+      if (c.measureText(s).width <= max) return s;
+      while (s.length > 1 && c.measureText(s + "…").width > max) s = s.slice(0, -1);
+      return s + "…";
+    };
+    // A name that will not fit at full size tries smaller before it is cut.
+    var shrink = function (s, max, w, sizes) {
+      for (var i = 0; i < sizes.length; i++) {
+        c.font = F(w, sizes[i]);
+        if (c.measureText(s).width <= max) return { s: s, px: sizes[i], w: c.measureText(s).width };
+      }
+      c.font = F(w, sizes[sizes.length - 1]);
+      var t = fit(s, max);
+      return { s: t, px: sizes[sizes.length - 1], w: c.measureText(t).width };
+    };
+    var text = function (s, x, y, font, col, align, max) {
+      c.font = font; c.fillStyle = col; c.textAlign = align || "left"; c.textBaseline = "alphabetic";
+      c.fillText(max ? fit(s, max) : s, x, y);
+    };
+    var card = function (x, y, w, h) {
+      c.save(); c.shadowColor = T.dark ? "rgba(0,0,0,.45)" : "rgba(30,30,70,.16)"; c.shadowBlur = 18; c.shadowOffsetY = 8;
+      rr(x, y, w, h, 18); c.fillStyle = T.glass; c.fill(); c.restore();
+      rr(x + .5, y + .5, w - 1, h - 1, 17.5); c.strokeStyle = T.border; c.lineWidth = 1; c.stroke();
+    };
+
+    /* wallpaper: the theme's own gradient, blobs and all */
+    var base = c.createLinearGradient(0, 0, 0, H);
+    if (T.dark) { base.addColorStop(0, "#16011c"); base.addColorStop(1, "#0b0010"); }
+    else { base.addColorStop(0, "#f8f5fc"); base.addColorStop(1, "#edeaf5"); }
+    c.fillStyle = base; c.fillRect(0, 0, W, H);
+    var blob = function (x, y, r, col) {
+      var g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+    };
+    if (T.dark) { blob(40, -40, 420, "rgba(69,9,81,.5)"); blob(W + 20, 20, 470, "rgba(18,49,63,.5)"); blob(W / 2, H + 60, 380, "rgba(58,10,61,.5)"); }
+    else { blob(30, -40, 400, "#f6d8ff"); blob(W + 10, 20, 450, "#ffd7e6"); blob(W / 2, H + 60, 360, "#d2f8ff"); }
+
+    /* the bar */
+    var bar = c.createLinearGradient(0, 0, W, 0);
+    bar.addColorStop(0, "#37003c"); bar.addColorStop(.55, "#4a0050"); bar.addColorStop(1, "#6a0a5c");
+    c.fillStyle = bar; c.fillRect(0, 0, W, 96);
+    var rule = c.createLinearGradient(0, 0, W, 0);
+    rule.addColorStop(0, "#e90052"); rule.addColorStop(.5, "#04f5ff"); rule.addColorStop(1, "#00ff87");
+    c.fillStyle = rule; c.fillRect(0, 96, W, 3);
+    if (logo) { c.save(); rr(PAD, 22, 52, 52, 12); c.clip(); c.drawImage(logo, PAD, 22, 52, 52); c.restore(); }
+    text(M.league, 84, 44, F(800, 21), "#fff", "left", W - 84 - PAD);
+    var sub = M.gwName + " · " + num(M.n) + " squads" + (M.status ? " · " + M.status : "");
+    text(sub, 84, 70, F(600, 14), "rgba(255,255,255,.78)", "left", W - 84 - PAD);
+
+    /* the template XI */
+    var y = 116, cw = W - PAD * 2, ph = 410;
+    card(PAD, y, cw, ph + 62);
+    text("The template XI", PAD + 16, y + 30, F(800, 17), T.head);
+    text("The most-owned player in each position, with how much of the league has him", PAD + 16, y + 48, F(500, 11.5), T.faint, "left", cw - 32);
+    sharePitch(c, M.xi, PAD + 12, y + 58, cw - 24, ph, T, logo, faces, rr, shrink, F);
+
+    /* the three lists */
+    y += ph + 62 + 12;
+    var lh = 226, gap = 10, colw = (cw - gap * (M.cols.length - 1)) / Math.max(1, M.cols.length);
+    M.cols.forEach(function (col, i) {
+      var x = PAD + i * (colw + gap);
+      card(x, y, colw, lh);
+      text(col.title, x + 12, y + 24, F(800, 12.5), T.head, "left", colw - 24);
+      if (col.note) text(col.note, x + 12, y + 38, F(500, 10), T.faint, "left", colw - 24);
+      col.rows.slice(0, 5).forEach(function (r, k) {
+        var ry = y + 60 + k * 33;
+        c.font = F(700, 12.5);
+        var vw = c.measureText(r.val).width;
+        rr(x + 12, ry - 12, 18, 18, 9); c.fillStyle = k === 0 ? T.accent : T.chip; c.fill();
+        text(String(k + 1), x + 21, ry + 1, F(800, 10), k === 0 ? "#fff" : T.soft, "center");
+        text(r.val, x + colw - 12, ry + 1, F(800, 12.5), T.ink, "right");
+        c.font = F(600, 10);
+        var tagw = r.tag ? c.measureText(r.tag).width + 5 : 0;
+        var nameMax = colw - 24 - 26 - vw - 8 - tagw;
+        var nf = shrink(r.name, nameMax, 700, [12.5, 11.5, 10.5]);
+        text(nf.s, x + 36, ry + 1, F(700, nf.px), T.ink);
+        if (r.tag) text(r.tag, x + 36 + nf.w + 5, ry + 1, F(600, 10), T.faint);
+      });
+    });
+
+    /* the headline tiles */
+    y += lh + 12;
+    var th = 84, tw = (cw - 10 * (M.tiles.length - 1)) / Math.max(1, M.tiles.length);
+    M.tiles.forEach(function (t, i) {
+      var x = PAD + i * (tw + 10);
+      card(x, y, tw, th);
+      text(t.l.toUpperCase(), x + 10, y + 22, F(800, 9), T.faint, "left", tw - 20);
+      text(t.v, x + 10, y + 52, F(800, 24), T.accent, "left", tw - 20);
+      var wf = shrink(t.w, tw - 20, 600, [10.5, 9.5, 8.5]);
+      text(wf.s, x + 10, y + 70, F(600, wf.px), T.soft);
+    });
+
+    /* who made it */
+    var when = new Date().toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    text("Game On V12 · " + when, W / 2, H - 16, F(600, 11), T.faint, "center");
+  }
+
+  // The pitch as the app draws it: hoarding, goal, perspective turf and the
+  // eleven in four lines, each card a shirt with the face over it, the name
+  // on white and the ownership on purple.
+  function sharePitch(c, xi, x, y, w, h, T, logo, faces, rr, shrink, F) {
+    c.save();
+    rr(x, y, w, h, 12); c.clip();
+    // turf, in the same per-mille geometry as turfSvg()
+    var X = function (u) { return x + (u / 1000) * w; }, Y = function (v) { return y + (v / 1000) * h; };
+    var T0 = 73, hw = function (v) { return 410 + 0.2267 * (v - T0); };
+    var grass = c.createLinearGradient(0, y, 0, y + h);
+    grass.addColorStop(0, "#1e9349"); grass.addColorStop(.55, "#27a957"); grass.addColorStop(.86, "#31b965"); grass.addColorStop(1, "#2fb862");
+    c.fillStyle = grass; c.fillRect(x, y, w, h);
+    var edges = [73, 150, 232, 325, 425, 530, 640, 760, 885, 1000];
+    c.fillStyle = "rgba(0,0,0,.055)";
+    for (var k = 0; k + 1 < edges.length; k += 2) c.fillRect(x, Y(edges[k]), w, Y(edges[k + 1]) - Y(edges[k]));
+    c.strokeStyle = "rgba(255,255,255,.72)"; c.lineWidth = 1.6; c.lineJoin = "round";
+    var trap = function (f, y1, y2) {
+      c.beginPath(); c.moveTo(X(500 - hw(y1) * f), Y(y1)); c.lineTo(X(500 - hw(y2) * f), Y(y2));
+      c.lineTo(X(500 + hw(y2) * f), Y(y2)); c.lineTo(X(500 + hw(y1) * f), Y(y1)); c.closePath(); c.stroke();
+    };
+    c.beginPath(); c.moveTo(X(500 - hw(T0)), Y(T0)); c.lineTo(X(500 - hw(1000)), Y(1000));
+    c.moveTo(X(500 + hw(T0)), Y(T0)); c.lineTo(X(500 + hw(1000)), Y(1000));
+    c.moveTo(X(500 - hw(T0)), Y(T0)); c.lineTo(X(500 + hw(T0)), Y(T0)); c.stroke();
+    trap(0.66, T0, 158); trap(0.35, T0, 110);
+    c.beginPath(); c.ellipse(X(500), Y(158), (128 / 1000) * w, (27 / 1000) * h, 0, 0, Math.PI); c.stroke();
+    c.beginPath(); c.moveTo(X(500 - hw(603)), Y(603)); c.lineTo(X(500 + hw(603)), Y(603)); c.stroke();
+    c.beginPath(); c.ellipse(X(500), Y(603), (198 / 1000) * w, (97 / 1000) * h, 0, 0, Math.PI * 2); c.stroke();
+    // hoarding and goal
+    var hx = x + w * .095, hy = y + h * .004, hwid = w * .81, hh = h * .056;
+    var hg = c.createLinearGradient(hx, 0, hx + hwid, 0);
+    hg.addColorStop(0, "#1e0037"); hg.addColorStop(.5, "#2a0648"); hg.addColorStop(1, "#1e0037");
+    rr(hx, hy, hwid, hh, 7); c.fillStyle = hg; c.fill();
+    if (logo) {
+      var lw = hh - 4;
+      c.save(); rr(hx + w * .025, hy + 2, lw, lw, 3); c.clip(); c.drawImage(logo, hx + w * .025, hy + 2, lw, lw); c.restore();
+      c.save(); rr(hx + hwid - w * .025 - lw, hy + 2, lw, lw, 3); c.clip(); c.drawImage(logo, hx + hwid - w * .025 - lw, hy + 2, lw, lw); c.restore();
+    }
+    var gx = x + w * .413, gy = y + h * .022, gw = w * .174, gh = h * .051;
+    c.fillStyle = "rgba(0,0,0,.3)"; c.fillRect(gx, gy, gw, gh);
+    c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = .7; c.beginPath();
+    for (var nx = gx + 5; nx < gx + gw; nx += 5) { c.moveTo(nx, gy); c.lineTo(nx, gy + gh); }
+    for (var ny = gy + 4; ny < gy + gh; ny += 4) { c.moveTo(gx, ny); c.lineTo(gx + gw, ny); }
+    c.stroke();
+    c.strokeStyle = "#fff"; c.lineWidth = 2.5; c.beginPath(); c.moveTo(gx, gy + gh); c.lineTo(gx, gy); c.lineTo(gx + gw, gy); c.lineTo(gx + gw, gy + gh); c.stroke();
+
+    // the eleven
+    var rows = xi || [], rowH = (h - 34) / Math.max(1, rows.length);
+    var CW = 64, SH = 52, NH = 19, PH = 19, CH = SH + NH + PH, GAP = 10;
+    rows.forEach(function (ln, ri) {
+      var ps = ln.players || [], n = ps.length;
+      var total = n * CW + (n - 1) * GAP, sx = x + (w - total) / 2;
+      var cy = y + 30 + ri * rowH + (rowH - CH) / 2;
+      ps.forEach(function (p, i) {
+        var px = sx + i * (CW + GAP);
+        c.save(); c.shadowColor = "rgba(0,0,0,.28)"; c.shadowBlur = 6; c.shadowOffsetY = 2;
+        rr(px, cy, CW, CH, 7); c.fillStyle = "rgba(6,60,32,.42)"; c.fill(); c.restore();
+        c.save(); rr(px, cy, CW, CH, 7); c.clip();
+        var im = faces[p.el];
+        if (!im) shareJersey(c, p.team, p.type, px + CW / 2, cy + 6, 46, 43);
+        else {
+          // object-fit cover at 50% 6%, into a 48 by 46 slot
+          var fw = 48, fh = 46, s = Math.max(fw / im.width, fh / im.height);
+          var dw = im.width * s, dh = im.height * s;
+          var fx = px + (CW - fw) / 2, fy = cy + 4;
+          c.save(); c.beginPath(); c.rect(fx, fy, fw, fh); c.clip();
+          c.drawImage(im, fx + (fw - dw) / 2, fy - (dh - fh) * .06, dw, dh); c.restore();
+        }
+        c.fillStyle = "#fff"; c.fillRect(px, cy + SH, CW, NH);
+        var nf = shrink(p.name, CW - 6, 700, [11, 10, 9]);
+        c.font = F(700, nf.px); c.fillStyle = "#2b0b34"; c.textAlign = "center"; c.textBaseline = "middle";
+        c.fillText(nf.s, px + CW / 2, cy + SH + NH / 2 + .5);
+        c.fillStyle = "#37003c"; c.fillRect(px, cy + SH + NH, CW, PH);
+        c.font = F(800, 12); c.fillStyle = "#fff";
+        c.fillText(p.eo + "%", px + CW / 2, cy + SH + NH + PH / 2 + .5);
+        c.restore();
+      });
+    });
+    c.restore();
+  }
+
+  // The little shirt, the same path as jersey() scaled into a box.
+  function shareJersey(c, team, type, cx, top, bw, bh) {
+    var k = kitFor(team, type), body = k[0], sleeve = k[1], stripe = k[2];
+    var sx = bw / 44, sy = bh / 42;
+    c.save(); c.translate(cx - bw / 2, top); c.scale(sx, sy);
+    var shirt = new Path2D("M16,3 L11,4.6 L3,11 L8.6,18.2 L12.6,14.6 L12.6,39 L31.4,39 L31.4,14.6 L35.4,18.2 L41,11 L33,4.6 L28,3 C26.4,6.6 17.6,6.6 16,3 Z");
+    c.save(); c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 3; c.shadowOffsetY = 2; c.fillStyle = body; c.fill(shirt); c.restore();
+    if (stripe) {
+      c.save(); c.clip(shirt); c.fillStyle = stripe;
+      c.fillRect(14.2, 0, 3.4, 42); c.fillRect(20.3, 0, 3.4, 42); c.fillRect(26.4, 0, 3.4, 42); c.restore();
+    }
+    c.fillStyle = sleeve;
+    c.fill(new Path2D("M11,4.6 L3,11 L8.6,18.2 L12.6,14.6 L12.6,5.6 Z"));
+    c.fill(new Path2D("M33,4.6 L41,11 L35.4,18.2 L31.4,14.6 L31.4,5.6 Z"));
+    c.strokeStyle = "rgba(0,0,0,.30)"; c.lineWidth = 1.1; c.stroke(shirt);
+    c.restore();
+  }
+
+  // The button: draw, then show the picture in a sheet with Share and Save.
+  // Sharing needs the tap it is answering, so the picture is made first and
+  // the buttons in the sheet each answer a fresh tap of their own.
+  var _shareUrl = null;
+  function shareStats(ds, gw) {
+    var btn = $("#stShare");
+    if (btn) btn.disabled = true;
+    shareDraw(ds, gw).then(function (cv) {
+      return new Promise(function (res, rej) {
+        cv.toBlob(function (b) { b ? res(b) : rej(new Error("no image")); }, "image/png");
+      });
+    }).then(function (blob) {
+      if (_shareUrl) { try { URL.revokeObjectURL(_shareUrl); } catch (e) {} }
+      _shareUrl = URL.createObjectURL(blob);
+      var name = "gameon-gw" + gw + ".png";
+      var file = null;
+      try { file = new File([blob], name, { type: "image/png" }); } catch (e) {}
+      var canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
+      var body = modal("Gameweek " + gw, '<div class="shpic"><img src="' + _shareUrl + '" alt="Gameweek ' + gw + ' picks" width="540" height="960"></div>' +
+        '<div class="btnrow shbtns">' +
+        (canShare ? '<button type="button" class="btn primary" id="shShare">' + svg("upload", 16) + 'Share</button>' : '') +
+        '<a class="btn' + (canShare ? '' : ' primary') + '" id="shSave" href="' + _shareUrl + '" download="' + name + '">' + svg("download", 16) + 'Save image</a>' +
+        '</div><div class="note shnote">Or press and hold the picture to save it.</div>');
+      var sh = $("#shShare", body);
+      if (sh) sh.addEventListener("click", function () {
+        navigator.share({ files: [file], title: "Gameweek " + gw }).catch(function (e) {
+          if (e && e.name === "AbortError") return;
+          var a = $("#shSave", body); if (a) a.click();
+        });
+      });
+      var sv = $("#shSave", body);
+      if (sv) sv.addEventListener("click", function () { toast("Saved gameon-gw" + gw + ".png"); });
+      track("/share", true);
+    }).catch(function () {
+      toast("Couldn’t make the picture");
+    }).then(function () { if (btn) btn.disabled = false; });
+  }
+
   var STAT_TABS = [
     { k: "gw",     label: "Gameweek", gwPicker: true },
     { k: "picks",  label: "Picks",    gwPicker: true },
@@ -4847,7 +5205,9 @@
     h += '<div class="pgwline" id="stGwLine" style="margin-bottom:4px">' +
       '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
         return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
-      }).join("") + '</select></div>';
+      }).join("") + '</select>' +
+      '<button type="button" class="btn sm" id="stShare" title="A picture of this gameweek to share">' +
+        svg("download", 15) + 'Export image</button></div>';
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
@@ -4859,6 +5219,7 @@
       drawStats(ds);
     });
     $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
+    $("#stShare", host).addEventListener("click", function () { shareStats(ds, state.statsGw); });
     drawStats(ds);
   }
 
