@@ -4123,7 +4123,14 @@
      end is HTML, not part of the drawing, so the crests on it keep their
      shape; the goal is HTML too, so it can stand in front of the board. */
   var TURF = null;
+  // Two pitches on one page — a profile after the stats, the compare view —
+  // must not share gradient ids, so the cached markup carries a placeholder
+  // and each pitch gets its own.
+  var _turfN = 0;
   function turfSvg() {
+    return turfTemplate().replace(/__t__/g, "t" + (++_turfN));
+  }
+  function turfTemplate() {
     if (TURF) return TURF;
     var T0 = 73;
     var hw = function (y) { return 410 + 0.2267 * (y - T0); };
@@ -4138,13 +4145,13 @@
     }
     TURF = '<svg class="pturf" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">' +
       '<defs>' +
-        '<linearGradient id="turfgrass" x1="0" y1="0" x2="0" y2="1">' +
+        '<linearGradient id="turfgrass-__t__" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0" stop-color="#1e9349"/><stop offset=".55" stop-color="#27a957"/>' +
           '<stop offset=".86" stop-color="#31b965"/><stop offset="1" stop-color="#eef8f2"/></linearGradient>' +
-        '<linearGradient id="turffade" x1="0" y1="0" x2="0" y2="1">' +
+        '<linearGradient id="turffade-__t__" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0" stop-color="#eef8f2" stop-opacity="0"/><stop offset="1" stop-color="#eef8f2"/></linearGradient>' +
       '</defs>' +
-      '<rect x="0" y="0" width="1000" height="1000" fill="url(#turfgrass)"/>' + bands +
+      '<rect x="0" y="0" width="1000" height="1000" fill="url(#turfgrass-__t__)"/>' + bands +
       '<g fill="none" stroke="rgba(255,255,255,.72)" stroke-width="2.2" vector-effect="non-scaling-stroke">' +
         '<path d="M' + (500 - hw(T0)) + ' ' + T0 + ' L' + (500 - hw(1000)) + ' 1000 M' + (500 + hw(T0)) + ' ' + T0 +
           ' L' + (500 + hw(1000)) + ' 1000 M' + (500 - hw(T0)) + ' ' + T0 + ' L' + (500 + hw(T0)) + ' ' + T0 + '"/>' +
@@ -4156,7 +4163,7 @@
       '</g>' +
       '<ellipse cx="500" cy="150" rx="5" ry="3" fill="rgba(255,255,255,.75)"/>' +
       '<ellipse cx="500" cy="603" rx="5" ry="3" fill="rgba(255,255,255,.75)"/>' +
-      '<rect x="0" y="880" width="1000" height="120" fill="url(#turffade)"/>' +
+      '<rect x="0" y="880" width="1000" height="120" fill="url(#turffade-__t__)"/>' +
       '</svg>';
     return TURF;
   }
