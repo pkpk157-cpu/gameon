@@ -4827,7 +4827,7 @@
      because a screenshot of a phone is a screenshot of a phone — this is the
      same picture on every device, and the faces, crests and logo are our own
      files so the canvas stays clean enough to save.                         */
-  var SHARE_W = 540, SHARE_H = 960;   // drawn at 2x for a 1080 by 1920 picture
+  var SHARE_W = 540;   // drawn at 2x: 1080 wide, as tall as the picture needs
 
   // The theme's own colours, read from the page so the picture follows the
   // theme the phone is showing rather than a copy of it kept here.
@@ -4919,6 +4919,141 @@
       return base;
     }
 
+    // the three pictures with no pitch: squad money, the season, the years before
+    if (kind === "value") {
+      var v = H.value;
+      if (!v) return "Squad values appear after the next data refresh";
+      var flat = v.richest.value === v.poorest.value;
+      var vals = ds.managers.map(function (m) {
+        var r = (ds.history[m.id] || {})[gw];
+        return r && r.v > 0 ? { name: m.entryName, v: r.v, bk: r.bk || 0 } : null;
+      }).filter(Boolean);
+      var span = Math.max(1, v.richest.value - v.poorest.value);
+      base.hero = { title: "Most valuable teams", rows: vals.slice().sort(function (a, b) { return b.v - a.v; }).slice(0, 8)
+        .map(function (x) { return { name: x.name, sub: mval(x.bk) + " in the bank", val: mval(x.v), frac: flat ? 1 : (x.v - v.poorest.value) / span }; }),
+        note: flat ? "Every squad is still at its starting value" : num(v.count) + " squads from " + mval(v.poorest.value) + " to " + mval(v.richest.value) };
+      if (sq.bestValue.length) {
+        cols.push({ title: "Best value", note: "points per £m this week", rows: sq.bestValue.map(function (x) {
+          return { name: x.name, tag: mval(x.price), val: String(x.value) }; }) });
+      }
+      if (sq.priciest.length) {
+        cols.push({ title: "Priciest owned", rows: sq.priciest.map(function (x) {
+          return { name: x.name, val: mval(x.price) }; }) });
+      }
+      var banked = vals.filter(function (x) { return x.bk > 0; }).sort(function (a, b) { return b.bk - a.bk; }).slice(0, 5);
+      if (banked.length) {
+        cols.push({ title: "Most in the bank", rows: banked.map(function (x) { return { name: x.name, val: mval(x.bk) }; }) });
+      }
+      if (flat) {
+        tiles.push({ l: "Squad value", v: mval(v.average), w: "identical across " + num(v.count) + " squads" });
+        tiles.push({ l: "In the bank", v: mval(v.averageBank), w: "on average" });
+      } else {
+        tiles.push({ l: "Richest squad", v: mval(v.richest.value), w: v.richest.name });
+        tiles.push({ l: "League average", v: mval(v.average), w: mval(v.averageBank) + " in the bank" });
+        tiles.push({ l: "Leanest squad", v: mval(v.poorest.value), w: v.poorest.name });
+        if (v.mostBanked && v.mostBanked.bank > 0) tiles.push({ l: "Most in the bank", v: mval(v.mostBanked.bank), w: v.mostBanked.name });
+      }
+      base.file = "gameon-gw" + gw + "-value.png";
+      base.title = "Gameweek " + gw + " values";
+      base.sub = H.gwName + " squad values · " + num(v.count) + " squads";
+      base.cols = cols.slice(0, 3); base.tiles = tiles.slice(0, 4);
+      return base;
+    }
+
+    if (kind === "season") {
+      var se = H.season;
+      if (!se) return "No gameweeks scored yet";
+      var sp = K.pointsSpread(ds);
+      if (sp && sp.buckets.length) {
+        base.hero = { title: "Where everyone landed", plain: true, rows: sp.buckets.slice(0, 12).map(function (b) {
+            return { name: num(b.from) + "–" + num(b.to), val: num(b.n), frac: sp.most ? b.n / sp.most : 0 }; }),
+          note: num(sp.count) + " managers, " + num(sp.low) + " to " + num(sp.high) + " points · median " + num(sp.median) + " · bands of " + num(sp.width) };
+      }
+      var table = K.classic(ds);
+      cols.push({ title: "Classic top five", note: "hits taken off", rows: table.slice(0, 5).map(function (r) {
+        return { name: r.entryName, val: num(r.total) }; }) });
+      var bests = [];
+      ds.managers.forEach(function (m) {
+        var hh = ds.history[m.id] || {};
+        Object.keys(hh).forEach(function (g) {
+          var r = hh[g]; if (!r || typeof r.p !== "number") return;
+          var sc = K.gwScore(ds, m.id, +g);
+          bests.push({ name: m.entryName, gw: +g, p: sc === null ? r.p : sc });
+        });
+      });
+      bests.sort(function (a, b) { return b.p - a.p; });
+      if (bests.length) {
+        cols.push({ title: "Best gameweeks", rows: bests.slice(0, 5).map(function (x) {
+          return { name: x.name, tag: "GW" + x.gw, val: num(x.p) }; }) });
+      }
+      var wAll = K.winningsAll(ds);
+      var purse = ds.managers.map(function (m) {
+        var w = wAll[+m.id] || { settled: 0, total: 0 };
+        return { name: m.entryName, settled: w.settled, total: w.total };
+      }).filter(function (x) { return x.total > 0; })
+        .sort(function (a, b) { return (b.total - a.total) || (b.settled - a.settled); });
+      if (purse.length) {
+        cols.push({ title: "On course to win", note: "XP, nothing settled yet", rows: purse.slice(0, 5).map(function (x) {
+          return { name: x.name, val: num(x.total) }; }) });
+      }
+      if (se.bestGw) tiles.push({ l: "Best gameweek", v: num(se.bestGw.p), w: se.bestGw.name + " · GW" + se.bestGw.gw });
+      if (se.worstGw) tiles.push({ l: "Lowest gameweek", v: num(se.worstGw.p), w: se.worstGw.name + " · GW" + se.worstGw.gw });
+      if (se.bestAvg) tiles.push({ l: "Best average", v: num(se.bestAvg.avg), w: se.bestAvg.name });
+      if (se.steadiest) tiles.push({ l: "Most consistent", v: num(se.steadiest.spread), w: se.steadiest.name });
+      if (se.biggestClimb && se.biggestClimb.climb > 0) tiles.push({ l: "Biggest riser", v: num(se.biggestClimb.climb), w: se.biggestClimb.name });
+      if (se.mostHits && se.mostHits.hits > 0) tiles.push({ l: "Most hits", v: "−" + num(se.mostHits.hits), w: se.mostHits.name });
+      if (se.mostBench && se.mostBench.bench > 0) tiles.push({ l: "Most benched", v: num(se.mostBench.bench), w: se.mostBench.name });
+      if (se.mostTransfers && se.mostTransfers.transfers > 0) tiles.push({ l: "Most transfers", v: num(se.mostTransfers.transfers), w: se.mostTransfers.name });
+      tiles.push({ l: "Never took a hit", v: num(se.cleanest), w: "managers" });
+      base.file = "gameon-season.png";
+      base.title = "Season so far";
+      base.sub = "Season so far · " + num(se.gws) + " gameweek" + (se.gws === 1 ? "" : "s") + " · " + num(ds.managers.length) + " managers";
+      base.cols = cols.slice(0, 3); base.tiles = tiles.slice(0, 8);
+      return base;
+    }
+
+    if (kind === "fame") {
+      var pa = H.past;
+      if (!pa) return "Past-season history appears after the next data refresh";
+      var mm = K.managerMap(ds), careers = [];
+      // "2021/22" reads as "21/22" beside a name in a column this narrow
+      var yr = function (sn) { return String(sn || "").replace(/^20(\d\d)\/(\d\d)$/, "$1/$2"); };
+      Object.keys(ds.pastSeasons || {}).forEach(function (id) {
+        var arr = ds.pastSeasons[id], m = mm[+id];
+        if (!m || !arr || !arr.length) return;
+        var sum = arr.reduce(function (s, x) { return s + (x.total || 0); }, 0);
+        careers.push({ name: m.entryName, seasons: arr.length, career: sum });
+      });
+      careers.sort(function (a, b) { return b.career - a.career; });
+      var top = careers[0] ? careers[0].career : 1;
+      if (careers.length) {
+        base.hero = { title: "Most career points", rows: careers.slice(0, 8).map(function (x) {
+            return { name: x.name, sub: x.seasons + " season" + (x.seasons === 1 ? "" : "s"), val: num(x.career), frac: x.career / top }; }),
+          note: "Every past season added up, " + num(pa.players) + " managers with a history" };
+      }
+      if (pa.topRanks.length) {
+        cols.push({ title: "Best ever finish", note: "overall FPL rank", rows: pa.topRanks.map(function (x) {
+          return { name: x.name, tag: yr(x.bestRank.season), val: num(x.bestRank.rank) }; }) });
+      }
+      if (pa.topScores.length) {
+        cols.push({ title: "Highest season", rows: pa.topScores.map(function (x) {
+          return { name: x.name, tag: yr(x.bestPts.season), val: num(x.bestPts.total) }; }) });
+      }
+      if (pa.veterans.length) {
+        cols.push({ title: "Most seasons", rows: pa.veterans.map(function (x) {
+          return { name: x.name, val: num(x.seasons) }; }) });
+      }
+      tiles.push({ l: "Top 10k finishes", v: num(pa.topTen), w: pa.topTen === 1 ? "manager has one" : "managers have one" });
+      if (pa.topRanks[0]) tiles.push({ l: "Best ever finish", v: num(pa.topRanks[0].bestRank.rank), w: pa.topRanks[0].name });
+      if (pa.topAvg[0]) tiles.push({ l: "Best avg season", v: num(pa.topAvg[0].avg), w: pa.topAvg[0].name });
+      tiles.push({ l: "Played before", v: num(pa.players), w: "of " + num(ds.managers.length) + " managers" });
+      base.file = "gameon-alltime.png";
+      base.title = "All time";
+      base.sub = "All time · " + num(pa.players) + " managers have played FPL before";
+      base.cols = cols.slice(0, 3); base.tiles = tiles.slice(0, 4);
+      return base;
+    }
+
     // the gameweek's returns: nothing to say before anything has scored
     if (!scored) return "No scores yet for " + H.gwName + " — try the Picks picture";
     var tw = sq.teamOfWeek;
@@ -4960,7 +5095,7 @@
     if (typeof M === "string") return Promise.reject(new Error(M));
     var T = shareTheme();
     var players = [];
-    (M.pitch.lines || []).forEach(function (ln) { ln.players.forEach(function (p) { players.push(p); }); });
+    ((M.pitch && M.pitch.lines) || []).forEach(function (ln) { ln.players.forEach(function (p) { players.push(p); }); });
     var loads = [shareImg("logo-tile.webp")].concat(players.map(function (p) {
       var code = faceCode(p.el);
       return (!code || faceHidden(code)) ? Promise.resolve(null) : shareImg("photos/p" + code + ".webp");
@@ -4969,7 +5104,7 @@
       var logo = imgs[0], faces = {};
       players.forEach(function (p, i) { faces[p.el] = imgs[i + 1]; });
       var cv = document.createElement("canvas");
-      cv.width = SHARE_W * 2; cv.height = SHARE_H * 2;
+      cv.width = SHARE_W * 2; cv.height = shareHeight(M) * 2;
       var c = cv.getContext("2d");
       c.scale(2, 2);
       sharePaint(c, M, T, logo, faces);
@@ -4978,8 +5113,22 @@
     });
   }
 
+  // How tall the picture is: the sections it has, stacked. A picture with a
+  // pitch keeps the phone's own 9:16; the others are as tall as they need.
+  function shareHeight(M) {
+    var y = 116;
+    if (M.pitch) y += (M.chips ? 384 : 410) + 62 + 12;
+    if (M.hero) y += 62 + M.hero.rows.length * 30 + 10 + 12;
+    if (M.cols && M.cols.length) y += (M.chips ? 214 : 226) + (M.chips ? 10 : 12);
+    if (M.chips) y += 46 + 10;
+    var th = M.chips ? 80 : 84, rows = Math.ceil((M.tiles || []).length / 4);
+    y += rows * th + Math.max(0, rows - 1) * 10;
+    y += 26;
+    return M.pitch ? Math.max(960, y) : y;
+  }
+
   function sharePaint(c, M, T, logo, faces) {
-    var W = SHARE_W, H = SHARE_H, PAD = 16;
+    var W = SHARE_W, H = shareHeight(M), PAD = 16;
     var F = function (w, s) { return w + " " + s + "px " + T.font; };
     var rr = function (x, y, w, h, r) {
       c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
@@ -5035,40 +5184,77 @@
     text(M.league, 84, 44, F(800, 21), "#fff", "left", W - 84 - PAD);
     text(M.sub, 84, 70, F(600, 14), "rgba(255,255,255,.78)", "left", W - 84 - PAD);
 
-    /* the template XI */
-    var y = 116, cw = W - PAD * 2, ph = M.chips ? 384 : 410;
-    card(PAD, y, cw, ph + 62);
-    text(M.pitch.title, PAD + 16, y + 30, F(800, 17), T.head);
-    text(M.pitch.note, PAD + 16, y + 48, F(500, 11.5), T.faint, "left", cw - 32);
-    sharePitch(c, M.pitch.lines, M.pitch.metric, PAD + 12, y + 58, cw - 24, ph, T, logo, faces, rr, shrink, F);
+    var y = 116, cw = W - PAD * 2;
 
-    /* the three lists */
-    y += ph + 62 + 12;
-    var lh = M.chips ? 214 : 226, rs = M.chips ? 31 : 33, gap = 10, colw = (cw - gap * (M.cols.length - 1)) / Math.max(1, M.cols.length);
-    M.cols.forEach(function (col, i) {
-      var x = PAD + i * (colw + gap);
-      card(x, y, colw, lh);
-      text(col.title, x + 12, y + 24, F(800, 12.5), T.head, "left", colw - 24);
-      if (col.note) text(col.note, x + 12, y + 38, F(500, 10), T.faint, "left", colw - 24);
-      col.rows.slice(0, 5).forEach(function (r, k) {
-        var ry = y + 60 + k * rs;
-        c.font = F(700, 12.5);
+    /* the pitch */
+    if (M.pitch) {
+      var ph = M.chips ? 384 : 410;
+      card(PAD, y, cw, ph + 62);
+      text(M.pitch.title, PAD + 16, y + 30, F(800, 17), T.head);
+      text(M.pitch.note, PAD + 16, y + 48, F(500, 11.5), T.faint, "left", cw - 32);
+      sharePitch(c, M.pitch.lines, M.pitch.metric, PAD + 12, y + 58, cw - 24, ph, T, logo, faces, rr, shrink, F);
+      y += ph + 62 + 12;
+    }
+
+    /* the hero: a ranked list with a bar under each row */
+    if (M.hero) {
+      var hh = 62 + M.hero.rows.length * 30 + 10;
+      card(PAD, y, cw, hh);
+      text(M.hero.title, PAD + 16, y + 30, F(800, 17), T.head);
+      text(M.hero.note || "", PAD + 16, y + 48, F(500, 11.5), T.faint, "left", cw - 32);
+      var ig = c.createLinearGradient(PAD, 0, PAD + cw, 0);
+      ig.addColorStop(0, T.accent); ig.addColorStop(1, T.dark ? "#c98bff" : "#6b1f7a");
+      M.hero.rows.forEach(function (r, k) {
+        var ry = y + 62 + k * 30, x0 = PAD + 16, x1 = PAD + cw - 16;
+        if (M.hero.plain) x0 -= 26;
+        else {
+          rr(x0, ry + 2, 18, 18, 9); c.fillStyle = k === 0 ? T.accent : T.chip; c.fill();
+          text(String(k + 1), x0 + 9, ry + 15, F(800, 10), k === 0 ? "#fff" : T.soft, "center");
+        }
+        c.font = F(800, 12.5);
         var vw = c.measureText(r.val).width;
-        rr(x + 12, ry - 12, 18, 18, 9); c.fillStyle = k === 0 ? T.accent : T.chip; c.fill();
-        text(String(k + 1), x + 21, ry + 1, F(800, 10), k === 0 ? "#fff" : T.soft, "center");
-        text(r.val, x + colw - 12, ry + 1, F(800, 12.5), T.ink, "right");
+        text(r.val, x1, ry + 15, F(800, 12.5), T.ink, "right");
         c.font = F(600, 10);
-        var tagw = r.tag ? c.measureText(r.tag).width + 5 : 0;
-        var nameMax = colw - 24 - 26 - vw - 8 - tagw;
-        var nf = shrink(r.name, nameMax, 700, [12.5, 11.5, 10.5]);
-        text(nf.s, x + 36, ry + 1, F(700, nf.px), T.ink);
-        if (r.tag) text(r.tag, x + 36 + nf.w + 5, ry + 1, F(600, 10), T.faint);
+        var sw = r.sub ? c.measureText(r.sub).width + 6 : 0;
+        var nf = shrink(r.name, x1 - vw - 10 - (x0 + 26) - sw, 700, [12.5, 11.5, 10.5]);
+        text(nf.s, x0 + 26, ry + 15, F(700, nf.px), T.ink);
+        if (r.sub) text(r.sub, x0 + 26 + nf.w + 6, ry + 15, F(600, 10), T.faint);
+        var bw = x1 - (x0 + 26);
+        rr(x0 + 26, ry + 21, bw, 5, 2.5); c.fillStyle = T.chip; c.fill();
+        var fw = Math.max(5, Math.round(bw * Math.max(0, Math.min(1, r.frac || 0))));
+        rr(x0 + 26, ry + 21, fw, 5, 2.5); c.fillStyle = ig; c.fill();
       });
-    });
+      y += hh + 12;
+    }
+
+    /* the lists */
+    if (M.cols && M.cols.length) {
+      var lh = M.chips ? 214 : 226, rs = M.chips ? 31 : 33, gap = 10, colw = (cw - gap * (M.cols.length - 1)) / M.cols.length;
+      M.cols.forEach(function (col, i) {
+        var x = PAD + i * (colw + gap);
+        card(x, y, colw, lh);
+        text(col.title, x + 12, y + 24, F(800, 12.5), T.head, "left", colw - 24);
+        if (col.note) text(col.note, x + 12, y + 38, F(500, 10), T.faint, "left", colw - 24);
+        col.rows.slice(0, 5).forEach(function (r, k) {
+          var ry = y + 60 + k * rs;
+          c.font = F(800, 12.5);
+          var vw = c.measureText(r.val).width;
+          rr(x + 12, ry - 12, 18, 18, 9); c.fillStyle = k === 0 ? T.accent : T.chip; c.fill();
+          text(String(k + 1), x + 21, ry + 1, F(800, 10), k === 0 ? "#fff" : T.soft, "center");
+          text(r.val, x + colw - 12, ry + 1, F(800, 12.5), T.ink, "right");
+          c.font = F(600, 10);
+          var tagw = r.tag ? c.measureText(r.tag).width + 5 : 0;
+          var nameMax = colw - 24 - 26 - vw - 8 - tagw;
+          var nf = shrink(r.name, nameMax, 700, [12.5, 11.5, 10.5]);
+          text(nf.s, x + 36, ry + 1, F(700, nf.px), T.ink);
+          if (r.tag) text(r.tag, x + 36 + nf.w + 5, ry + 1, F(600, 10), T.faint);
+        });
+      });
+      y += lh + (M.chips ? 10 : 12);
+    }
 
     /* chips played, as a row of pills */
     if (M.chips) {
-      y += lh + 10;
       card(PAD, y, cw, 46);
       text("Chips played", PAD + 14, y + 28, F(800, 12.5), T.head);
       var px = PAD + 14 + c.measureText("Chips played").width + 12;
@@ -5083,25 +5269,26 @@
         px += pw + 6;
       });
       y += 46 + 10;
-    } else {
-      y += lh + 12;
     }
-    /* the headline tiles */
-    var th = M.chips ? 80 : 84, tw = (cw - 10 * (M.tiles.length - 1)) / Math.max(1, M.tiles.length);
-    M.tiles.forEach(function (t, i) {
-      var x = PAD + i * (tw + 10);
-      card(x, y, tw, th);
-      var k = th / 84;
+
+    /* the headline tiles, four to a row */
+    var th = M.chips ? 80 : 84, k = th / 84;
+    (M.tiles || []).forEach(function (t, i) {
+      var per = Math.min(4, M.tiles.length - Math.floor(i / 4) * 4);
+      var tw = (cw - 10 * (per - 1)) / per;
+      var x = PAD + (i % 4) * (tw + 10), ty = y + Math.floor(i / 4) * (th + 10);
+      card(x, ty, tw, th);
       var lf = shrink(t.l.toUpperCase(), tw - 20, 800, [9, 8.2]);
-      text(lf.s, x + 10, y + 22 * k, F(800, lf.px), T.faint);
-      text(t.v, x + 10, y + 52 * k, F(800, 24), T.accent, "left", tw - 20);
+      text(lf.s, x + 10, ty + 22 * k, F(800, lf.px), T.faint);
+      var vf = shrink(t.v, tw - 20, 800, [24, 20, 17]);
+      text(vf.s, x + 10, ty + 52 * k, F(800, vf.px), T.accent);
       var wf = shrink(t.w, tw - 20, 600, [10.5, 9.5, 8.5]);
-      text(wf.s, x + 10, y + 70 * k, F(600, wf.px), T.soft);
+      text(wf.s, x + 10, ty + 70 * k, F(600, wf.px), T.soft);
     });
 
     /* who made it */
     var when = new Date().toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    text("Game On V12 · " + when, W / 2, H - (M.chips ? 9 : 16), F(600, 11), T.faint, "center");
+    text("Game On V12 · " + when, W / 2, H - 9, F(600, 11), T.faint, "center");
   }
 
   // The pitch as the app draws it: hoarding, goal, perspective turf and the
@@ -5242,16 +5429,17 @@
       track("/share", true);
     }).catch(function (e) {
       // a reason the model gave is said as it is; anything else is one line
-      toast(e && /^No scores yet/.test(e.message) ? e.message : "Couldn’t make the picture");
+      var why = e && e.message;
+      toast(why && /^(No scores yet|No gameweeks|Squad values|Past-season)/.test(why) ? why : "Couldn’t make the picture");
     }).then(function () { if (btn) btn.disabled = false; });
   }
 
   var STAT_TABS = [
     { k: "gw",     label: "Gameweek", gwPicker: true, share: "gw" },
     { k: "picks",  label: "Picks",    gwPicker: true, share: "picks" },
-    { k: "value",  label: "Value",    gwPicker: true },
-    { k: "season", label: "Season" },
-    { k: "fame",   label: "All time" }
+    { k: "value",  label: "Value",    gwPicker: true, share: "value" },
+    { k: "season", label: "Season",   share: "season" },
+    { k: "fame",   label: "All time", share: "fame" }
   ];
 
   function renderStats(host, ds) {
@@ -5299,10 +5487,10 @@
     var box = $("#stBox");
     if (!box) return;
     var tab = STAT_TABS.filter(function (t) { return t.k === state.statsTab; })[0] || STAT_TABS[0];
-    var line = $("#stGwLine");
-    if (line) line.style.display = tab.gwPicker ? "" : "none";
-    var sb = $("#stShare");
-    if (sb) sb.style.display = tab.share ? "" : "none";
+    var line = $("#stGwLine"), sel = $("#stGwSel"), sb = $("#stShare");
+    if (line) line.style.display = (tab.gwPicker || tab.share) ? "" : "none";
+    if (sel) sel.style.display = tab.gwPicker ? "" : "none";
+    if (sb) { sb.style.display = tab.share ? "" : "none"; sb.classList.toggle("alone", !tab.gwPicker); }
 
     var H = K.highlights(ds, state.statsGw);
     if (!H) { box.innerHTML = '<div class="callout">Nothing to show yet.</div>'; return; }

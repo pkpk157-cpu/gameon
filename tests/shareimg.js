@@ -1,12 +1,13 @@
 const GOENV = require("./lib/env.js");
-/* The gameweek as a picture, two ways. The Export image button sits beside
- * the gameweek picker on the Gameweek and Picks tabs and nowhere else; a tap
- * makes a 1080 by 1920 PNG in the theme the phone is showing and shows it in
- * a sheet with Save under it. Picks is what the league chose: the template
- * XI, captains, chips, transfers. Gameweek is what it returned: the team of
- * the week, top scorers, captain returns, differentials, the scores. A
- * gameweek with no squads says so in a toast and breaks nothing; one that has
- * not scored yet says so on the Gameweek tab and still draws on Picks;
+/* The stats as a picture, one per tab. The Export image button sits beside
+ * the gameweek picker, or alone on the tabs without one; a tap makes a PNG
+ * 1080 wide in the theme the phone is showing and shows it in a sheet with
+ * Save under it. Picks is what the league chose: the template XI, captains,
+ * chips, transfers. Gameweek is what it returned: the team of the week, top
+ * scorers, captain returns, differentials, the scores. Value is the money,
+ * Season the campaign so far, All time the years before. A gameweek with no
+ * squads says so in a toast and breaks nothing; one that has not scored yet
+ * says so on the Gameweek tab and still draws on Picks;
  * hostile names and nulls draw without an error; a narrow phone keeps the
  * button on the page. The picture itself is checked by colour: the purple
  * bar, the green pitch and the theme's wallpaper, each where it should be. */
@@ -35,6 +36,7 @@ const picture = (p) => p.evaluate(async () => {
     tileTxt: at(10, 1700), title: document.querySelector("#modalTitle").textContent,
     save: save ? { href: save.getAttribute("href"), name: save.getAttribute("download") } : null };
 });
+const document_open = () => false;
 const isPurple = ([r, g, b]) => r > 40 && r < 130 && g < 30 && b > 50 && b < 110;
 const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
 
@@ -61,8 +63,9 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     chk(where.on && where.inLine && where.text === "Export image", "the button sits on the gameweek line", JSON.stringify(where));
     for (const tab of ["value", "season", "fame"]) {
       await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
-      const shown = await p.evaluate(() => document.querySelector("#stShare").offsetParent !== null);
-      chk(!shown, "no button on the " + tab + " tab, which has no picture of its own");
+      const st = await p.evaluate(() => ({ btn: document.querySelector("#stShare").offsetParent !== null,
+        sel: document.querySelector("#stGwSel").offsetParent !== null }));
+      chk(st.btn && (st.sel === (tab === "value")), tab + " tab: the button shows" + (tab === "value" ? " beside the picker" : " on its own"), JSON.stringify(st));
     }
     await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(150);
     const t0 = Date.now(); const pic = await exportNow(p); const ms = Date.now() - t0;
@@ -86,8 +89,21 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     const model = await p.evaluate((gw) => { const ds = window.GO_STORE.dataset(); const H = window.GO_COMPUTE.highlights(ds, gw);
       return { xi: H.squads.templateXi.reduce((s, l) => s + l.players.length, 0), tw: H.squads.teamOfWeek ? H.squads.teamOfWeek.els.length : 0 }; }, gw);
     chk(model.xi === 11 && model.tw === 11, "the template XI and the team of the week are eleven men each", JSON.stringify(model));
-    // close, then export the first gameweek on both tabs, where nothing moved in and the lists fall back
+    // the three pictures with no pitch: as tall as they need, the bar and wallpaper the same
+    const want = { value: { title: "Gameweek " + gw + " values", file: "gameon-gw" + gw + "-value.png" },
+                   season: { title: "Season so far", file: "gameon-season.png" },
+                   fame: { title: "All time", file: "gameon-alltime.png" } };
+    for (const tab of Object.keys(want)) {
+      await p.click("#modalClose"); await p.waitForTimeout(300);
+      await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
+      const px = await exportNow(p);
+      chk(!!px && px.w === 1080 && px.h >= 1400 && px.h <= 2400 && px.title === want[tab].title && px.save && px.save.name === want[tab].file,
+          tab + " tab: its own picture, titled and named for it", px && [px.w + "x" + px.h, px.title, px.save && px.save.name].join(" · "));
+      chk(px && isPurple(px.bar) && px.wall[0] > 220 && px.wall[1] > 220 && px.wall[2] > 220, tab + ": the bar and the wallpaper", px && JSON.stringify([px.bar, px.wall]));
+    }
     await p.click("#modalClose"); await p.waitForTimeout(300);
+    await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+    // close, then export the first gameweek on both tabs, where nothing moved in and the lists fall back
     await p.selectOption("#stGwSel", "1"); await p.waitForTimeout(300);
     const pk1 = await exportNow(p);
     chk(!!pk1 && pk1.w === 1080 && pk1.title === "Gameweek 1 picks", "gameweek 1 picks export too, with their own fallbacks", pk1 && pk1.title);
@@ -163,6 +179,19 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
       else if (expectPic === true) chk(out.sheet, "the picture is made", JSON.stringify(out));
       else chk(out.sheet || /make the picture/.test(out.toast), "either a picture or a toast, never silence", JSON.stringify(out));
       chk(out.enabled, "the button is live again afterwards");
+      // every other tab too: a picture or a reason, never silence, never an error
+      const said = [];
+      for (const tab of ["picks", "value", "season", "fame"]) {
+        if (out.sheet || document_open(p)) { await p.evaluate(() => { const x = document.querySelector("#modalClose"); if (x) x.click(); }); await p.waitForTimeout(250); }
+        await p.evaluate(() => { const t = document.querySelector("#toast"); if (t) { t.textContent = ""; t.classList.remove("show"); } });
+        await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
+        if (!(await p.evaluate(() => document.querySelector("#stShare").offsetParent !== null))) { said.push(tab + ":hidden"); continue; }
+        await p.click("#stShare"); await p.waitForTimeout(2000);
+        const o = await p.evaluate(() => ({ sheet: !!document.querySelector("#modalBack.show .shpic img"), toast: document.querySelector("#toast").textContent.trim() }));
+        said.push(tab + ":" + (o.sheet ? "picture" : (o.toast ? "toast" : "silence")));
+        out.sheet = o.sheet;
+      }
+      chk(!said.some((x) => /silence/.test(x)), "the other tabs each give a picture or a reason", said.join(" "));
       chk(errs.length === 0, "no JS errors", errs.slice(0, 2).join(" | "));
     });
   }

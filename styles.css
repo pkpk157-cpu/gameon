@@ -1054,6 +1054,7 @@ tr[data-ppgw].open .ppmore { transform:rotate(45deg); color:var(--accent); }
 /* the export button beside the gameweek picker, and the picture it makes */
 .pgwline .btn.sm { padding:5px 12px; font-size:13px; border-radius:999px; vertical-align:middle; margin-left:8px; gap:5px; }
 .pgwline .btn.sm svg { width:15px; height:15px; }
+.pgwline .btn.sm.alone { margin-left:0; }
 /* The whole picture in view with its buttons under it, whatever the phone: it
    is a tall picture, so its height is what the sheet has to spare. */
 .shpic { display:flex; justify-content:center; }
