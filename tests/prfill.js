@@ -10,6 +10,9 @@ const GOENV = require("./lib/env.js");
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8793, ME = 1255976, RATE = 6;
+// how many players the table must list: whatever the published dataset holds,
+// since FPL adds players through the season
+const N = Object.keys(JSON.parse(fs.readFileSync(path.join(APP, "data.json"), "utf8")).dataset.elements).length;
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
   fs.readFile(path.join(APP, u), (e, b) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { "content-type": T[path.extname(u)] || "text/plain" }); r.end(b); }); });
@@ -18,7 +21,7 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
 // Watches the table grow: the row count after every mutation, whether a frame
 // was painted between one step and the next, and the blocking time of each
 // frame while it happens.
-const WATCH = () => {
+const WATCH = (N) => {
   window.__W = { steps: [], blocks: [], frames: 0, cols: {} };
   try {
     new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__W.blocks.push(Math.round(e.blockingDuration)); })
@@ -36,7 +39,7 @@ const WATCH = () => {
     if (window.__W.steps.length === 1) {
       requestAnimationFrame(() => requestAnimationFrame(() => { window.__W.cols.first = cols(); }));
     }
-    if (n >= 659) requestAnimationFrame(() => requestAnimationFrame(() => { window.__W.cols.full = cols(); window.__W.done = 1; }));
+    if (n >= N) requestAnimationFrame(() => requestAnimationFrame(() => { window.__W.cols.full = cols(); window.__W.done = 1; }));
   }).observe(document.documentElement, { childList: true, subtree: true });
   if (document.documentElement) start();
   else document.addEventListener("readystatechange", function once () {
@@ -54,7 +57,7 @@ const rows = (p) => p.evaluate(() => [...document.querySelectorAll("table.pricet
     const ctx = await b.newContext({ viewport: { width: w, height: 844 }, deviceScaleFactor: 2, isMobile: w < 560, hasTouch: true, serviceWorkers: "block", colorScheme: "dark" });
     await ctx.addInitScript((me) => { try { localStorage.setItem("go12.me", JSON.stringify(me)); localStorage.removeItem("go12.favs"); } catch (e) {} }, ME);
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", e => errs.push(e.message));
-    await p.addInitScript(WATCH);
+    await p.addInitScript(WATCH, N);
     if (throttle) { const cdp = await ctx.newCDPSession(p); await cdp.send("Emulation.setCPUThrottlingRate", { rate: RATE }); }
     await p.goto("http://127.0.0.1:" + PORT + "/index.html#prices", { waitUntil: "domcontentloaded" });
     await p.waitForFunction(() => window.__W && window.__W.done, null, { timeout: 60000 });
@@ -66,14 +69,14 @@ const rows = (p) => p.evaluate(() => [...document.querySelectorAll("table.pricet
     const { ctx, p, errs } = await open(w, w === 390);
     const W = await p.evaluate(() => window.__W);
     const all = await rows(p);
-    chk(all.length === 659, w + ": every player is in the table", String(all.length));
+    chk(all.length === N, w + ": every player is in the table", String(all.length));
     chk(W.steps.length >= 4, w + ": the table arrives in steps rather than all at once", W.steps.map(s => s.n).join(" -> "));
     chk(W.steps[0].n <= 40, w + ": the first step is a screenful, not the whole list", String(W.steps[0].n));
     // the crux: a frame was painted between the first rows and the second batch
     chk(W.steps[1] && W.steps[1].frame > W.steps[0].frame,
       w + ": the first rows reach the glass before the rest are asked for",
       "frames " + W.steps.map(s => s.frame).join(","));
-    chk(W.steps[W.steps.length - 1].n === 659, w + ": the last step completes the list", String(W.steps[W.steps.length - 1].n));
+    chk(W.steps[W.steps.length - 1].n === N, w + ": the last step completes the list", String(W.steps[W.steps.length - 1].n));
     chk(JSON.stringify(W.cols.first) === JSON.stringify(W.cols.full),
       w + ": the columns do not shift as the rest lands", JSON.stringify(W.cols.first) + " vs " + JSON.stringify(W.cols.full));
     if (w === 390) {
@@ -102,10 +105,10 @@ const rows = (p) => p.evaluate(() => [...document.querySelectorAll("table.pricet
     // tap the name header the moment the first rows exist, mid-fill
     await p.waitForSelector("table.pricetbl tbody tr", { timeout: 30000 });
     await p.evaluate(() => document.querySelector('th[data-sort="name"]').click());
-    await p.waitForFunction(() => document.querySelectorAll("table.pricetbl tbody tr").length >= 659, null, { timeout: 60000 });
+    await p.waitForFunction((N) => document.querySelectorAll("table.pricetbl tbody tr").length >= N, N, { timeout: 60000 });
     await p.waitForTimeout(700);
     const names = await rows(p);
-    chk(names.length === 659, "sorted mid-fill: still every player, exactly once", String(names.length));
+    chk(names.length === N, "sorted mid-fill: still every player, exactly once", String(names.length));
     const coll = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
     let bad = null;
     for (let i = 1; i < names.length; i++) if (coll.compare(names[i - 1], names[i]) > 0) { bad = names[i - 1] + " before " + names[i] + " at " + i; break; }
@@ -132,9 +135,9 @@ const rows = (p) => p.evaluate(() => [...document.querySelectorAll("table.pricet
       "searched mid-fill: the search wins and the rest of the list does not arrive behind it", who + " -> " + found.join(", "));
     // clear it: the whole list comes back, once
     await p.evaluate(() => { const s = document.querySelector("#prSearch"); s.value = ""; s.dispatchEvent(new Event("input", { bubbles: true })); });
-    await p.waitForFunction(() => document.querySelectorAll("table.pricetbl tbody tr").length >= 659, null, { timeout: 60000 });
+    await p.waitForFunction((N) => document.querySelectorAll("table.pricetbl tbody tr").length >= N, N, { timeout: 60000 });
     await p.waitForTimeout(900);
-    chk((await rows(p)).length === 659, "searched mid-fill: clearing it brings every player back exactly once");
+    chk((await rows(p)).length === N, "searched mid-fill: clearing it brings every player back exactly once");
 
     // walk away mid-fill: nothing throws, and coming back is whole
     await p.evaluate(() => { location.hash = "prices"; location.reload(); });
@@ -153,9 +156,9 @@ const rows = (p) => p.evaluate(() => [...document.querySelectorAll("table.pricet
       "left mid-fill: the hidden table stops filling instead of laying out rows nobody is looking at",
       parked.rows + " -> " + still);
     await p.evaluate(() => { location.hash = "prices"; });
-    await p.waitForFunction(() => document.querySelectorAll("table.pricetbl tbody tr").length >= 659, null, { timeout: 60000 });
+    await p.waitForFunction((N) => document.querySelectorAll("table.pricetbl tbody tr").length >= N, N, { timeout: 60000 });
     await p.waitForTimeout(900);
-    chk((await rows(p)).length === 659, "came back after leaving mid-fill: every player, exactly once");
+    chk((await rows(p)).length === N, "came back after leaving mid-fill: every player, exactly once");
     chk(errs.length === 0, "mid-fill traffic: no page errors", errs.join(" | "));
     await ctx.close();
   }
@@ -174,9 +177,9 @@ const rows = (p) => p.evaluate(() => [...document.querySelectorAll("table.pricet
     await p.click('[data-who="favs"]'); await p.waitForTimeout(700);
     chk((await rows(p)).length === 0 && await p.evaluate(() => !!document.querySelector(".nohits")), "Starred is empty and says why");
     await p.click('[data-who="all"]');
-    await p.waitForFunction(() => document.querySelectorAll("table.pricetbl tbody tr").length >= 659, null, { timeout: 60000 });
+    await p.waitForFunction((N) => document.querySelectorAll("table.pricetbl tbody tr").length >= N, N, { timeout: 60000 });
     await p.waitForTimeout(700);
-    chk((await rows(p)).length === 659, "back to All players: every player, exactly once");
+    chk((await rows(p)).length === N, "back to All players: every player, exactly once");
     chk(errs.length === 0, "tabs: no page errors", errs.join(" | "));
     await ctx.close();
   }
