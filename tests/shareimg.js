@@ -1,9 +1,12 @@
 const GOENV = require("./lib/env.js");
-/* The gameweek as a picture. The Export image button sits beside the
- * gameweek picker on the tabs that have one; a tap makes a 1080 by 1920 PNG
- * of the template XI, the captains, the differentials and the headlines, in
- * the theme the phone is showing, and shows it in a sheet with Save under it.
- * A gameweek with nothing to picture says so in a toast and breaks nothing;
+/* The gameweek as a picture, two ways. The Export image button sits beside
+ * the gameweek picker on the Gameweek and Picks tabs and nowhere else; a tap
+ * makes a 1080 by 1920 PNG in the theme the phone is showing and shows it in
+ * a sheet with Save under it. Picks is what the league chose: the template
+ * XI, captains, chips, transfers. Gameweek is what it returned: the team of
+ * the week, top scorers, captain returns, differentials, the scores. A
+ * gameweek with no squads says so in a toast and breaks nothing; one that has
+ * not scored yet says so on the Gameweek tab and still draws on Picks;
  * hostile names and nulls draw without an error; a narrow phone keeps the
  * button on the page. The picture itself is checked by colour: the purple
  * bar, the green pitch and the theme's wallpaper, each where it should be. */
@@ -56,14 +59,14 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     const where = await p.evaluate(() => { const b = document.querySelector("#stShare"); const l = document.querySelector("#stGwLine");
       return { on: !!b && b.offsetParent !== null, inLine: !!(b && l && l.contains(b)), text: b && b.textContent.trim() }; });
     chk(where.on && where.inLine && where.text === "Export image", "the button sits on the gameweek line", JSON.stringify(where));
-    for (const tab of ["season", "fame"]) {
+    for (const tab of ["value", "season", "fame"]) {
       await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
       const shown = await p.evaluate(() => document.querySelector("#stShare").offsetParent !== null);
-      chk(!shown, "no button on the " + tab + " tab, which has no gameweek");
+      chk(!shown, "no button on the " + tab + " tab, which has no picture of its own");
     }
-    await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+    await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(150);
     const t0 = Date.now(); const pic = await exportNow(p); const ms = Date.now() - t0;
-    chk(!!pic && pic.w === 1080 && pic.h === 1920, "a 1080 by 1920 picture opens in the sheet", pic && pic.w + "x" + pic.h + " in " + ms + "ms");
+    chk(!!pic && pic.w === 1080 && pic.h === 1920, "Gameweek tab: a 1080 by 1920 picture opens in the sheet", pic && pic.w + "x" + pic.h + " in " + ms + "ms");
     chk(pic && pic.bytes > 200000, "a real PNG, not a blank", pic && pic.bytes + " bytes");
     chk(pic && isPurple(pic.bar), "the purple bar across the top", pic && JSON.stringify(pic.bar));
     chk(pic && isGreen(pic.pitch), "the green pitch under it", pic && JSON.stringify(pic.pitch));
@@ -72,15 +75,26 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     chk(pic && pic.title === "Gameweek " + gw, "the sheet is titled for the gameweek", pic && pic.title);
     chk(pic && pic.save && /^blob:/.test(pic.save.href) && pic.save.name === "gameon-gw" + gw + ".png", "Save is a download of gameon-gw" + gw + ".png", pic && JSON.stringify(pic.save));
     chk(ms < 8000, "made in under eight seconds", ms + "ms");
-    // the drawn model: the template XI is eleven, the columns are three, the tiles four
+    // the Picks picture is its own file with its own title
+    await p.click("#modalClose"); await p.waitForTimeout(300);
+    await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+    const pk = await exportNow(p);
+    chk(!!pk && pk.w === 1080 && pk.title === "Gameweek " + gw + " picks", "Picks tab: its own picture, titled for the picks", pk && pk.title);
+    chk(pk && pk.save && pk.save.name === "gameon-gw" + gw + "-picks.png", "Picks saves as gameon-gw" + gw + "-picks.png", pk && JSON.stringify(pk.save));
+    chk(pk && pk.bytes !== pic.bytes && isPurple(pk.bar) && isGreen(pk.pitch), "a different picture, same bar and pitch", pk && pk.bytes + " vs " + pic.bytes);
+    // the drawn model: the template XI is eleven
     const model = await p.evaluate((gw) => { const ds = window.GO_STORE.dataset(); const H = window.GO_COMPUTE.highlights(ds, gw);
-      return { xi: H.squads.templateXi.reduce((s, l) => s + l.players.length, 0), caps: H.squads.mostCaptained.length, diffs: H.squads.differentials.length }; }, gw);
-    chk(model.xi === 11, "the template XI drawn is eleven men", model.xi);
-    // close, then export the first gameweek, where nothing moved in and the lists fall back
+      return { xi: H.squads.templateXi.reduce((s, l) => s + l.players.length, 0), tw: H.squads.teamOfWeek ? H.squads.teamOfWeek.els.length : 0 }; }, gw);
+    chk(model.xi === 11 && model.tw === 11, "the template XI and the team of the week are eleven men each", JSON.stringify(model));
+    // close, then export the first gameweek on both tabs, where nothing moved in and the lists fall back
     await p.click("#modalClose"); await p.waitForTimeout(300);
     await p.selectOption("#stGwSel", "1"); await p.waitForTimeout(300);
+    const pk1 = await exportNow(p);
+    chk(!!pk1 && pk1.w === 1080 && pk1.title === "Gameweek 1 picks", "gameweek 1 picks export too, with their own fallbacks", pk1 && pk1.title);
+    await p.click("#modalClose"); await p.waitForTimeout(300);
+    await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(150);
     const pic1 = await exportNow(p);
-    chk(!!pic1 && pic1.w === 1080 && pic1.title === "Gameweek 1", "gameweek 1 exports too, with its own fallbacks", pic1 && pic1.title);
+    chk(!!pic1 && pic1.w === 1080 && pic1.title === "Gameweek 1", "gameweek 1 returns export too", pic1 && pic1.title);
     chk(errs.length === 0, "no JS errors", errs.slice(0, 2).join(" | "));
   });
 
@@ -107,7 +121,30 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     chk(errs.length === 0, "no JS errors", errs.slice(0, 2).join(" | "));
   });
 
-  // 4. hostile states: nothing to draw says so; bad names and nulls still draw
+  // 4. a gameweek nobody has scored in yet: Picks draws, Gameweek says why not
+  {
+    const real = JSON.parse(fs.readFileSync(path.join(APP, "data.json"), "utf8"));
+    const ds = real.dataset, cur = (ds.bootstrap.events.find((e) => e.is_current) || {}).id;
+    if (cur) {
+      if (ds.livePoints && ds.livePoints[cur]) ds.livePoints[cur] = {};
+      Object.keys(ds.history || {}).forEach((id) => { const r = ds.history[id][cur]; if (r) { r.p = 0; r.b = 0; } });
+      if (ds.liveBonus) delete ds.liveBonus[cur]; if (ds.breakdown) delete ds.breakdown[cur];
+      const f = path.join(GOENV.STATES, "unscored-live.json"); fs.writeFileSync(f, JSON.stringify(real)); DATA = f;
+      await run({}, async (p, errs) => {
+        console.log("-- before kick-off (nothing scored in GW" + cur + ")");
+        await p.click("#stShare"); await p.waitForTimeout(2500);
+        const out = await p.evaluate(() => ({ sheet: !!document.querySelector("#modalBack.show .shpic img"), toast: document.querySelector("#toast").textContent.trim() }));
+        chk(!out.sheet && /^No scores yet for/.test(out.toast) && /Picks picture/.test(out.toast), "Gameweek tab: a toast says there are no scores yet and points at Picks", JSON.stringify(out));
+        await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+        const pk = await exportNow(p);
+        chk(!!pk && pk.w === 1080 && pk.title === "Gameweek " + cur + " picks", "Picks tab: the picture is made all the same", pk && pk.title);
+        chk(errs.length === 0, "no JS errors", errs.slice(0, 2).join(" | "));
+      });
+      DATA = null;
+    }
+  }
+
+  // 5. hostile states: nothing to draw says so; bad names and nulls still draw
   const states = { "no-picks": false, "gw2-current-no-picks": null, "hostile-names": true, "nulls-everywhere": null, "unknown-elements": null, "one-manager": null };
   for (const st of Object.keys(states)) {
     DATA = GOENV.STATES + "/" + st + ".json";

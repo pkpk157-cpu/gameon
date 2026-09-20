@@ -4858,67 +4858,109 @@
 
   // Everything the picture says, gathered first so drawing is one pass with
   // no choices left in it. Null when the gameweek has nothing to picture.
-  function shareModel(ds, gw) {
+  // Two pictures, one per tab. "picks" is the gameweek before a ball is
+  // kicked: what the league chose. "gw" is what those choices returned. Each
+  // gathers everything first so drawing is one pass with no choices in it.
+  // Null when the gameweek has nothing to picture; a string when there is a
+  // reason to give instead.
+  function shareModel(ds, gw, kind) {
     var H = K.highlights(ds, gw);
     if (!H || !H.squads) return null;
     var sq = H.squads, g = H.gwStats, n = sq.managers || 0;
     var pct = function (c) { return n ? Math.round((c / n) * 100) + "%" : ""; };
-    var cols = [];
+    var ev = ((ds.bootstrap || {}).events || []).filter(function (e) { return +e.id === +gw; })[0];
+    var scored = !!(g && g.top && g.top.p > 0);
+    var final = !!(ev && ev.finished && ev.data_checked);
+    var status = final ? "Final" : (H.live ? (scored ? "Live" : "Deadline passed") : "");
+    var base = { gw: gw, gwName: H.gwName, league: (ds.league && ds.league.name) || "Game On", n: n, status: status };
+    var cols = [], tiles = [];
+
+    if (kind === "picks") {
+      // what the league chose, before anything scored
+      if (sq.mostCaptained.length) {
+        cols.push({ title: "Most captained", rows: sq.mostCaptained.map(function (x) {
+          return { name: x.name, val: pct(x.caps) }; }) });
+      }
+      if (sq.movedIn && sq.movedIn.length) {
+        cols.push({ title: "Brought in", rows: sq.movedIn.map(function (x) {
+          return { name: x.name, val: num(x.count) }; }) });
+      } else if (sq.mostOwned.length) {
+        cols.push({ title: "Most owned", rows: sq.mostOwned.map(function (x) {
+          return { name: x.name, val: x.ownedPct + "%" }; }) });
+      }
+      if (sq.movedOut && sq.movedOut.length) {
+        cols.push({ title: "Moved out", rows: sq.movedOut.map(function (x) {
+          return { name: x.name, val: num(x.count) }; }) });
+      } else if (sq.ownershipLeaders.length) {
+        cols.push({ title: "Effective ownership", note: "counts captaincy", rows: sq.ownershipLeaders.map(function (x) {
+          return { name: x.name, val: x.eo + "%" }; }) });
+      }
+      var chipKeys = Object.keys(sq.chips || {});
+      var chips = chipKeys.map(function (c) { return { name: CHIP_NAME[c] || c, n: sq.chips[c] }; })
+        .sort(function (a, b) { return b.n - a.n; });
+      tiles.push({ l: "Different captains", v: num(sq.distinctCaptains), w: "across the league" });
+      if (g) {
+        var dealt = g.count - g.noTransfer;
+        tiles.push({ l: "Transfers", v: num(g.transfersTotal), w: dealt ? (num(dealt) + " managers moved") : "nobody moved" });
+        tiles.push({ l: "Hits taken", v: g.hitTotal ? "−" + num(g.hitTotal) : "0", w: g.hitTotal ? "points paid" : "no hits taken" });
+        tiles.push({ l: "Same squad", v: num(g.noTransfer), w: pct(g.noTransfer) + " of the league" });
+      } else {
+        if (sq.mostOwned[0]) tiles.push({ l: "Most owned", v: sq.mostOwned[0].ownedPct + "%", w: sq.mostOwned[0].name });
+        if (sq.ownershipLeaders[0]) tiles.push({ l: "Highest EO", v: sq.ownershipLeaders[0].eo + "%", w: sq.ownershipLeaders[0].name });
+        if (sq.mostVice[0]) tiles.push({ l: "Most vice-captained", v: num(sq.mostVice[0].vices), w: sq.mostVice[0].name });
+      }
+      base.file = "gameon-gw" + gw + "-picks.png";
+      base.title = "Gameweek " + gw + " picks";
+      base.sub = H.gwName + " picks · " + num(n) + " squads" + (status ? " · " + status : "");
+      base.pitch = { title: "The template XI", metric: "eo", lines: sq.templateXi,
+        note: "The most-owned player in each position, with how much of the league has him" };
+      base.chips = chips;
+      base.cols = cols.slice(0, 3); base.tiles = tiles.slice(0, 4);
+      return base;
+    }
+
+    // the gameweek's returns: nothing to say before anything has scored
+    if (!scored) return "No scores yet for " + H.gwName + " — try the Picks picture";
+    var tw = sq.teamOfWeek;
+    if (sq.topScorers.length) {
+      cols.push({ title: "Top scorers", note: "held in the league", rows: sq.topScorers.map(function (x) {
+        return { name: x.name, val: num(x.pts) }; }) });
+    }
     if (sq.mostCaptained.length) {
-      cols.push({ title: "Most captained", rows: sq.mostCaptained.map(function (x) {
-        return { name: x.name, val: pct(x.caps) }; }) });
+      cols.push({ title: "Captain returns", note: "share who captained him", rows: sq.mostCaptained.map(function (x) {
+        return { name: x.name, tag: pct(x.caps), val: num(x.pts * 2) }; }) });
     }
     if (sq.differentials.length) {
       cols.push({ title: "Differentials", note: "under 10% owned", rows: sq.differentials.map(function (x) {
         return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) }; }) });
-    } else if (sq.ownershipLeaders.length) {
-      cols.push({ title: "Effective ownership", rows: sq.ownershipLeaders.map(function (x) {
-        return { name: x.name, tag: x.team, val: x.eo + "%" }; }) });
+    } else if (sq.bestValue.length) {
+      cols.push({ title: "Best value", note: "points per £m", rows: sq.bestValue.map(function (x) {
+        return { name: x.name, val: String(x.value) }; }) });
     }
-    if (sq.movedIn && sq.movedIn.length) {
-      cols.push({ title: "Brought in", rows: sq.movedIn.map(function (x) {
-        return { name: x.name, val: num(x.count) }; }) });
-    } else if (sq.topScorers.length && sq.topScorers[0].pts > 0) {
-      cols.push({ title: "Top scorers owned", rows: sq.topScorers.map(function (x) {
-        return { name: x.name, tag: x.team, val: num(x.pts) }; }) });
-    } else if (sq.mostOwned.length) {
-      cols.push({ title: "Most owned", rows: sq.mostOwned.map(function (x) {
-        return { name: x.name, tag: x.team, val: x.ownedPct + "%" }; }) });
-    }
-    cols = cols.slice(0, 3);
-
-    // The headline tiles, most telling first; a gameweek that has not kicked
-    // off has no scores yet and says what it can instead.
-    var tiles = [];
-    var scored = g && g.top && g.top.p > 0;
-    if (H.potw) tiles.push({ l: "Top player", v: num(H.potw.pts), w: H.potw.name });
-    if (scored) tiles.push({ l: "Top score", v: num(g.top.p), w: g.top.name });
-    if (scored) tiles.push({ l: "League average", v: num(g.average), w: n + " managers" });
-    if (sq.bestCaptain && sq.bestCaptain.pts > 0) {
-      tiles.push({ l: "Best captain", v: num(sq.bestCaptain.pts * 2), w: sq.bestCaptain.name });
-    }
-    var chipKeys = Object.keys(sq.chips || {});
-    var chipN = chipKeys.reduce(function (s, c) { return s + sq.chips[c]; }, 0);
-    tiles.push({ l: "Chips played", v: num(chipN), w: chipN
-      ? chipKeys.map(function (c) { return sq.chips[c] + " " + (CHIP_NAME[c] || c); }).join(", ") : "none this week" });
-    if (tiles.length < 4) tiles.push({ l: "Different captains", v: num(sq.distinctCaptains), w: "across the league" });
-    if (tiles.length < 4 && g) tiles.push({ l: "Transfers", v: num(g.transfersTotal), w: g.hitTotal ? ("−" + num(g.hitTotal) + " in hits") : "no hits taken" });
-    tiles = tiles.slice(0, 4);
-
-    var ev = ((ds.bootstrap || {}).events || []).filter(function (e) { return +e.id === +gw; })[0];
-    var status = ev && ev.finished && ev.data_checked ? "Final"
-      : (H.live ? (scored ? "Live" : "Deadline passed") : "");
-    return { gw: gw, gwName: H.gwName, league: (ds.league && ds.league.name) || "Game On",
-             n: n, status: status, xi: sq.templateXi, cols: cols, tiles: tiles };
+    tiles.push({ l: "Top score", v: num(g.top.p), w: g.top.name });
+    tiles.push({ l: "Lowest score", v: num(g.low.p), w: g.low.name });
+    tiles.push({ l: "League average", v: num(g.average), w: g.fplAverage !== null ? ("FPL average " + num(g.fplAverage)) : (num(g.count) + " managers") });
+    if (H.potw) tiles.push({ l: "Player of the week", v: num(H.potw.pts), w: H.potw.name });
+    else if (g.mostBench && g.mostBench.bench > 0) tiles.push({ l: "Most benched", v: num(g.mostBench.bench), w: g.mostBench.name });
+    base.file = "gameon-gw" + gw + ".png";
+    base.title = "Gameweek " + gw;
+    base.sub = H.gwName + " · " + num(g.count) + " managers" + (status ? " · " + status : "");
+    base.pitch = tw ? { title: "Team of the week", metric: "pts", lines: tw.lines,
+        note: "The best eleven anyone in the league held, a " + tw.shape + " worth " + num(tw.total) + " points" }
+      : { title: "The template XI", metric: "pts", lines: sq.templateXi,
+        note: "The most-owned player in each position, and what he scored" };
+    base.cols = cols.slice(0, 3); base.tiles = tiles.slice(0, 4);
+    return base;
   }
 
   // Draws the picture. Resolves with the canvas.
-  function shareDraw(ds, gw) {
-    var M = shareModel(ds, gw);
+  function shareDraw(ds, gw, kind) {
+    var M = shareModel(ds, gw, kind);
     if (!M) return Promise.reject(new Error("nothing to draw"));
+    if (typeof M === "string") return Promise.reject(new Error(M));
     var T = shareTheme();
     var players = [];
-    (M.xi || []).forEach(function (ln) { ln.players.forEach(function (p) { players.push(p); }); });
+    (M.pitch.lines || []).forEach(function (ln) { ln.players.forEach(function (p) { players.push(p); }); });
     var loads = [shareImg("logo-tile.webp")].concat(players.map(function (p) {
       var code = faceCode(p.el);
       return (!code || faceHidden(code)) ? Promise.resolve(null) : shareImg("photos/p" + code + ".webp");
@@ -4931,6 +4973,7 @@
       var c = cv.getContext("2d");
       c.scale(2, 2);
       sharePaint(c, M, T, logo, faces);
+      cv.shareModel = M;
       return cv;
     });
   }
@@ -4990,26 +5033,25 @@
     c.fillStyle = rule; c.fillRect(0, 96, W, 3);
     if (logo) { c.save(); rr(PAD, 22, 52, 52, 12); c.clip(); c.drawImage(logo, PAD, 22, 52, 52); c.restore(); }
     text(M.league, 84, 44, F(800, 21), "#fff", "left", W - 84 - PAD);
-    var sub = M.gwName + " · " + num(M.n) + " squads" + (M.status ? " · " + M.status : "");
-    text(sub, 84, 70, F(600, 14), "rgba(255,255,255,.78)", "left", W - 84 - PAD);
+    text(M.sub, 84, 70, F(600, 14), "rgba(255,255,255,.78)", "left", W - 84 - PAD);
 
     /* the template XI */
-    var y = 116, cw = W - PAD * 2, ph = 410;
+    var y = 116, cw = W - PAD * 2, ph = M.chips ? 384 : 410;
     card(PAD, y, cw, ph + 62);
-    text("The template XI", PAD + 16, y + 30, F(800, 17), T.head);
-    text("The most-owned player in each position, with how much of the league has him", PAD + 16, y + 48, F(500, 11.5), T.faint, "left", cw - 32);
-    sharePitch(c, M.xi, PAD + 12, y + 58, cw - 24, ph, T, logo, faces, rr, shrink, F);
+    text(M.pitch.title, PAD + 16, y + 30, F(800, 17), T.head);
+    text(M.pitch.note, PAD + 16, y + 48, F(500, 11.5), T.faint, "left", cw - 32);
+    sharePitch(c, M.pitch.lines, M.pitch.metric, PAD + 12, y + 58, cw - 24, ph, T, logo, faces, rr, shrink, F);
 
     /* the three lists */
     y += ph + 62 + 12;
-    var lh = 226, gap = 10, colw = (cw - gap * (M.cols.length - 1)) / Math.max(1, M.cols.length);
+    var lh = M.chips ? 214 : 226, rs = M.chips ? 31 : 33, gap = 10, colw = (cw - gap * (M.cols.length - 1)) / Math.max(1, M.cols.length);
     M.cols.forEach(function (col, i) {
       var x = PAD + i * (colw + gap);
       card(x, y, colw, lh);
       text(col.title, x + 12, y + 24, F(800, 12.5), T.head, "left", colw - 24);
       if (col.note) text(col.note, x + 12, y + 38, F(500, 10), T.faint, "left", colw - 24);
       col.rows.slice(0, 5).forEach(function (r, k) {
-        var ry = y + 60 + k * 33;
+        var ry = y + 60 + k * rs;
         c.font = F(700, 12.5);
         var vw = c.measureText(r.val).width;
         rr(x + 12, ry - 12, 18, 18, 9); c.fillStyle = k === 0 ? T.accent : T.chip; c.fill();
@@ -5024,27 +5066,48 @@
       });
     });
 
+    /* chips played, as a row of pills */
+    if (M.chips) {
+      y += lh + 10;
+      card(PAD, y, cw, 46);
+      text("Chips played", PAD + 14, y + 28, F(800, 12.5), T.head);
+      var px = PAD + 14 + c.measureText("Chips played").width + 12;
+      if (!M.chips.length) text("none this week", px, y + 28, F(600, 12), T.faint);
+      M.chips.forEach(function (ch) {
+        var lbl = ch.name + " × " + num(ch.n);
+        c.font = F(700, 11.5);
+        var pw = c.measureText(lbl).width + 20;
+        if (px + pw > PAD + cw - 12) return;
+        rr(px, y + 12, pw, 22, 11); c.fillStyle = T.dark ? "rgba(246,196,69,.16)" : "rgba(169,121,26,.14)"; c.fill();
+        text(lbl, px + 10, y + 27, F(700, 11.5), T.gold);
+        px += pw + 6;
+      });
+      y += 46 + 10;
+    } else {
+      y += lh + 12;
+    }
     /* the headline tiles */
-    y += lh + 12;
-    var th = 84, tw = (cw - 10 * (M.tiles.length - 1)) / Math.max(1, M.tiles.length);
+    var th = M.chips ? 80 : 84, tw = (cw - 10 * (M.tiles.length - 1)) / Math.max(1, M.tiles.length);
     M.tiles.forEach(function (t, i) {
       var x = PAD + i * (tw + 10);
       card(x, y, tw, th);
-      text(t.l.toUpperCase(), x + 10, y + 22, F(800, 9), T.faint, "left", tw - 20);
-      text(t.v, x + 10, y + 52, F(800, 24), T.accent, "left", tw - 20);
+      var k = th / 84;
+      var lf = shrink(t.l.toUpperCase(), tw - 20, 800, [9, 8.2]);
+      text(lf.s, x + 10, y + 22 * k, F(800, lf.px), T.faint);
+      text(t.v, x + 10, y + 52 * k, F(800, 24), T.accent, "left", tw - 20);
       var wf = shrink(t.w, tw - 20, 600, [10.5, 9.5, 8.5]);
-      text(wf.s, x + 10, y + 70, F(600, wf.px), T.soft);
+      text(wf.s, x + 10, y + 70 * k, F(600, wf.px), T.soft);
     });
 
     /* who made it */
     var when = new Date().toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    text("Game On V12 · " + when, W / 2, H - 16, F(600, 11), T.faint, "center");
+    text("Game On V12 · " + when, W / 2, H - (M.chips ? 9 : 16), F(600, 11), T.faint, "center");
   }
 
   // The pitch as the app draws it: hoarding, goal, perspective turf and the
   // eleven in four lines, each card a shirt with the face over it, the name
   // on white and the ownership on purple.
-  function sharePitch(c, xi, x, y, w, h, T, logo, faces, rr, shrink, F) {
+  function sharePitch(c, xi, metric, x, y, w, h, T, logo, faces, rr, shrink, F) {
     c.save();
     rr(x, y, w, h, 12); c.clip();
     // turf, in the same per-mille geometry as turfSvg()
@@ -5088,7 +5151,10 @@
 
     // the eleven
     var rows = xi || [], rowH = (h - 34) / Math.max(1, rows.length);
-    var CW = 64, SH = 52, NH = 19, PH = 19, CH = SH + NH + PH, GAP = 10;
+    // the card is the app's, unless the rows are too close for it: then the
+    // shirt slot gives ground and the name and figure bars keep their height
+    var CW = 64, NH = 19, PH = 19, GAP = 10;
+    var CH = Math.min(90, Math.floor(rowH) - 2), SH = CH - NH - PH;
     rows.forEach(function (ln, ri) {
       var ps = ln.players || [], n = ps.length;
       var total = n * CW + (n - 1) * GAP, sx = x + (w - total) / 2;
@@ -5099,10 +5165,10 @@
         rr(px, cy, CW, CH, 7); c.fillStyle = "rgba(6,60,32,.42)"; c.fill(); c.restore();
         c.save(); rr(px, cy, CW, CH, 7); c.clip();
         var im = faces[p.el];
-        if (!im) shareJersey(c, p.team, p.type, px + CW / 2, cy + 6, 46, 43);
+        if (!im) shareJersey(c, p.team, p.type, px + CW / 2, cy + 6, 46, SH - 9);
         else {
           // object-fit cover at 50% 6%, into a 48 by 46 slot
-          var fw = 48, fh = 46, s = Math.max(fw / im.width, fh / im.height);
+          var fw = 48, fh = SH - 6, s = Math.max(fw / im.width, fh / im.height);
           var dw = im.width * s, dh = im.height * s;
           var fx = px + (CW - fw) / 2, fy = cy + 4;
           c.save(); c.beginPath(); c.rect(fx, fy, fw, fh); c.clip();
@@ -5114,7 +5180,7 @@
         c.fillText(nf.s, px + CW / 2, cy + SH + NH / 2 + .5);
         c.fillStyle = "#37003c"; c.fillRect(px, cy + SH + NH, CW, PH);
         c.font = F(800, 12); c.fillStyle = "#fff";
-        c.fillText(p.eo + "%", px + CW / 2, cy + SH + NH + PH / 2 + .5);
+        c.fillText(metric === "pts" ? num(p.pts) : (p.eo + "%"), px + CW / 2, cy + SH + NH + PH / 2 + .5);
         c.restore();
       });
     });
@@ -5143,43 +5209,46 @@
   // Sharing needs the tap it is answering, so the picture is made first and
   // the buttons in the sheet each answer a fresh tap of their own.
   var _shareUrl = null;
-  function shareStats(ds, gw) {
+  function shareStats(ds, gw, kind) {
     var btn = $("#stShare");
     if (btn) btn.disabled = true;
-    shareDraw(ds, gw).then(function (cv) {
+    var M = null;
+    shareDraw(ds, gw, kind).then(function (cv) {
+      M = cv.shareModel;
       return new Promise(function (res, rej) {
         cv.toBlob(function (b) { b ? res(b) : rej(new Error("no image")); }, "image/png");
       });
     }).then(function (blob) {
       if (_shareUrl) { try { URL.revokeObjectURL(_shareUrl); } catch (e) {} }
       _shareUrl = URL.createObjectURL(blob);
-      var name = "gameon-gw" + gw + ".png";
+      var name = M.file;
       var file = null;
       try { file = new File([blob], name, { type: "image/png" }); } catch (e) {}
       var canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
-      var body = modal("Gameweek " + gw, '<div class="shpic"><img src="' + _shareUrl + '" alt="Gameweek ' + gw + ' picks" width="540" height="960"></div>' +
+      var body = modal(M.title, '<div class="shpic"><img src="' + _shareUrl + '" alt="' + esc(M.title) + '" width="540" height="960"></div>' +
         '<div class="btnrow shbtns">' +
         (canShare ? '<button type="button" class="btn primary" id="shShare">' + svg("upload", 16) + 'Share</button>' : '') +
         '<a class="btn' + (canShare ? '' : ' primary') + '" id="shSave" href="' + _shareUrl + '" download="' + name + '">' + svg("download", 16) + 'Save image</a>' +
         '</div><div class="note shnote">Or press and hold the picture to save it.</div>');
       var sh = $("#shShare", body);
       if (sh) sh.addEventListener("click", function () {
-        navigator.share({ files: [file], title: "Gameweek " + gw }).catch(function (e) {
+        navigator.share({ files: [file], title: M.title }).catch(function (e) {
           if (e && e.name === "AbortError") return;
           var a = $("#shSave", body); if (a) a.click();
         });
       });
       var sv = $("#shSave", body);
-      if (sv) sv.addEventListener("click", function () { toast("Saved gameon-gw" + gw + ".png"); });
+      if (sv) sv.addEventListener("click", function () { toast("Saved " + name); });
       track("/share", true);
-    }).catch(function () {
-      toast("Couldn’t make the picture");
+    }).catch(function (e) {
+      // a reason the model gave is said as it is; anything else is one line
+      toast(e && /^No scores yet/.test(e.message) ? e.message : "Couldn’t make the picture");
     }).then(function () { if (btn) btn.disabled = false; });
   }
 
   var STAT_TABS = [
-    { k: "gw",     label: "Gameweek", gwPicker: true },
-    { k: "picks",  label: "Picks",    gwPicker: true },
+    { k: "gw",     label: "Gameweek", gwPicker: true, share: "gw" },
+    { k: "picks",  label: "Picks",    gwPicker: true, share: "picks" },
     { k: "value",  label: "Value",    gwPicker: true },
     { k: "season", label: "Season" },
     { k: "fame",   label: "All time" }
@@ -5219,7 +5288,10 @@
       drawStats(ds);
     });
     $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
-    $("#stShare", host).addEventListener("click", function () { shareStats(ds, state.statsGw); });
+    $("#stShare", host).addEventListener("click", function () {
+      var t = STAT_TABS.filter(function (x) { return x.k === state.statsTab; })[0];
+      shareStats(ds, state.statsGw, (t && t.share) || "gw");
+    });
     drawStats(ds);
   }
 
@@ -5229,6 +5301,8 @@
     var tab = STAT_TABS.filter(function (t) { return t.k === state.statsTab; })[0] || STAT_TABS[0];
     var line = $("#stGwLine");
     if (line) line.style.display = tab.gwPicker ? "" : "none";
+    var sb = $("#stShare");
+    if (sb) sb.style.display = tab.share ? "" : "none";
 
     var H = K.highlights(ds, state.statsGw);
     if (!H) { box.innerHTML = '<div class="callout">Nothing to show yet.</div>'; return; }
