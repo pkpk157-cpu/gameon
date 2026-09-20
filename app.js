@@ -5540,24 +5540,6 @@
         num(g.benchAvg) + " each on average", "chart")
     ]);
 
-    var dealt = g.count - g.noTransfer;
-    h += statGroup("Transfers", [
-      hcard("Total transfers", num(g.transfersTotal), "across the league", null,
-        g.hitTotal ? ("\u2212" + num(g.hitTotal) + " pts in hits") : "no hits taken", "swap"),
-      hcard("Made a transfer", num(dealt), "of " + g.count + " managers", null,
-        dealt ? (Math.round((dealt / g.count) * 100) + "% of the league") : "nobody moved", "users"),
-      hcard("Made none", num(g.noTransfer), "kept the same squad", null,
-        Math.round((g.noTransfer / g.count) * 100) + "% of the league", "shield"),
-      (g.mostTransfers && g.mostTransfers.transfers > 0)
-        ? hcard("Most transfers", num(g.mostTransfers.transfers), g.mostTransfers.name,
-            g.mostTransfers.id, "in one gameweek", "flame")
-        : "",
-      (g.mostHits && g.mostHits.hits > 0)
-        ? hcard("Biggest hit", "\u2212" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
-            num(g.mostHits.transfers) + " transfers", "warn")
-        : ""
-    ]);
-
     h += statGroup("Movement", [
       g.biggestClimb
         ? hcard("Biggest climb", "+" + num(g.biggestClimb.move), g.biggestClimb.name,
@@ -5569,24 +5551,6 @@
         : ""
     ]);
 
-    var chipCards = [];
-    if (g.chipsPlayed) {
-      var kinds = Object.keys(g.chipKinds).map(function (c) {
-        return num(g.chipKinds[c]) + " " + (CHIP_NAME[c] || c);
-      }).join(" \u00b7 ");
-      chipCards.push(hcard("Chips played", num(g.chipsPlayed), "this gameweek", null, kinds, "sparkle"));
-      // each chip gets its own card, and each opens the list of who played it
-      Object.keys(g.chipKinds).forEach(function (c) {
-        chipCards.push('<div class="hcard" data-chipgo="' + esc(c) + '" data-chipgw="' + g.gw +
-          '" role="button" tabindex="0">' +
-          '<div class="hl">' + sicon("sparkle") + '<span>' + esc(CHIP_NAME[c] || c) + '</span></div>' +
-          '<div class="hv">' + num(g.chipKinds[c]) + '</div>' +
-          '<div class="hw">managers</div>' +
-          '<div class="hs">tap to see who</div></div>');
-      });
-    }
-    h += statGroup("Chips", chipCards);
-
     h += statGroup("Player of the week", [
       H.potw
         ? hcard(H.potw.name, num(H.potw.pts), H.potw.team, null,
@@ -5594,6 +5558,55 @@
               ? H.potw.ownedPct + "% of the league owned him" : "", "star")
         : ""
     ]);
+
+    // What the choices returned: the captains and the differentials. The
+    // choices themselves are on the Picks tab; this is what they came to.
+    var sq = H.squads;
+    if (sq) {
+      h += statGroup("Captains and differentials", [
+        sq.bestCaptain
+          ? hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
+              sq.bestCaptain.caps + " of " + sq.managers + " captained", "captain")
+          : "",
+        sq.worstCaptain
+          ? hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
+              sq.worstCaptain.caps + " captained", "circleDown")
+          : "",
+        sq.differentials.length
+          ? hcard("Best differential", num(sq.differentials[0].pts), sq.differentials[0].name, null,
+              sq.differentials[0].ownedPct + "% of the league", "gem")
+          : ""
+      ]);
+    }
+
+    // The best eleven the league held, and how many of them were yours. It
+    // is what the gameweek returned, so it sits with the returns, not the picks.
+    if (sq && sq.teamOfWeek) {
+      var tw = sq.teamOfWeek, mine = null, ds = S.dataset();
+      var mySq = state.me && ds && ds.picks && ds.picks[H.gw] && ds.picks[H.gw][state.me];
+      if (mySq && mySq.p) {
+        var held = {};
+        mySq.p.forEach(function (t) { held[+t[0]] = 1; });
+        mine = tw.els.filter(function (el) { return held[+el]; }).length;
+      }
+      h += '<div class="section-title"><h2>Team of the week</h2><div class="rule"></div></div>';
+      h += '<div class="note" style="margin:-4px 2px 10px">The highest-scoring legal eleven from players anyone in the league held, a ' +
+        esc(tw.shape) + ' worth ' + num(tw.total) + ' points' +
+        (mine !== null ? ' \u00b7 ' + mine + ' of them in your squad' : '') + '.</div>';
+      h += '<div class="card pitchcard"><div class="bd">' +
+        pitchHtml({ lines: tw.lines, bench: [] }, "pts") + '</div></div>';
+    }
+
+    if (sq && (sq.topScorers.length || sq.differentials.length)) {
+      h += '<div class="card"><div class="bd hcols">';
+      h += hlist("Top scorers owned", sq.topScorers, function (x) {
+        return { name: x.name, tag: x.team, val: num(x.pts) };
+      });
+      h += hlist("Differentials", sq.differentials, function (x) {
+        return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) };
+      }, "Owned by under 10% of the league.");
+      h += '</div></div>';
+    }
 
     h += bucketTable(g);
     return h;
@@ -5633,20 +5646,34 @@
     if (!sq) return '<div class="callout">No squads stored for this gameweek.</div>';
     var h = '<div class="statlead">' + esc(H.gwName) + ' · ' + num(sq.managers) + ' squads</div>';
     h += '<div class="hgrid">';
-    if (sq.bestCaptain) {
-      h += hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
-        sq.bestCaptain.caps + " of " + sq.managers + " captained", "captain");
-    }
-    if (sq.worstCaptain) {
-      h += hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
-        sq.worstCaptain.caps + " captained", "circleDown");
-    }
-    if (sq.differentials.length) {
-      var d0 = sq.differentials[0];
-      h += hcard("Best differential", num(d0.pts), d0.name, null, d0.ownedPct + "% of the league", "gem");
-    }
     h += hcard("Different captains", num(sq.distinctCaptains), "picked across the league", null, "", "users");
+    if (sq.mostCaptained[0]) {
+      h += hcard("Most captained", sq.managers ? Math.round((sq.mostCaptained[0].caps / sq.managers) * 100) + "%" : num(sq.mostCaptained[0].caps),
+        sq.mostCaptained[0].name, null, num(sq.mostCaptained[0].caps) + " of " + num(sq.managers) + " armbands", "captain");
+    }
     h += '</div>';
+
+    // Transfers are made before the deadline, so they are a matter of picks.
+    var g = H.gwStats;
+    if (g) {
+      var dealt = g.count - g.noTransfer;
+      h += statGroup("Transfers", [
+        hcard("Total transfers", num(g.transfersTotal), "across the league", null,
+          g.hitTotal ? ("\u2212" + num(g.hitTotal) + " pts in hits") : "no hits taken", "swap"),
+        hcard("Made a transfer", num(dealt), "of " + g.count + " managers", null,
+          dealt ? (Math.round((dealt / g.count) * 100) + "% of the league") : "nobody moved", "users"),
+        hcard("Made none", num(g.noTransfer), "kept the same squad", null,
+          Math.round((g.noTransfer / g.count) * 100) + "% of the league", "shield"),
+        (g.mostTransfers && g.mostTransfers.transfers > 0)
+          ? hcard("Most transfers", num(g.mostTransfers.transfers), g.mostTransfers.name,
+              g.mostTransfers.id, "in one gameweek", "flame")
+          : "",
+        (g.mostHits && g.mostHits.hits > 0)
+          ? hcard("Biggest hit", "\u2212" + num(g.mostHits.hits), g.mostHits.name, g.mostHits.id,
+              num(g.mostHits.transfers) + " transfers", "warn")
+          : ""
+      ]);
+    }
 
     var chipKeys = Object.keys(sq.chips || {});
     if (chipKeys.length) {
@@ -5665,23 +5692,6 @@
         pitchHtml({ lines: sq.templateXi, bench: [] }, "eo") + '</div></div>';
     }
 
-    // The best eleven the league held, and how many of them were yours.
-    if (sq.teamOfWeek) {
-      var tw = sq.teamOfWeek, mine = null, ds = S.dataset();
-      var mySq = state.me && ds && ds.picks && ds.picks[H.gw] && ds.picks[H.gw][state.me];
-      if (mySq && mySq.p) {
-        var held = {};
-        mySq.p.forEach(function (t) { held[+t[0]] = 1; });
-        mine = tw.els.filter(function (el) { return held[+el]; }).length;
-      }
-      h += '<div class="section-title"><h2>Team of the week</h2><div class="rule"></div></div>';
-      h += '<div class="note" style="margin:-4px 2px 10px">The highest-scoring legal eleven from players anyone in the league held, a ' +
-        esc(tw.shape) + ' worth ' + num(tw.total) + ' points' +
-        (mine !== null ? ' \u00b7 ' + mine + ' of them in your squad' : '') + '.</div>';
-      h += '<div class="card pitchcard"><div class="bd">' +
-        pitchHtml({ lines: tw.lines, bench: [] }, "pts") + '</div></div>';
-    }
-
     h += '<div class="card"><div class="bd hcols">';
     h += hlist("Most owned", sq.mostOwned, function (x) {
       return { name: x.name, tag: x.team, val: x.ownedPct + "%" };
@@ -5695,12 +5705,6 @@
     h += hlist("Most vice-captained", sq.mostVice, function (x) {
       return { name: x.name, tag: x.team, val: num(x.vices) };
     });
-    h += hlist("Top scorers owned", sq.topScorers, function (x) {
-      return { name: x.name, tag: x.team, val: num(x.pts) };
-    });
-    h += hlist("Differentials", sq.differentials, function (x) {
-      return { name: x.name, tag: x.ownedPct + "%", val: num(x.pts) };
-    }, "Owned by under 10% of the league.");
     h += '</div></div>';
 
     if (sq.movedIn && (sq.movedIn.length || sq.movedOut.length)) {
