@@ -3136,12 +3136,12 @@
             K.finishedGws(ds).forEach(function (g) { doneFx[g] = true; });
             state.fxGw = gws.filter(function (g) { return !doneFx[g]; })[0] || gws[gws.length - 1];
           }
-          // one group at a time reads best, so open on the first; "All groups"
-          // stays on the list for anyone who wants the whole gameweek at once
-          if (state.fxGroup == null || state.fxGroup === "") {
-            var mfg = myGroupIndex(groups);
-            state.fxGroup = String(mfg >= 0 ? mfg : 0);
-          }
+          // One group at a time reads best, and it is the same group on both
+          // panels: the one picked for the standings opens here, and a group
+          // picked here follows the reader to the standings. "All groups"
+          // stays on the list for anyone who wants the whole gameweek at once.
+          if (state.fxGroup == null || state.fxGroup === "") state.fxGroup = String(state.group);
+          else if (state.fxGroup !== "all" && +state.fxGroup !== state.group) state.fxGroup = String(state.group);
           extra.innerHTML = seg + '<div class="segsub">' +
             '<select class="in narrow" id="fxGw">' + gws.map(function (g) {
               return '<option value="' + g + '"' + (+g === +state.fxGw ? ' selected' : '') +
@@ -3164,7 +3164,11 @@
             });
           };
           $("#fxGw", host).addEventListener("change", function () { state.fxGw = +this.value; drawFx(); });
-          $("#fxGroup", host).addEventListener("change", function () { state.fxGroup = this.value; drawFx(); });
+          $("#fxGroup", host).addEventListener("change", function () {
+            state.fxGroup = this.value;
+            if (state.fxGroup !== "all") state.group = +state.fxGroup;
+            drawFx();
+          });
           drawFx();
         } else {
           extra.innerHTML = seg + '<div class="segsub">' +
@@ -3175,6 +3179,7 @@
           panel.innerHTML = groupPanel(groups[state.group] || groups[0], cfg);
           $("#grpSel", host).addEventListener("change", function () {
             state.group = +this.value;
+            state.fxGroup = String(state.group);
             panel.innerHTML = groupPanel(groups[state.group], cfg);
           });
         }
