@@ -1790,15 +1790,27 @@
     return new Date(iso).toLocaleString(undefined,
       { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
+  // What each step actually does, in a line under it: whose move it is, FPL's
+  // or ours, and what it changes in the app. The full account is behind the
+  // information button; this is the part worth having in view.
+  var STEP_WHAT = {
+    lock:   "FPL locks every squad. We read all of them and the new gameweek appears here.",
+    ko:     "Points and ranks move every ten minutes or so. Bonus is provisional; auto subs not yet.",
+    ft:     "Every player\u2019s points are in apart from bonus. Nothing is settled yet.",
+    bonus:  "FPL\u2019s official bonus replaces the provisional one, usually the next morning.",
+    final:  "FPL applies auto subs and closes the week, usually early the next afternoon.",
+    squads: "We re-read every squad with the subs in. LMS, months and groups settle."
+  };
   function stepRow(st, on, when) {
     var line = "";
     if (when && when.at) {
       line = '<span class="gwwhen' + (when.kind === "expected" ? ' est' : '') + '">' +
         (when.kind === "expected" ? "Expected " : "") + esc(whenText(when.at)) + '</span>';
     }
+    var what = STEP_WHAT[st.k] ? '<span class="gwwhat">' + esc(STEP_WHAT[st.k]) + '</span>' : '';
     return '<div class="gwstep' + (on ? ' on' : '') + '">' +
       '<i class="gwmark" aria-hidden="true">' + sicon(on ? "check" : "cross") + '</i>' +
-      '<span class="gwlab">' + esc(st.t) + line + '</span>' +
+      '<span class="gwlab">' + esc(st.t) + line + what + '</span>' +
       '<span class="gwyn">' + (on ? "Done" : "Not yet") + '</span></div>';
   }
   function renderGwStatus(host, ds) {
@@ -1886,12 +1898,29 @@
   function gwHelp(basis) {
     var list = helpList;
     var h = list("The gameweek, step by step", [
-      ["Deadline passed", "Squads are set. Nobody can transfer or change a captain for this gameweek any more."],
-      ["First match kicked off", "The gameweek is under way and points have started moving."],
-      ["Every match at full time", "The last whistle has gone. Points are complete apart from bonus, which FPL has not confirmed yet."],
-      ["Bonus confirmed", "FPL has awarded the official bonus on every match. Until then this app shows a provisional bonus worked out from the same bps FPL uses, which is almost always right but is not the official award."],
-      ["Gameweek finalised by FPL", "FPL has closed the gameweek: auto substitutions applied, points settled, nothing more to change."],
-      ["Settled squads stored here", "This app has re-read every squad now the gameweek is closed, so what it shows and what FPL shows are the same."]
+      ["Deadline passed", "FPL locks every squad: no transfer, captain or chip can change for this gameweek. " +
+        "Within the next half hour this app reads all " + "the league\u2019s squads \u2014 it takes longest at the deadline, " +
+        "when everyone\u2019s app is asking FPL at once \u2014 and the Classic bar, the profiles and the Picks tab switch to the new gameweek."],
+      ["First match kicked off", "From here this app reads FPL about every ten minutes. Player points, Classic totals and ranks, " +
+        "the month\u2019s table and the pyramid\u2019s mini-season all move live. Bonus is provisional, worked out from the same bps FPL uses, " +
+        "and marked with a *. Automatic substitutions have not happened: a benched player\u2019s points count for nobody until FPL finalises."],
+      ["Every match at full time", "The last whistle has gone. Every player\u2019s points are in apart from bonus. Nothing is settled: " +
+        "no elimination, no month, no group result, no XP."],
+      ["Bonus confirmed", "FPL awards the official bonus on every match, in practice the morning after the last match. " +
+        "It replaces the provisional bonus and the * goes. Almost always the same numbers, but only now are they FPL\u2019s."],
+      ["Gameweek finalised by FPL", "FPL applies automatic substitutions, settles every squad\u2019s points and updates overall ranks. " +
+        "This season that has landed early in the afternoon after the last match; the Expected time above is worked from the gameweeks watched so far."],
+      ["Settled squads stored here", "Within ten minutes of FPL finalising, this app re-reads every squad, so the eleven shown is the eleven that played, " +
+        "substitutes in. Only now do the competitions that need a closed gameweek settle: the week\u2019s LMS elimination (its tie-breakers " +
+        "count the playing XI), a month once its last gameweek is closed, UCL group results, and the pyramid at the end of its season. " +
+        "XP moves from on course to settled only when a competition finishes."]
+    ]);
+    h += list("Who moves when", [
+      ["Classic", "Moves live through the gameweek, provisional bonus included. Final once FPL finalises."],
+      ["Manager of the Month", "The table moves live. A month is won only when its last gameweek is finalised."],
+      ["Last Manager Standing", "Nothing moves during the week. The elimination is decided when the gameweek is finalised and the squads stored."],
+      ["Pyramid", "Mini-season totals move live. Promotion and relegation are decided when the season\u2019s last gameweek is finalised."],
+      ["UCL", "Group results count finalised gameweeks only; a gameweek in play shows nothing in the group table until then."]
     ]);
     h += list("A match day's badge", [
       ["Confirmed", "Every match that day is done and its bonus is official."],
