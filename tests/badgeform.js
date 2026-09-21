@@ -27,7 +27,7 @@ const WHO = [2128096, 7207605, 1255976];   // six badges, a climber, the leader
           const cr = card.getBoundingClientRect();
           return [...row.querySelectorAll(".badge")].map((x, i) => {
             const r = x.getBoundingClientRect(), cs = getComputedStyle(x);
-            return { i, text: x.textContent, form: x.classList.contains("form"),
+            return { i, text: x.textContent, form: x.classList.contains("form"), blot: x.classList.contains("blot"),
                      style: cs.borderStyle, over: r.left < cr.left - 0.5 || r.right > cr.right + 0.5,
                      why: x.getAttribute("data-why") || "", h: Math.round(r.height) };
           });
@@ -35,9 +35,11 @@ const WHO = [2128096, 7207605, 1255976];   // six badges, a climber, the leader
         const tag = theme + " " + w + " #" + id;
         chk(await p.evaluate(() => document.documentElement.getAttribute("data-theme")) === theme, tag + ": the theme is on");
         chk(info.length > 0, tag + ": badges render", info.map(x => x.text).join(" | "));
-        const firstForm = info.findIndex(x => x.form);
-        chk(firstForm === -1 || info.slice(firstForm).every(x => x.form), tag + ": honours first, form last",
-          info.map(x => (x.form ? "f" : "h")).join(""));
+        // honours, then form, then the blots (settled before form): rank never falls
+        const rank = (x) => x.blot ? (x.form ? 3 : 2) : (x.form ? 1 : 0);
+        const ranks = info.map(rank), firstForm = info.findIndex(x => x.form);
+        chk(ranks.every((k, i) => i === 0 || k >= ranks[i - 1]), tag + ": honours, form, then blots",
+          info.map(x => (x.blot ? (x.form ? "B" : "b") : (x.form ? "f" : "h"))).join(""));
         chk(info.filter(x => x.form).every(x => x.style === "dashed"), tag + ": form badges are outlined");
         chk(info.filter(x => !x.form).every(x => x.style === "solid"), tag + ": honours stay filled");
         chk(info.every(x => !x.over), tag + ": no badge spills out of the card",

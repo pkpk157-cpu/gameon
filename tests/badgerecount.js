@@ -150,10 +150,10 @@ for (const id of ids) {
     if (typeof b.form !== "boolean") fail(id + " " + b.k + " has no form flag");
     if (!b.label) fail(id + " " + b.k + " has no label");
   });
-  // honours must all come before form badges
-  const seq = C.badges(ds, id).map((b) => b.form);
-  if (seq.indexOf(false) > seq.indexOf(true) && seq.indexOf(true) !== -1)
-    fail(id + " form badge before an honour");
+  // honours, then form, then the blots (settled before form): the rank never falls
+  const rank = (b) => b.blot ? (b.form ? 3 : 2) : (b.form ? 1 : 0);
+  const seq = C.badges(ds, id).map(rank);
+  for (let i = 1; i < seq.length; i++) if (seq[i] < seq[i - 1]) { fail(id + " badges out of order: " + seq.join("")); break; }
 }
 console.log("managers checked:", ids.length, "| finished GWs:", played.join(","));
 console.log("badge counts:", JSON.stringify(tally));

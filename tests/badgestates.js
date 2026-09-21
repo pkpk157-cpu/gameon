@@ -28,9 +28,10 @@ for(const f of fs.readdirSync(GOENV.STATES).sort()){
         if(!Array.isArray(b.gws)) throw new Error("gws not an array "+b.k);
         if(/NaN|undefined|null/.test(b.tag+" "+b.why)) throw new Error("junk text "+b.k+": "+b.tag+" / "+b.why);
       }
-      // honours first, form last
-      const seq=B.map(b=>b.form);
-      if(seq.indexOf(true)!==-1&&seq.indexOf(false)>seq.indexOf(true)) throw new Error("form before honour");
+      // honours, then form, then the blots (settled before form): the rank never falls
+      const rank=(b)=>b.blot?(b.form?3:2):(b.form?1:0);
+      const seq=B.map(rank);
+      for(let i=1;i<seq.length;i++) if(seq[i]<seq[i-1]) throw new Error("badges out of order: "+seq.join(""));
     }
   }catch(e){err=e.message;}
   if(err){bad++;console.log("FAIL "+f+": "+err);}
