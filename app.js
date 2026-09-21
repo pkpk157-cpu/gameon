@@ -38,6 +38,7 @@
      to be read at 14px: one idea per glyph, no interior detail that closes up
      at that size. */
   var SICONS = {
+    sleep: '<path d="M4 8h6l-6 7h6"/><path d="M14 4h5l-5 6h5"/>',
     star: '<path d="M12 3.6l2.6 5.3 5.8.9-4.2 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.2-4.1 5.8-.9Z"/>',
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0Z"/><path d="M8 5.6H5.4A3.4 3.4 0 0 0 8 9M16 5.6h2.6A3.4 3.4 0 0 1 16 9"/><path d="M12 13v4M8.5 20h7"/>',
     chart: '<path d="M4 17h16"/><path d="M7.5 17v-6M12 17v-10M16.5 17v-4"/>',
@@ -4826,7 +4827,7 @@
         }).join(", ")
       : "";
     var why = (b.form ? "Right now: " : "") + b.why + when;
-    return '<button type="button" class="badge' + (b.form ? " form" : "") +
+    return '<button type="button" class="badge' + (b.form ? " form" : "") + (b.blot ? " blot" : "") +
       '" aria-expanded="false" data-why="' + esc(why) + '">' +
       sicon(b.icon) + esc(b.label) + '<b>' + esc(what) + '</b></button>';
   }

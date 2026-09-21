@@ -2067,11 +2067,13 @@
     if (_gwf.key === key) return _gwf.val;
     var out = {};
     played.forEach(function (g) {
-      var best = null, capBest = null, own = {}, caps = {}, squads = 0;
+      var best = null, worst = null, capBest = null, own = {}, caps = {}, squads = 0;
       var hist = ds.history || {};
       (ds.managers || []).forEach(function (m) {
         var r = (hist[m.id] || {})[g];
-        if (r && typeof r.p === "number" && (best === null || r.p > best)) best = r.p;
+        if (!r || typeof r.p !== "number") return;
+        if (best === null || r.p > best) best = r.p;
+        if (worst === null || r.p < worst) worst = r.p;
       });
       var pk = picksAt(ds, g), lp = liveAt(ds, g) || {};
       if (pk) Object.keys(pk).forEach(function (mid) {
@@ -2093,7 +2095,7 @@
           if (typeof pts === "number" && (capBest === null || pts > capBest)) capBest = pts;
         }
       });
-      out[g] = { best: best, capBest: capBest, own: own, caps: caps, squads: squads,
+      out[g] = { best: best, worst: worst, capBest: capBest, own: own, caps: caps, squads: squads,
                  lp: lp, picks: pk };
     });
     _gwf = { key: key, val: out };
@@ -2106,7 +2108,7 @@
   function seasonFacts(ds) {
     var key = (ds.updatedAt || "") + "|" + C.finishedGws(ds).join(",");
     if (_snf.key === key) return _snf.val;
-    var groupWins = {}, promos = {};
+    var groupWins = {}, promos = {}, relegs = {};
 
     (C.h2h(ds).groups || []).forEach(function (G) {
       if (!G.complete) return;
@@ -2133,9 +2135,10 @@
       Object.keys(now).forEach(function (mid) {
         var a = was[mid], b = now[mid];
         if (a && b && order[b] < order[a]) (promos[mid] || (promos[mid] = [])).push(name);
+        if (a && b && order[b] > order[a]) (relegs[mid] || (relegs[mid] = [])).push(name);
       });
     }
-    var val = { groupWins: groupWins, promos: promos };
+    var val = { groupWins: groupWins, promos: promos, relegs: relegs };
     _snf = { key: key, val: val };
     return val;
   }
@@ -2160,18 +2163,29 @@
   C.badges = function (ds, id) {
     if (!ds || !id || !ds.managers || !ds.managers.length) return [];
     id = +id;
-    var honours = [], form = [];
+    var honours = [], form = [], blots = [], formBlots = [];
     var played = C.finishedGws(ds);
     var h = (ds.history || {})[id] || {};
     var F = gwFacts(ds), SF = seasonFacts(ds), cr = classicRankByGw(ds);
 
     function honour(k, label, count, gws, icon, tag, why) {
       honours.push({ k: k, label: label, count: count, gws: gws || [], icon: icon,
-                     tag: tag, why: why, form: false });
+                     tag: tag, why: why, form: false, blot: false });
     }
     function now(k, label, count, gws, icon, tag, why) {
       form.push({ k: k, label: label, count: count, gws: gws || [], icon: icon,
-                  tag: tag, why: why, form: true });
+                  tag: tag, why: why, form: true, blot: false });
+    }
+    // A blot is an honour's opposite: settled, permanent, and it stacks. A
+    // form blot is a standing that can be climbed out of. Dry and factual,
+    // since everyone can read them; each is the mirror of a badge above.
+    function blot(k, label, count, gws, icon, tag, why) {
+      blots.push({ k: k, label: label, count: count, gws: gws || [], icon: icon,
+                   tag: tag, why: why, form: false, blot: true });
+    }
+    function nowBad(k, label, count, gws, icon, tag, why) {
+      formBlots.push({ k: k, label: label, count: count, gws: gws || [], icon: icon,
+                       tag: tag, why: why, form: true, blot: true });
     }
 
     // Which chip was played in which gameweek, from the manager's own record.
@@ -2181,6 +2195,7 @@
     /* ---- one pass over the finished gameweeks -------------------------- */
     var tops = [], dbls = [], cents = [], backs = [], arms = [], caps = [],
         diffs = [], cleans = [];
+    var spoons = [], blanks = [], falls = [], wasted = [], reckless = [], flops = [];
     played.forEach(function (g, i) {
       var f = F[g] || {}, mine = h[g];
       if (!mine || typeof mine.p !== "number") return;
@@ -2191,18 +2206,27 @@
       if (f.best !== null && f.best !== undefined && mine.p === f.best) tops.push(g);
       if (mine.p >= 200) dbls.push(g);
       if (mine.p >= 100) cents.push(g);
+      // and its opposite: the league's lowest, and a week under thirty-five
+      if (f.worst !== null && f.worst !== undefined && mine.p === f.worst) spoons.push(g);
+      if (mine.p < 35) blanks.push(g);
 
       // Comeback: seventy-five places or more up the Classic table in one
       // gameweek. Fifty places is an ordinary week in a field of this size.
+      // Freefall is the same distance the other way.
       if (i > 0) {
         var at = cr[g] && cr[g].rank[id], before = cr[played[i - 1]] && cr[played[i - 1]].rank[id];
         if (at && before && before - at >= 75) backs.push(g);
+        if (at && before && at - before >= 75) falls.push(g);
       }
 
       // Clean sheet: nothing spent on hits and nothing left scoring on the
       // bench. A Bench Boost week cannot waste bench points, so it is not one.
       var chip = chipAt[g] || (sq && sq.c) || "";
       if (chip !== "bboost" && !(mine.h || 0) && !(mine.b || 0)) cleans.push(g);
+      // Bench blunder: twenty or more left scoring on the bench, again not on
+      // a Bench Boost week. Reckless: eight or more paid in hits in one go.
+      if (chip !== "bboost" && (mine.b || 0) >= 20) wasted.push(g);
+      if ((mine.h || 0) >= 8) reckless.push(g);
 
       var pl = sq && sq.p;
       if (!pl || !pl.length) return;
@@ -2213,6 +2237,9 @@
       var capPts = (capEl !== null && typeof f.lp[capEl] === "number") ? f.lp[capEl] : null;
       if (capPts !== null) {
         if (capPts * capMult >= 40) caps.push(g);
+        // Captain calamity: the armband brought back two or fewer after
+        // doubling — the man scored at most one, or lost points.
+        if (capPts * capMult <= 2) flops.push(g);
         // Best armband is for the call, not the haul: the league's top captain
         // when most of the league was somewhere else. Where the best captain
         // was also the obvious one, picking him was not a decision and nobody
@@ -2271,6 +2298,23 @@
     if (cleans.length) honour("clean", "Clean sheet", cleans.length, cleans, "check",
       "×" + cleans.length, "No hits taken and nothing left scoring on the bench");
 
+    /* ---- blots: settled, permanent, and they stack ----------------------- */
+    var downs = SF.relegs[id] || [];
+    if (downs.length) blot("releg", "Relegated", downs.length, downs, "steps",
+      "×" + downs.length, "Went down a division between mini-seasons");
+    if (spoons.length) blot("spoon", "Wooden spoon", spoons.length, spoons, "circleDown",
+      "×" + spoons.length, "The league’s lowest score of the gameweek");
+    if (blanks.length) blot("blank", "Blank", blanks.length, blanks, "cross",
+      "×" + blanks.length, "Under 35 points in a gameweek");
+    if (falls.length) blot("freefall", "Freefall", falls.length, falls, "down",
+      "×" + falls.length, "Down 75 places or more in the Classic table in one gameweek");
+    if (flops.length) blot("capflop", "Captain calamity", flops.length, flops, "captain",
+      "×" + flops.length, "An armband worth 2 points or fewer after doubling");
+    if (wasted.length) blot("benched", "Bench blunder", wasted.length, wasted, "bench",
+      "×" + wasted.length, "20 points or more left scoring on the bench");
+    if (reckless.length) blot("reckless", "Reckless", reckless.length, reckless, "warn",
+      "×" + reckless.length, "8 points or more paid in hits in one gameweek");
+
     /* ---- form: true today, and it can stop being true ------------------ */
     var row = C.classic(ds).filter(function (r) { return +r.id === id; })[0];
     if (row && row.computedRank === 1) {
@@ -2300,6 +2344,32 @@
     if (streak >= 3) now("climb", "Climbing", streak, played.slice(-streak), "up",
       streak + " GWs", "Up the Classic table " + streak + " gameweeks running");
 
+    /* ---- form blots: true today, and they can be climbed out of ---------- */
+    var field = C.classic(ds).length;
+    if (row && field > 20 && row.computedRank > field - 10) {
+      nowBad("bottomten", "Bottom ten", row.computedRank, [], "circleDown", ordinalOf(row.computedRank),
+        "Inside the bottom ten of the Classic table");
+    }
+    // Sliding: a worse Classic position than the gameweek before, three or
+    // more finished gameweeks running — the mirror of Climbing.
+    var slide = 0;
+    for (var q = played.length - 1; q >= 1; q--) {
+      var a2 = cr[played[q]] && cr[played[q]].rank[id];
+      var b2 = cr[played[q - 1]] && cr[played[q - 1]].rank[id];
+      if (a2 && b2 && a2 > b2) slide++; else break;
+    }
+    if (slide >= 3) nowBad("slide", "Sliding", slide, played.slice(-slide), "down",
+      slide + " GWs", "Down the Classic table " + slide + " gameweeks running");
+    // Asleep: no transfer for four finished gameweeks running. The first
+    // gameweek has no transfers to make, so it never counts.
+    var idle = 0;
+    for (var z = played.length - 1; z >= 0; z--) {
+      var rz = h[played[z]];
+      if (played[z] > 1 && rz && typeof rz.p === "number" && !(rz.tr || 0)) idle++; else break;
+    }
+    if (idle >= 4) nowBad("asleep", "Asleep", idle, played.slice(-idle), "sleep",
+      idle + " GWs", "No transfer for " + idle + " gameweeks running");
+
     // Survivor: still in Last Manager Standing once a quarter of the field has
     // gone. Before that it is everyone's, and a badge everyone has says
     // nothing.
@@ -2311,7 +2381,7 @@
         "Still standing in Last Manager with " + gone + " of " + total + " out");
     }
 
-    return honours.concat(form);
+    return honours.concat(form, blots, formBlots);
   };
 
   // Where a manager stands against the money in every competition at once —

@@ -32,20 +32,24 @@ console.log("  managers with any badge:", all.filter(m => m.B.length).length + "
 // ---- honours vs form: shape, order and wording -------------------------
 const HONOUR = ["month","group","promo","top","dbl","century","comeback","armband","capt","diff","clean"];
 const FORM = ["leader","topten","top10k","climb","survivor"];
+const BLOT = ["releg","spoon","blank","freefall","capflop","benched","reckless"];
+const FORMBLOT = ["bottomten","slide","asleep"];
 let shapeBad = 0, orderBad = 0, kindBad = 0, wordBad = 0;
+// the order on a profile: honours, form, then the blots, settled before form
+const rank = (b) => b.blot ? (b.form ? 3 : 2) : (b.form ? 1 : 0);
 all.forEach(m => {
-  const seq = m.B.map(b => b.form);
-  if (seq.indexOf(true) !== -1 && seq.indexOf(false) > seq.indexOf(true)) orderBad++;
+  const seq = m.B.map(rank);
+  for (let i = 1; i < seq.length; i++) if (seq[i] < seq[i - 1]) { orderBad++; break; }
   m.B.forEach(b => {
     if (!b.label || typeof b.tag !== "string" || !b.tag || typeof b.why !== "string" || !b.why ||
-        typeof b.form !== "boolean" || !Array.isArray(b.gws)) shapeBad++;
-    if (b.form ? HONOUR.indexOf(b.k) !== -1 : FORM.indexOf(b.k) !== -1) kindBad++;
-    if (HONOUR.indexOf(b.k) === -1 && FORM.indexOf(b.k) === -1) kindBad++;
+        typeof b.form !== "boolean" || typeof b.blot !== "boolean" || !Array.isArray(b.gws)) shapeBad++;
+    const want = b.blot ? (b.form ? FORMBLOT : BLOT) : (b.form ? FORM : HONOUR);
+    if (want.indexOf(b.k) === -1) kindBad++;
     if (/NaN|undefined|null/.test(b.tag + " " + b.why)) wordBad++;
   });
 });
-chk(shapeBad === 0, "every badge carries a label, tag, reason, gws list and form flag", shapeBad + " bad");
-chk(orderBad === 0, "honours always come before form badges", orderBad + " out of order");
+chk(shapeBad === 0, "every badge carries a label, tag, reason, gws list, form and blot flags", shapeBad + " bad");
+chk(orderBad === 0, "honours, then form, then blots settled before form", orderBad + " out of order");
 chk(kindBad === 0, "every badge is a known kind, flagged on the right side", kindBad + " wrong");
 chk(wordBad === 0, "no badge text leaks NaN, undefined or null", wordBad + " bad");
 // A manager can hold Leader or Top ten, never both.
