@@ -2422,6 +2422,8 @@
       if (b) { location.hash = "rules/" + b.getAttribute("data-rules"); return; }
       var cg = e.target.closest("[data-chipgo]");
       if (cg) { location.hash = "chips/" + cg.getAttribute("data-chipgw") + "/" + cg.getAttribute("data-chipgo"); return; }
+      var tr = e.target.closest("[data-trend]");
+      if (tr) { openTrend(tr.getAttribute("data-trend")); return; }
       var n = e.target.closest("[data-entry]");
       if (!n) {
         // Only the name cell carries the link, but a row is what people aim
@@ -4846,8 +4848,13 @@
   function mval(tenths) { return "£" + (Math.round(tenths) / 10).toFixed(1) + "m"; }
 
   // A headline card: big number, caption, and who it belongs to.
-  function hcard(label, big, who, id, sub, icon) {
-    return '<div class="hcard"' + (id ? ' data-entry="' + id + '" role="button" tabindex="0"' : '') + '>' +
+  // A card that carries a series key opens that figure across every gameweek;
+  // the manager it names is reachable from there. Otherwise a card that names
+  // a manager opens his profile.
+  function hcard(label, big, who, id, sub, icon, series) {
+    return '<div class="hcard' + (series ? ' trend' : '') + '"' +
+      (series ? ' data-trend="' + series + '" role="button" tabindex="0"'
+              : (id ? ' data-entry="' + id + '" role="button" tabindex="0"' : '')) + '>' +
       '<div class="hl">' + sicon(icon) + '<span>' + esc(label) + '</span></div>' +
       '<div class="hv">' + esc(big) + '</div>' +
       (who ? '<div class="hw">' + esc(who) + '</div>' : '') +
@@ -5565,37 +5572,37 @@
     var h = H.live ? '<div class="statlead"><span class="pill live">Live</span></div>' : '';
 
     h += statGroup("Scores", [
-      hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy"),
-      hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player, "down"),
+      hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy", "top"),
+      hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player, "down", "low"),
       hcard("League average", num(g.average), g.count + " managers", null,
-        g.median !== null ? ("median " + num(g.median)) : "", "chart"),
+        g.median !== null ? ("median " + num(g.median)) : "", "chart", "average"),
       hcard("A good week was", num(g.topQuarter) + "+", "the top quarter", null,
-        "bottom quarter: " + num(g.bottomQuarter) + " or less", "target"),
+        "bottom quarter: " + num(g.bottomQuarter) + " or less", "target", "topQuarter"),
       hcard("Beat the average", num(g.aboveAvg), "of " + g.count + " managers", null,
-        num(g.range) + " between best and worst", "check"),
+        num(g.range) + " between best and worst", "check", "aboveAvg"),
       g.fplAverage !== null
         ? hcard("Beat FPL's average", num(g.beatFpl), "of " + g.count + " managers", null,
-            "the world scored " + num(g.fplAverage), "globe")
+            "the world scored " + num(g.fplAverage), "globe", "beatFpl")
         : ""
     ]);
 
     h += statGroup("Left on the bench", [
       (g.mostBench && g.mostBench.bench > 0)
         ? hcard("Most benched", num(g.mostBench.bench), g.mostBench.name, g.mostBench.id,
-            "points benched", "bench")
+            "points benched", "bench", "mostBench")
         : "",
       hcard("Across the league", num(g.benchTotal), "points benched", null,
-        num(g.benchAvg) + " each on average", "chart")
+        num(g.benchAvg) + " each on average", "chart", "benchTotal")
     ]);
 
     h += statGroup("Movement", [
       g.biggestClimb
         ? hcard("Biggest climb", "+" + num(g.biggestClimb.move), g.biggestClimb.name,
-            g.biggestClimb.id, num(g.climbers) + " managers moved up", "up")
+            g.biggestClimb.id, num(g.climbers) + " managers moved up", "up", "climb")
         : "",
       g.biggestFall
         ? hcard("Biggest fall", "\u2212" + num(g.biggestFall.move), g.biggestFall.name,
-            g.biggestFall.id, num(g.fallers) + " managers moved down", "down")
+            g.biggestFall.id, num(g.fallers) + " managers moved down", "down", "fall")
         : ""
     ]);
 
@@ -5603,7 +5610,7 @@
       H.potw
         ? hcard(H.potw.name, num(H.potw.pts), H.potw.team, null,
             (H.potw.ownedPct !== null && H.potw.ownedPct !== undefined)
-              ? H.potw.ownedPct + "% of the league owned him" : "", "star")
+              ? H.potw.ownedPct + "% of the league owned him" : "", "star", "potw")
         : ""
     ]);
 
@@ -5614,15 +5621,15 @@
       h += statGroup("Captains and differentials", [
         sq.bestCaptain
           ? hcard("Best captain", num(sq.bestCaptain.pts * 2), sq.bestCaptain.name, null,
-              sq.bestCaptain.caps + " of " + sq.managers + " captained", "captain")
+              sq.bestCaptain.caps + " of " + sq.managers + " captained", "captain", "bestCap")
           : "",
         sq.worstCaptain
           ? hcard("Captain to forget", num(sq.worstCaptain.pts * 2), sq.worstCaptain.name, null,
-              sq.worstCaptain.caps + " captained", "circleDown")
+              sq.worstCaptain.caps + " captained", "circleDown", "worstCap")
           : "",
         sq.differentials.length
           ? hcard("Best differential", num(sq.differentials[0].pts), sq.differentials[0].name, null,
-              sq.differentials[0].ownedPct + "% of the league", "gem")
+              sq.differentials[0].ownedPct + "% of the league", "gem", "bestDiff")
           : ""
       ]);
     }
@@ -6704,6 +6711,81 @@
             (p.r ? " \u00b7 " + ord(p.r) + " of " + num(p.of) : "");
         }) +
       '</svg></div>';
+  }
+
+  /* One tile of the Gameweek tab across the whole season: a bar per gameweek,
+     the week the tab is on marked, the live week hatched because its figure is
+     still moving, and under it the same numbers as a list with the manager or
+     player each belongs to. Every figure is the tab's own for that week. */
+  function openTrend(key) {
+    var ds = S.dataset(), meta = K.SERIES[key];
+    if (!ds || !meta) return;
+    var all = K.gwSeries(ds);
+    var pts = all ? all.series[key] : [];
+    var cur = +state.statsGw;
+    modal(meta.label, trendHtml(key, meta, pts, cur));
+    // the bars read out their week; a name in the list opens who it was,
+    // through the same tap handler every manager's name in the app uses
+    track("/trend", true);
+  }
+  function trendHtml(key, meta, pts, cur) {
+    var have = pts.filter(function (p) { return p.v !== null; });
+    if (!have.length) return '<div class="callout">Nothing to chart yet.</div>';
+    var h = '';
+    if (meta.note) h += '<div class="note" style="margin:-4px 0 10px">' + esc(meta.note) + '</div>';
+    if (have.length < 2) {
+      var one = have[0];
+      h += '<div class="sparkone"><span class="v">' + num(one.v) + '</span>' +
+        '<span class="l">GW' + one.gw + (one.who ? ' \u00b7 ' + esc(one.who) : '') +
+        ' \u2014 a chart needs more than one gameweek</span></div>';
+    } else {
+      h += trendChart(pts, cur, meta.unit);
+    }
+    // the same season as a list, newest first, the week the tab is on marked
+    h += '<div class="trlist">' + pts.slice().reverse().map(function (p) {
+      var val = p.v === null ? '\u2014' : num(p.v);
+      return '<div class="trrow' + (p.gw === cur ? ' on' : '') + '">' +
+        '<span class="trgw">GW' + p.gw + (p.live ? ' <span class="pill live">Live</span>' : '') + '</span>' +
+        '<span class="trwho"' + (p.id ? ' data-entry="' + p.id + '" role="button" tabindex="0"' : '') + '>' + esc(p.who) + '</span>' +
+        '<span class="trv">' + val + '</span></div>';
+    }).join("") + '</div>';
+    return h;
+  }
+  function trendChart(pts, cur, unit) {
+    var G = CHART_GEOM, plotH = 150;
+    var H = G.top + plotH + G.foot;
+    var top = G.top, bot = top + plotH;
+    var x0 = G.padL + 16, x1 = G.w - G.padR - 16;
+    var x = function (i) { return x0 + (i * (x1 - x0)) / (pts.length - 1); };
+    var vals = pts.map(function (p) { return p.v === null ? 0 : p.v; });
+    var hi = Math.max(0, Math.max.apply(null, vals)), lo = Math.min(0, Math.min.apply(null, vals));
+    if (hi === lo) hi = lo + 1;
+    var yP = function (v) { return bot - ((v - lo) / (hi - lo)) * (plotH - 20); };
+    var zero = yP(0);
+    var bg = barGeom(x, pts.length, 1);
+    var lab = labelRule(pts, function (p) { return p.v === null ? -Infinity : p.v; });
+    var body = "", labels = "";
+    body += '<defs><pattern id="trhatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+      '<rect width="4" height="4" fill="var(--card-bg)"/><rect width="2" height="4" fill="var(--chart-a)"/></pattern></defs>';
+    body += '<line class="base" x1="' + x0 + '" x2="' + x1 + '" y1="' + zero.toFixed(1) + '" y2="' + zero.toFixed(1) + '"/>';
+    pts.forEach(function (p, i) {
+      if (p.v === null) return;
+      var yv = yP(p.v), hh = Math.abs(zero - yv), y = Math.min(zero, yv);
+      body += '<rect class="barP' + (p.live ? ' live' : '') + (p.gw === cur ? ' on' : '') + '" x="' + (x(i) - bg.w / 2).toFixed(1) +
+        '" y="' + y.toFixed(1) + '" width="' + bg.w.toFixed(1) + '" height="' + Math.max(1, hh).toFixed(1) + '" rx="3"/>';
+      if (lab(i) || p.gw === cur) {
+        labels += '<text class="dlP" x="' + x(i).toFixed(1) + '" y="' + (p.v < 0 ? (y + hh + 11) : (y - 5)).toFixed(1) + '">' + num(p.v) + '</text>';
+      }
+    });
+    // the week the tab is on, marked under its label
+    var ci = pts.findIndex(function (p) { return p.gw === cur; });
+    var mark = ci >= 0 ? '<path class="cur" d="M' + (x(ci) - 4).toFixed(1) + ' ' + (H - 3) + ' l4 -5 l4 5 Z"/>' : '';
+    return '<div class="fchart trchart"><svg viewBox="0 0 ' + G.w + ' ' + H + '" role="img" aria-label="' +
+      esc(unit) + ' by gameweek from GW' + pts[0].gw + ' to GW' + pts[pts.length - 1].gw + '">' +
+      body + labels + mark + gwAxis(pts, x, H - 8) +
+      gwHits(pts, x, G.top - 10, bot + 6, function (p) {
+        return "GW" + p.gw + ": " + (p.v === null ? "\u2014" : num(p.v) + " " + unit) + (p.who ? " \u00b7 " + p.who : "") + (p.live ? " (live)" : "");
+      }) + '</svg></div>';
   }
 
   /* The same season, two managers. Points are grouped bars — one pair per

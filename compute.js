@@ -3296,6 +3296,67 @@
     { k: "final",  t: "Gameweek finalised by FPL" }
   ];
 
+  /* The Gameweek tab's tiles, for every gameweek at once: what a tile shows
+     for one week, as a series across the season, so a tap on it can draw the
+     season. Read through highlights() itself — the same numbers the tiles
+     print, never a second arithmetic — and kept for the dataset, since a
+     season is thirty-eight of them. */
+  var _gws = { key: null, val: null };
+  C.SERIES = {
+    top:       { label: "Top score",            unit: "pts" },
+    low:       { label: "Lowest score",         unit: "pts" },
+    average:   { label: "League average",       unit: "pts" },
+    topQuarter:{ label: "A good week was",      unit: "pts", note: "the top quarter started here" },
+    aboveAvg:  { label: "Beat the average",     unit: "managers" },
+    beatFpl:   { label: "Beat FPL\u2019s average", unit: "managers" },
+    mostBench: { label: "Most benched",         unit: "pts" },
+    benchTotal:{ label: "Benched across the league", unit: "pts" },
+    climb:     { label: "Biggest climb",        unit: "places" },
+    fall:      { label: "Biggest fall",         unit: "places" },
+    potw:      { label: "Player of the week",   unit: "pts" },
+    bestCap:   { label: "Best captain",         unit: "pts", note: "after doubling" },
+    worstCap:  { label: "Captain to forget",    unit: "pts", note: "after doubling" },
+    bestDiff:  { label: "Best differential",    unit: "pts", note: "owned by under 10% of the league" }
+  };
+  C.gwSeries = function (ds) {
+    if (!ds || !ds.bootstrap) return null;
+    var gws = (ds.bootstrap.events || []).filter(function (e) { return e.finished || e.is_current; })
+      .map(function (e) { return e.id; });
+    var key = (ds.updatedAt || "") + "|" + gws.join(",");
+    if (_gws.key === key) return _gws.val;
+    var live = C.liveGwId(ds);
+    var out = {};
+    Object.keys(C.SERIES).forEach(function (k) { out[k] = []; });
+    gws.forEach(function (g) {
+      var H = C.highlights(ds, g);
+      var s = H && H.gwStats, q = H && H.squads;
+      var pt = function (k, v, who, id) {
+        out[k].push({ gw: g, v: (typeof v === "number" ? v : null), who: who || "", id: id || null, live: g === live });
+      };
+      if (s) {
+        pt("top", s.top && s.top.p, s.top && s.top.name, s.top && s.top.id);
+        pt("low", s.low && s.low.p, s.low && s.low.name, s.low && s.low.id);
+        pt("average", s.average, s.count + " managers");
+        pt("topQuarter", s.topQuarter, "bottom quarter " + s.bottomQuarter + " or less");
+        pt("aboveAvg", s.aboveAvg, "of " + s.count);
+        pt("beatFpl", s.fplAverage === null ? null : s.beatFpl, s.fplAverage === null ? "" : "FPL average " + s.fplAverage);
+        pt("mostBench", s.mostBench && s.mostBench.bench, s.mostBench && s.mostBench.name, s.mostBench && s.mostBench.id);
+        pt("benchTotal", s.benchTotal, s.benchAvg + " each on average");
+        pt("climb", s.biggestClimb ? s.biggestClimb.move : null, s.biggestClimb && s.biggestClimb.name, s.biggestClimb && s.biggestClimb.id);
+        pt("fall", s.biggestFall ? s.biggestFall.move : null, s.biggestFall && s.biggestFall.name, s.biggestFall && s.biggestFall.id);
+      } else {
+        ["top","low","average","topQuarter","aboveAvg","beatFpl","mostBench","benchTotal","climb","fall"].forEach(function (k) { pt(k, null); });
+      }
+      pt("potw", H && H.potw ? H.potw.pts : null, H && H.potw ? H.potw.name : "");
+      pt("bestCap", q && q.bestCaptain ? q.bestCaptain.pts * 2 : null, q && q.bestCaptain ? q.bestCaptain.name : "");
+      pt("worstCap", q && q.worstCaptain ? q.worstCaptain.pts * 2 : null, q && q.worstCaptain ? q.worstCaptain.name : "");
+      pt("bestDiff", q && q.differentials && q.differentials[0] ? q.differentials[0].pts : null,
+         q && q.differentials && q.differentials[0] ? q.differentials[0].name + " \u00b7 " + q.differentials[0].ownedPct + "%" : "");
+    });
+    _gws = { key: key, val: { gws: gws, series: out } };
+    return _gws.val;
+  };
+
   C.gwStatus = function (ds, now) {
     if (!ds || !ds.bootstrap || !ds.bootstrap.events) return null;
     if (!now && ds._gws) return ds._gws;

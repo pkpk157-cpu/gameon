@@ -1538,6 +1538,22 @@ table.t.cmptable.seasons td.num.win .sp { color:var(--good); }
   padding:4px 10px; border-radius:999px; border:1px solid var(--line);
   background:transparent; }
 .fchart .lg.on { color:var(--ink); border-color:var(--line-strong); background:var(--glass-hi); }
+/* one tile across the season: a tile that opens it shows a hand, the live
+   week's bar is hatched while its figure moves, the week the tab is on is
+   marked under its label, and the list beneath is the same numbers in words */
+.hcard.trend { cursor:pointer; }
+.trchart .base { stroke:var(--line-strong); stroke-width:1; vector-effect:non-scaling-stroke; }
+.trchart .barP.live { fill:url(#trhatch); stroke:var(--chart-a); stroke-width:1; vector-effect:non-scaling-stroke; }
+.trchart .barP.on { stroke:var(--ink); stroke-width:1.4; vector-effect:non-scaling-stroke; }
+.trchart .cur { fill:var(--ink); }
+.trlist { margin-top:10px; border-top:1px solid var(--line); }
+.trrow { display:flex; align-items:center; gap:10px; padding:8px 2px; border-bottom:1px solid var(--line); font-size:13px; }
+.trrow.on { background:var(--accent-tint); border-radius:8px; padding-left:8px; padding-right:8px; }
+.trgw { flex:none; width:64px; font-weight:800; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+.trgw .pill { margin-left:4px; }
+.trwho { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-soft); }
+.trwho[data-entry] { color:var(--ink); font-weight:700; cursor:pointer; }
+.trv { flex:none; font-weight:800; font-variant-numeric:tabular-nums; }
 .fchart .lg i { width:10px; height:10px; border-radius:2px; background:var(--ink-faint); flex:none; }
 .fchart .lg.on i.bar { background:var(--chart-a); }
 .fchart .lg.on i.dot { background:var(--chart-b); border-radius:50%; }
