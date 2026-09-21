@@ -145,7 +145,24 @@ async function h2hAll(id) {
   return { league: { name: name }, results: all };
 }
 
-(async () => {
+// Which read a gameweek gets, decided in one place so it can be tested:
+//   reuse — settled, and read after it settled: everything from the last run
+//   live  — squads frozen, so only the points are read
+//   full  — every squad read again: the first time, or the subs are in, or settled
+// FPL applies its automatic substitutions once every match's bonus is confirmed
+// — this season the morning after the last whistle, hours before it flags the
+// gameweek finished and checked. Squads are re-read at that first moment
+// (level 1) and once more when FPL signs the week off (level 2), so the subs
+// show early and the final word is still FPL's.
+function squadPlan(o) {
+  if (!o.cached) return "full";
+  if (o.settled) return o.prevFinal >= 2 ? "reuse" : "full";
+  if (o.allFinished && !o.prevFinal) return "full";
+  return "live";
+}
+module.exports = { squadPlan };
+
+if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
   const bs = await getJSON("/bootstrap-static/");
   const events = (bs.events || []).map((e) => ({
@@ -394,9 +411,13 @@ async function h2hAll(id) {
       });
     });
     const bonus = {};
+    // Every match finished, in FPL's sense: bonus in, and with it the
+    // automatic substitutions. Settled implies it without asking.
+    let allFinished = !!settled;
     if (!settled) {
       try {
         const fixtures = await getJSON("/fixtures/?event=" + gw);
+        allFinished = (fixtures || []).length > 0 && fixtures.every((f) => f.finished);
         let inPlay = 0;
         (fixtures || []).forEach((f) => {
           // Provisional bonus holds from kick-off until FPL marks the fixture
@@ -415,7 +436,7 @@ async function h2hAll(id) {
                                 Object.keys(bonus).length + " player(s)");
       } catch (e) { console.log("  GW " + gw + " fixtures failed, no provisional bonus: " + e.message); }
     }
-    return { mins, pts, bonus, goals, cs, assists, expl };
+    return { mins, pts, bonus, goals, cs, assists, expl, allFinished };
   }
 
   // Every run checks the formula the live view uses against FPL's own score for
@@ -667,47 +688,51 @@ async function h2hAll(id) {
     for (const gw of want) {
       const ev = events.find((e) => e.id === gw);
       const settled = !!(ev && ev.finished && ev.data_checked);
-      const cached = prevPicks[gw] && prevLive[gw] &&
-        Object.keys(prevPicks[gw]).length >= Math.floor(managers.length * 0.9);
+      const cached = !!(prevPicks[gw] && prevLive[gw] &&
+        Object.keys(prevPicks[gw]).length >= Math.floor(managers.length * 0.9));
+      // A gameweek in progress has frozen squads: nothing about a team can
+      // change between the deadline and the final whistle. So its points are
+      // read first, and with them whether every match's bonus is in — the
+      // moment FPL applies the automatic substitutions, which is when the
+      // squads are worth reading again.
+      let fresh = null, allFinished = false;
+      if (!settled && cached) {
+        try { fresh = await liveFor(gw, false); allFinished = !!fresh.allFinished; }
+        catch (e) { console.log("GW " + gw + " — live refresh failed, falling back to a full read: " + e.message); }
+      }
+      const plan = squadPlan({ cached, settled, prevFinal: prevFinal[gw] || 0, allFinished });
       // Squads are frozen at the deadline, so a settled gameweek can be reused
-      // — but only once it has been read AFTER it settled. FPL applies
-      // automatic substitutions when the gameweek finalises, and anything
-      // cached while it was still live holds the pre-substitution eleven.
-      if (settled && cached && prevFinal[gw]) {
+      // — but only once it has been read AFTER it settled. Anything read
+      // earlier may hold the pre-substitution eleven.
+      if (plan === "reuse") {
         picks[gw] = prevPicks[gw];
         livePoints[gw] = prevLive[gw];
         if (prevBonus[gw]) liveBonus[gw] = prevBonus[gw];
         if (prevStats[gw]) liveStats[gw] = prevStats[gw];
         if (prevBreak[gw]) breakdown[gw] = prevBreak[gw];
-        picksFinal[gw] = 1;
+        picksFinal[gw] = prevFinal[gw];
         console.log("GW " + gw + " — reused " + Object.keys(picks[gw]).length + " settled squads");
         continue;
       }
-      if (settled && cached) console.log("GW " + gw + " — settled: re-reading squads for auto-subs");
-
-      // A gameweek in progress has frozen squads: nothing about a team can
-      // change between the deadline and the final whistle. So refresh only what
-      // moves — the players' points — and leave 245 squad requests unmade. That
-      // is what makes a live refresh cheap enough to run often.
-      if (!settled && cached) {
-        try {
-          const fresh = await liveFor(gw, false);
-          picks[gw] = prevPicks[gw];
-          livePoints[gw] = fresh.pts;
-          if (Object.keys(fresh.bonus).length) liveBonus[gw] = fresh.bonus;
-          keepStats(gw, fresh);
-          breakdown[gw] = fresh.expl;
-          console.log("GW " + gw + " — live refresh only, " + Object.keys(picks[gw]).length +
-                      " squads reused (no squad requests)");
-          audit(gw, picks[gw], fresh.pts, fresh.bonus);
-          continue;
-        } catch (e) {
-          console.log("GW " + gw + " — live refresh failed, falling back to a full read: " + e.message);
-        }
+      // Only the points move: 245 squad requests left unmade, which is what
+      // makes a live refresh cheap enough to run often.
+      if (plan === "live" && fresh) {
+        picks[gw] = prevPicks[gw];
+        livePoints[gw] = fresh.pts;
+        if (Object.keys(fresh.bonus).length) liveBonus[gw] = fresh.bonus;
+        keepStats(gw, fresh);
+        breakdown[gw] = fresh.expl;
+        if (prevFinal[gw]) picksFinal[gw] = prevFinal[gw];
+        console.log("GW " + gw + " — live refresh only, " + Object.keys(picks[gw]).length +
+                    " squads reused (no squad requests)");
+        audit(gw, picks[gw], fresh.pts, fresh.bonus);
+        continue;
       }
+      if (settled && cached) console.log("GW " + gw + " — settled: re-reading squads for FPL's final word");
+      else if (allFinished && !prevFinal[gw]) console.log("GW " + gw + " — every match's bonus is in: re-reading squads for auto-subs");
       console.log("GW " + gw + " — fetching squads…");
       try {
-        const stats = await liveFor(gw, settled);
+        const stats = fresh || await liveFor(gw, settled);
         const { mins, pts, bonus } = stats;
         const got = {};
         await pool(managers, async (m) => {
@@ -727,10 +752,11 @@ async function h2hAll(id) {
           if (Object.keys(bonus).length) liveBonus[gw] = bonus;
           keepStats(gw, stats);
           breakdown[gw] = stats.expl;
-          if (settled) picksFinal[gw] = 1;
+          if (settled) picksFinal[gw] = 2;
+          else if (stats.allFinished) picksFinal[gw] = 1;
         }
         console.log("  GW " + gw + " — " + Object.keys(got).length + " squads" +
-                    (settled ? " (settled, auto-subs included)" : ""));
+                    (settled ? " (settled, auto-subs included)" : (stats.allFinished ? " (auto-subs in)" : "")));
         audit(gw, got, pts, bonus);
       } catch (e) { console.log("  GW " + gw + " squads failed (non-fatal): " + e.message); }
     }

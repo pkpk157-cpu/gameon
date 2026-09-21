@@ -205,7 +205,7 @@ const chk = (n, ok, d) => { if (!ok) { fails++; console.log("   FAIL " + n + (d 
         info.heads.length === 4 && /step by step/.test(info.heads[0]) && /moves when/.test(info.heads[1]) &&
         /badge/.test(info.heads[2]) && /times/.test(info.heads[3]), info.heads.join(" | "));
     const NEEDED = ["Deadline passed", "First match kicked off", "Every match at full time",
-                    "Bonus confirmed", "Gameweek finalised by FPL", "Settled squads stored here"];
+                    "Bonus confirmed", "Auto subs stored here", "Gameweek finalised by FPL"];
     chk("every one of the six steps is explained",
         NEEDED.every((k) => info.terms.includes(k)),
         NEEDED.filter((k) => !info.terms.includes(k)).join(" | ") || "all present");

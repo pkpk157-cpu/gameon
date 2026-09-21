@@ -1729,12 +1729,17 @@
       .slice().reverse();
     if (!rows.length) return '<div class="callout">No gameweeks have been played yet.</div>';
     var fx = ds.gwFixtures || {}, club = ds.elements[el][2];
+    // His side's score first, and the pill coloured by how his side did —
+    // green for a win, red for a loss, plain for a draw — as FPL's own page
+    // colours it. A match still in play is not a result and stays plain.
     var scoreOf = function (gw, opp, home) {
       var f = (fx[gw] || []).filter(function (x) {
         return (x[0] === club && x[1] === opp) || (x[1] === club && x[0] === opp);
       })[0];
-      if (!f || f[4] == null || f[5] == null) return "";
-      return home ? f[4] + " - " + f[5] : f[5] + " - " + f[4];
+      if (!f || f[4] == null || f[5] == null) return { text: "", cls: "" };
+      var us = home ? f[4] : f[5], them = home ? f[5] : f[4];
+      var over = f[3] || f[8];
+      return { text: us + " - " + them, cls: !over ? "" : us > them ? " win" : us < them ? " loss" : " draw" };
     };
     return '<table class="t pptbl"><thead><tr>' +
       '<th class="gw">GW</th><th>Opponent</th><th class="sc">Result</th>' +
@@ -1744,12 +1749,12 @@
         var opp = r.blank ? '<span class="bdblank">no fixture</span>'
           : '<span class="nwrap">' + crest(f.opp) + esc(f.opp) +
             '<i class="bdha">' + (f.home ? "H" : "A") + '</i></span>';
-        var sc = r.blank ? "" : scoreOf(r.gw, f.opp, f.home);
+        var sc = r.blank ? { text: "", cls: "" } : scoreOf(r.gw, f.opp, f.home);
         var pts = r.pts == null ? '<span class="bdblank">–</span>'
           : '<b>' + num(r.pts) + '</b>' + (r.prov ? '<i class="bdprov" title="includes provisional bonus">*</i>' : '');
         return '<tr' + (r.blank ? '' : ' data-ppgw="' + r.gw + '" role="button" tabindex="0"') + '>' +
           '<td class="gw">' + r.gw + '</td><td class="name">' + opp + '</td>' +
-          '<td class="sc"><span class="ppsc">' + esc(sc) + '</span></td>' +
+          '<td class="sc"><span class="ppsc' + sc.cls + '">' + esc(sc.text) + '</span></td>' +
           '<td class="pt">' + pts + '</td>' +
           '<td class="more">' + (r.blank ? '' : '<i class="ppmore" aria-hidden="true">+</i>') + '</td></tr>';
       }).join("") + '</tbody></table>';
@@ -1798,8 +1803,8 @@
     ko:     "Points and ranks move every ten minutes or so. Bonus is provisional; auto subs not yet.",
     ft:     "Every player\u2019s points are in apart from bonus. Nothing is settled yet.",
     bonus:  "FPL\u2019s official bonus replaces the provisional one, usually the next morning.",
-    final:  "FPL applies auto subs and closes the week, usually early the next afternoon.",
-    squads: "We re-read every squad with the subs in. LMS, months and groups settle."
+    squads: "FPL has made its auto subs. We re-read every squad, so the eleven shown is the eleven that played.",
+    final:  "FPL signs the week off, usually early the next afternoon. LMS, months and groups settle."
   };
   function stepRow(st, on, when) {
     var line = "";
@@ -1908,17 +1913,18 @@
         "no elimination, no month, no group result, no XP."],
       ["Bonus confirmed", "FPL awards the official bonus on every match, in practice the morning after the last match. " +
         "It replaces the provisional bonus and the * goes. Almost always the same numbers, but only now are they FPL\u2019s."],
-      ["Gameweek finalised by FPL", "FPL applies automatic substitutions, settles every squad\u2019s points and updates overall ranks. " +
-        "This season that has landed early in the afternoon after the last match; the Expected time above is worked from the gameweeks watched so far."],
-      ["Settled squads stored here", "Within ten minutes of FPL finalising, this app re-reads every squad, so the eleven shown is the eleven that played, " +
-        "substitutes in. Only now do the competitions that need a closed gameweek settle: the week\u2019s LMS elimination (its tie-breakers " +
-        "count the playing XI), a month once its last gameweek is closed, UCL group results, and the pyramid at the end of its season. " +
-        "XP moves from on course to settled only when a competition finishes."]
+      ["Auto subs stored here", "With the bonus in, FPL makes its automatic substitutions. Within ten minutes this app re-reads every squad, " +
+        "so the eleven shown is the eleven that played, substitutes in, and the pitch and the points agree with FPL\u2019s."],
+      ["Gameweek finalised by FPL", "FPL checks the week and signs it off: points final, overall ranks updated. This season that has landed " +
+        "early in the afternoon after the last match; the Expected time above is worked from the gameweeks watched so far. Only now do the " +
+        "competitions that need a closed gameweek settle: the week\u2019s LMS elimination (its tie-breakers count the playing XI), a month once " +
+        "its last gameweek is closed, UCL group results, and the pyramid at the end of its season. XP moves from on course to settled only " +
+        "when a competition finishes."]
     ]);
     h += list("Who moves when", [
       ["Classic", "Moves live through the gameweek, provisional bonus included. Final once FPL finalises."],
       ["Manager of the Month", "The table moves live. A month is won only when its last gameweek is finalised."],
-      ["Last Manager Standing", "Nothing moves during the week. The elimination is decided when the gameweek is finalised and the squads stored."],
+      ["Last Manager Standing", "Nothing moves during the week. The elimination is decided when FPL finalises the gameweek."],
       ["Pyramid", "Mini-season totals move live. Promotion and relegation are decided when the season\u2019s last gameweek is finalised."],
       ["UCL", "Group results count finalised gameweeks only; a gameweek in play shows nothing in the group table until then."]
     ]);

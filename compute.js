@@ -3200,8 +3200,8 @@
     { k: "ko",     t: "First match kicked off" },
     { k: "ft",     t: "Every match at full time" },
     { k: "bonus",  t: "Bonus confirmed on every match" },
-    { k: "final",  t: "Gameweek finalised by FPL" },
-    { k: "squads", t: "Settled squads stored here" }
+    { k: "squads", t: "Auto subs stored here" },
+    { k: "final",  t: "Gameweek finalised by FPL" }
   ];
 
   C.gwStatus = function (ds, now) {
