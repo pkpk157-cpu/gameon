@@ -143,6 +143,22 @@
     });
     return out;
   };
+  // Gameweeks whose points stand: FPL has checked them, or every match's bonus
+  // is in and the squads were re-read with the substitutions. FPL's own H2H
+  // tables count a week from that moment, hours before it is checked, so a
+  // result marked here is one FPL is already showing. A check can still move
+  // a score, which is why what depends on a week being closed for good — a
+  // month won, a group complete, an elimination, a badge — waits for the check.
+  C.scoredGws = function (ds) {
+    var have = {};
+    C.finishedGws(ds).forEach(function (g) { have[g] = 1; });
+    var fx = (ds && ds.gwFixtures) || {}, fin = (ds && ds.picksFinal) || {};
+    Object.keys(fx).forEach(function (g) {
+      var list = fx[g] || [];
+      if (list.length && fin[g] && list.every(function (f) { return f[3]; })) have[g] = 1;
+    });
+    return Object.keys(have).map(Number).sort(function (a, b) { return a - b; });
+  };
   // The in-progress gameweek (current but not yet finalised), or null.
   C.liveGwId = function (ds) {
     if (!ds || !ds.bootstrap) return null;
@@ -745,7 +761,10 @@
     var mm = managerMap(ds);
     var h = cfg().h2h;
     var finished = {}; C.finishedGws(ds).forEach(function (g) { finished[g] = true; });
-    var groupGws = h.groupStageGws.filter(function (g) { return finished[g]; });
+    // A week counts in the tables once its points stand; the stage is complete
+    // only once FPL has checked every week of it.
+    var scored = {}; C.scoredGws(ds).forEach(function (g) { scored[g] = true; });
+    var groupGws = h.groupStageGws.filter(function (g) { return scored[g]; });
 
     var leagueIds = cfg().h2hGroupLeagueIds || [];
     var haveFetched = leagueIds.length && leagueIds.some(function (id) {
@@ -2587,7 +2606,10 @@
     // While the gameweek is being played the scores are live: shown, but not
     // a verdict. Marking a mid-gameweek leader as the winner — or a 0-0 at
     // the deadline as a draw — would state a result that does not exist yet.
-    var live = scored && C.liveGwId(ds) === +f.gw;
+    // Once every match's bonus is in and the subs are stored, the points
+    // stand and the result is called, as FPL calls it, before the week is
+    // checked.
+    var live = scored && C.liveGwId(ds) === +f.gw && C.scoredGws(ds).indexOf(+f.gw) === -1;
     return {
       gw: f.gw, group: f.group, groupIndex: f.groupIndex,
       a: A, b: B,

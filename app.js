@@ -1927,7 +1927,7 @@
       ["Manager of the Month", "The table moves live. A month is won only when its last gameweek is finalised."],
       ["Last Manager Standing", "Nothing moves during the week. The elimination is decided when FPL finalises the gameweek."],
       ["Pyramid", "Mini-season totals move live. Promotion and relegation are decided when the season\u2019s last gameweek is finalised."],
-      ["UCL", "Group results count finalised gameweeks only; a gameweek in play shows nothing in the group table until then."]
+      ["UCL", "A gameweek counts in the group tables once its bonus is in and the subs are stored, as FPL counts it; while it is in play the matches show live scores and no result. The stage is complete only once FPL has checked every week."]
     ]);
     h += list("A match day's badge", [
       ["Confirmed", "Every match that day is done and its bonus is official."],
