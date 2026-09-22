@@ -1,10 +1,10 @@
 /* FPL Game On V12 — service worker (network-first for app + data, cache fallback) */
 // Bumped so devices that already stored a failed response under the old name
 // drop it on activate rather than serving that miss for the rest of the season.
-const CACHE = "gameon-v12-7";
+const CACHE = "gameon-v12-8";
 const ASSETS = [
   "./", "./index.html", "./styles.css",
-  "./config.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./app.js",
+  "./config.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./theo.js", "./app.js",
   "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "./favicon-64.png", "./logo-splash.webp",
   "./logo-tile.webp", "./logo-tile-inv.webp", "./pl-lion.webp"

@@ -2440,3 +2440,55 @@ table.t.voltbl td.num { font-variant-numeric:tabular-nums; }
 table.t.voltbl td.name { min-width:0; }
 table.t.voltbl td.name .who, table.t.voltbl td.name .mgr {
   display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* ---- Theo, the lion in the corner --------------------------------------
+   Above the tab bar, out of the way of anything that opens over the page,
+   and gone while the reader scrolls down. His parts move on their own
+   origins; the bubble is a status line that clears itself. */
+.theo { position:fixed; left:10px; bottom:calc(var(--nav-h, 66px) + 8px + env(safe-area-inset-bottom, 0px));
+  z-index:60; width:64px; height:64px; padding:0; border:0; background:transparent; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; transition:transform .35s ease, opacity .35s ease;
+  filter:drop-shadow(0 4px 8px rgba(20,0,40,.28)); }
+/* out of the way is small and faded, in place: nothing of him ever sits off
+   the edge of the screen, which is a thing the page audits for */
+.theo.away { transform:scale(.4); transform-origin:0 100%; opacity:0; pointer-events:none; }
+html.ovl .theo, html.ovl .theobub { display:none; }
+.theo .tlion { display:block; width:100%; height:100%; overflow:visible; }
+.theo .tlion .ttail, .theo .tlion .thead, .theo .tlion .teyes, .theo .tlion .tear, .theo .tlion .troar {
+  transform-box:fill-box; transform-origin:center; }
+.theo .tlion .ttail { transform-origin:0% 100%; }
+.theo .tlion .thead { transform-origin:50% 62%; }
+.theo .tlion .tearL { transform-origin:50% 100%; } .theo .tlion .tearR { transform-origin:50% 100%; }
+.theo .tlion .troar { transform:scaleY(0); transform-origin:50% 0; }
+.theo .tlion .tsmile { transition:opacity .15s; }
+@keyframes theo-wag { 0%,100% { transform:rotate(0); } 25% { transform:rotate(-22deg); } 75% { transform:rotate(18deg); } }
+@keyframes theo-shake { 0%,100% { transform:rotate(0); } 20% { transform:rotate(-9deg); } 40% { transform:rotate(8deg); } 60% { transform:rotate(-6deg); } 80% { transform:rotate(5deg); } }
+@keyframes theo-jump { 0%,100% { transform:translateY(0) scale(1,1); } 30% { transform:translateY(-16px) scale(.96,1.06); } 60% { transform:translateY(0) scale(1.06,.94); } 80% { transform:translateY(-4px) scale(1,1); } }
+@keyframes theo-blink { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(.08); } }
+@keyframes theo-twitch { 0%,100% { transform:rotate(0); } 30% { transform:rotate(-16deg); } 60% { transform:rotate(8deg); } }
+@keyframes theo-roar { 0% { transform:scaleY(0); } 30%,80% { transform:scaleY(1); } 100% { transform:scaleY(0); } }
+@keyframes theo-roarhead { 0%,100% { transform:scale(1); } 40% { transform:scale(1.08) rotate(-3deg); } }
+@keyframes theo-yawn { 0% { transform:scaleY(0); } 40%,70% { transform:scaleY(.8); } 100% { transform:scaleY(0); } }
+@keyframes theo-yawneyes { 0%,100% { transform:scaleY(1); } 40%,70% { transform:scaleY(.12); } }
+.theo.wag .ttail { animation:theo-wag .5s ease-in-out 2; }
+.theo.shake .thead { animation:theo-shake .8s ease-in-out; }
+.theo.jump .tlion { animation:theo-jump .7s ease-out; }
+.theo.blink .teyes { animation:theo-blink .4s ease-in-out; }
+.theo.twitch .tearL { animation:theo-twitch .7s ease-in-out; }
+.theo.twitch .tearR { animation:theo-twitch .7s ease-in-out .1s; }
+.theo.roar .troar { animation:theo-roar .9s ease-in-out; }
+.theo.roar .tsmile { opacity:0; }
+.theo.roar .thead { animation:theo-roarhead .9s ease-in-out; }
+.theo.yawn .troar { animation:theo-yawn 1.3s ease-in-out; }
+.theo.yawn .tsmile { opacity:0; }
+.theo.yawn .teyes { animation:theo-yawneyes 1.3s ease-in-out; }
+.theobub { position:fixed; left:14px; bottom:calc(var(--nav-h, 66px) + 74px + env(safe-area-inset-bottom, 0px));
+  z-index:60; max-width:min(270px, calc(100vw - 28px)); padding:9px 12px; border-radius:14px 14px 14px 4px;
+  font-size:13px; font-weight:600; line-height:1.4; color:var(--ink);
+  background:var(--glass-bar); border:1px solid var(--glass-border);
+  box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+  -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+  opacity:0; transform:translateY(6px); pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
+.theobub.show { opacity:1; transform:none; pointer-events:auto; cursor:pointer; }
+@media (prefers-reduced-motion: reduce) {
+  .theo, .theo *, .theobub { animation:none !important; transition:none !important; }
+}

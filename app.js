@@ -2754,6 +2754,8 @@
     var host = $('.view[data-view="' + state.view + '"]');
     if (!host) return;
     var ds = S.dataset();
+    // the lion in the corner learns the page and the data; he never touches either
+    if (window.GO_THEO) window.GO_THEO.sync({ ds: ds, me: state.me, view: state.view });
 
     if (state.view === "settings") return renderSettings(host);
     if (state.view === "rules") return renderRules(host);
@@ -6286,6 +6288,17 @@
     h += '<div class="btnrow" style="margin-top:10px"><button class="btn" id="btnCount">' + countLabel() + '</button></div>';
     h += '</div></div>';
 
+    // Theo. He is decoration with opinions, and not everyone wants opinions.
+    if (window.GO_THEO) {
+      var theoOn = window.GO_THEO.on();
+      h += '<div class="card"><div class="hd"><h3>Theo</h3></div><div class="bd">';
+      h += '<div class="note" id="theoNote">' + (theoOn
+        ? 'The lion in the corner. He says hello when the app opens and has something to say about your week when you tap him.'
+        : 'Theo is off. The corner is yours.') + '</div>';
+      h += '<div class="btnrow" style="margin-top:10px"><button class="btn" id="btnTheo">' + (theoOn ? 'Turn Theo off' : 'Bring Theo back') + '</button></div>';
+      h += '</div></div>';
+    }
+
     // Admin overrides
     h += '<div class="section-title"><h2>Admin — custom rules</h2><div class="rule"></div></div>';
     h += '<div class="card"><div class="bd">';
@@ -6316,6 +6329,17 @@
   function countLabel() { return countingOff() ? "Count my visits again" : "Stop counting my visits"; }
 
   function wireSettings(host) {
+    var bt = $("#btnTheo", host);
+    if (bt) bt.addEventListener("click", function () {
+      var on = !window.GO_THEO.on();
+      window.GO_THEO.setOn(on);
+      if (on) window.GO_THEO.sync({ ds: S.dataset(), me: state.me, view: state.view });
+      bt.textContent = on ? 'Turn Theo off' : 'Bring Theo back';
+      $("#theoNote", host).textContent = on
+        ? 'The lion in the corner. He says hello when the app opens and has something to say about your week when you tap him.'
+        : 'Theo is off. The corner is yours.';
+      toast(on ? "Theo\u2019s back" : "Theo has gone for a nap");
+    });
     $("#btnCount", host).addEventListener("click", function () {
       try { if (countingOff()) localStorage.removeItem(SKIP_KEY); else localStorage.setItem(SKIP_KEY, "t"); } catch (e) {}
       $("#countNote", host).textContent = countNote();
