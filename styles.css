@@ -2489,6 +2489,15 @@ html.ovl .theo, html.ovl .theobub { display:none; }
   -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
   opacity:0; transform:translateY(6px); pointer-events:none; transition:opacity .25s ease, transform .25s ease; }
 .theobub.show { opacity:1; transform:none; pointer-events:auto; cursor:pointer; }
+/* turned: a darker mane, brows down, a snarl with fangs, and a red edge to the bubble */
+.theo .tlion .tbrowmad, .theo .tlion .tsnarl { display:none; }
+.theo.savage .tlion .tbrow, .theo.savage .tlion .tsmile, .theo.savage .tlion .troar { display:none; }
+.theo.savage .tlion .tbrowmad, .theo.savage .tlion .tsnarl { display:block; }
+.theo.savage .tlion .tmane1 { fill:#5c1e06; }
+.theo.savage .tlion .tmane2 { fill:#9a3d0f; }
+.theo.savage .tlion .teyes ellipse { fill:#7a0f0f; }
+.theo.savage { filter:drop-shadow(0 4px 10px rgba(120,0,0,.45)); }
+.theobub.savage { border-color:color-mix(in srgb, var(--bad) 55%, transparent); }
 @media (prefers-reduced-motion: reduce) {
   .theo, .theo *, .theobub { animation:none !important; transition:none !important; }
 }

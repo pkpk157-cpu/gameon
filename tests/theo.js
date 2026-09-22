@@ -67,6 +67,27 @@ const holes = /undefined|NaN|null|\{|\}|—/;
     }
     chk(acts.size >= 3, "taps move different parts of him", [...acts].join(","));
     chk(seen.size >= 4 && [...seen].every((t) => t && !holes.test(t)), "taps bring different lines, all whole", seen.size + " distinct");
+    // ten taps in a session and he turns: the face, the tongue, and it holds until the app opens again
+    const before = await p.evaluate(() => ({ taps: window.GO_THEO.taps(), savage: window.GO_THEO.savage() }));
+    let turnLine = "";
+    while ((await p.evaluate(() => window.GO_THEO.taps())) < 10) { await p.click("#theo"); await p.waitForTimeout(150); }
+    turnLine = await p.evaluate(() => document.querySelector("#theobub").textContent);
+    const turned = await p.evaluate(() => { const t = document.querySelector("#theo"); const snarl = t.querySelector(".tsnarl"), smile = t.querySelector(".tsmile"), brow = t.querySelector(".tbrowmad");
+      return { cls: t.classList.contains("savage"), snarl: getComputedStyle(snarl).display !== "none", smile: getComputedStyle(smile).display === "none", brow: getComputedStyle(brow).display !== "none", savage: window.GO_THEO.savage() }; });
+    chk(!before.savage && turned.cls && turned.savage && turned.snarl && turned.smile && turned.brow, "the tenth tap turns him: fangs out, brows down, smile gone", JSON.stringify(turned));
+    chk(/ten/i.test(turnLine), "and he says so", turnLine);
+    const savageLines = new Set();
+    for (let i = 0; i < 6; i++) { await p.click("#theo"); await p.waitForTimeout(150); savageLines.add(await p.evaluate(() => document.querySelector("#theobub").textContent)); await p.waitForTimeout(300); }
+    const savageKinds = await p.evaluate(() => { const T = window.GO_THEO; const s = new Set(); for (let i = 0; i < 100; i++) { const j = T.pick(true); if (j >= 0) s.add(T.lines()[j]); } return [...s]; });
+    chk(savageKinds.length === 1 && savageKinds[0] === "savage" && savageLines.size >= 3 && [...savageLines].every((t) => t && !holes.test(t)), "turned, every tap is a savage line, and they vary", savageKinds.join(",") + " · " + savageLines.size + " distinct");
+    const allSavage = await p.evaluate(() => { const T = window.GO_THEO; return T.lines().map((k, i) => ({ k, fits: T.fits(i), text: T.text(i) })).filter((l) => l.k === "savage"); });
+    chk(allSavage.length >= 30 && allSavage.filter((l) => l.fits && (!l.text || holes.test(l.text))).length === 0, "thirty savage lines or more, every fitting one whole", allSavage.length);
+    const greetKinds2 = await p.evaluate(() => { const T = window.GO_THEO; const s = new Set(); for (let i = 0; i < 100; i++) { const j = T.pick(false); if (j >= 0) s.add(T.lines()[j]); } return [...s]; });
+    chk(greetKinds2.indexOf("savage") === -1, "a greeting is never savage, even from a turned lion", greetKinds2.join(","));
+    await p.reload({ waitUntil: "domcontentloaded" }); await p.waitForTimeout(2500);
+    const calm = await p.evaluate(() => ({ savage: window.GO_THEO.savage(), taps: window.GO_THEO.taps(), cls: document.querySelector("#theo").classList.contains("savage") }));
+    chk(!calm.savage && calm.taps === 0 && !calm.cls, "opening the app again calms him", JSON.stringify(calm));
+    await p.evaluate(() => { location.hash = "#classic"; }); await p.waitForTimeout(600);
     // scrolling the table sends him away, stopping brings him back
     await p.evaluate(() => { const f = document.querySelector(".view.active .freeze"); f.scrollTop = 0; f.dispatchEvent(new Event("scroll", { bubbles: true })); f.scrollTop = 400; f.dispatchEvent(new Event("scroll", { bubbles: true })); });
     await p.waitForTimeout(150);

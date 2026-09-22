@@ -17,6 +17,9 @@
   var KEY = "go12.theo";
   var root = null, lion = null, bub = null, ctx = { me: null };
   var greeted = false, last = -1, lastAct = "", bubT = null, awayT = null, idleT = null, scrollY = {};
+  // Ten taps in one session and he turns: the face changes and so does the
+  // tongue. He stays turned until the app is opened again.
+  var taps = 0, savage = false, SAVAGE_AT = 10;
 
   function isOff() { try { return localStorage.getItem(KEY) === "off"; } catch (e) { return false; } }
   function setOff(off) { try { if (off) localStorage.setItem(KEY, "off"); else localStorage.removeItem(KEY); } catch (e) {} }
@@ -324,6 +327,43 @@
     { k: "mood", w: function (c) { return me(c) && c.topTen && c.climbing; }, t: function () { return "Top ten and still climbing. Leave the settings alone, you\u2019re doing something right."; } },
     { k: "mood", w: function (c) { return me(c) && c.bottomTen && c.sliding; }, t: function () { return "Bottom ten and sliding. I\u2019m not angry. I\u2019m a lion; I\u2019m disappointed."; } },
     { k: "mood", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg - 25; }, t: function (c) { return num(c.pts) + " against an average of " + num(c.avg) + ". Was the wildcard active? Was anything?"; } },
+    // turned: ten taps, and the gloves are off. Keyed to the week where it can be.
+    { k: "savage", turn: true, w: function () { return true; }, t: function () { return "That\u2019s ten. You\u2019ve woken something."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Why are you even playing?"; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Better luck next season. This one\u2019s gone."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "You\u2019ll always walk alone. The table agrees."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "You should be sacked. I\u2019d do it myself, but I\u2019m a lion."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "You should be sacked. The vote was unanimous. I was the vote."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Keep tapping. It\u2019s the only thing you\u2019ve done right today."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "I\u2019ve seen Bench Boosts with more ambition than this squad."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "The deadline isn\u2019t a suggestion."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "I\u2019d wag my tail, but you haven\u2019t earned a twitch."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Roar. That was a warning."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Next season, try a different hobby. Bingo has fewer hits."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "The armband is not a lucky charm. Stop treating it like one."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Nice rank. Shame about the personality."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Your wildcard didn\u2019t fix it. Nothing will."; } },
+    { k: "savage", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg; }, t: function () { return "Even the gameweek average outscored you. The average!"; } },
+    { k: "savage", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg; }, t: function () { return "The average is a line. You\u2019re the reason it\u2019s that low."; } },
+    { k: "savage", w: function (c) { return me(c) && c.capPts != null && c.capPts <= 4; }, t: function () { return "Your captain choice was a cry for help."; } },
+    { k: "savage", w: function (c) { return me(c) && c.bottomTen; }, t: function (c) { return num(c.n) + " managers and you found the bottom. Talent."; } },
+    { k: "savage", w: function (c) { return me(c) && c.bottomTen; }, t: function () { return "Top ten? That\u2019s the table upside down, right?"; } },
+    { k: "savage", w: function (c) { return me(c) && c.sliding; }, t: function () { return "Sliding three weeks. That\u2019s not form, that\u2019s a policy."; } },
+    { k: "savage", w: function (c) { return me(c) && c.lmsOutGw; }, t: function (c) { return "Out of LMS in GW" + c.lmsOutGw + ". Last Manager Standing; you were the first sitting."; } },
+    { k: "savage", w: function (c) { return me(c) && c.capPts != null && c.bench > c.capPts; }, t: function () { return "Your bench outscored your captain. Let that sink in."; } },
+    { k: "savage", w: function (c) { return me(c) && c.hits > 0; }, t: function (c) { return "Hits: " + num(c.hits) + ". Return: regret."; } },
+    { k: "savage", w: function (c) { return me(c) && c.behind > 50; }, t: function (c) { return num(c.behind) + " behind the leader. He\u2019s not looking back. Nobody is."; } },
+    { k: "savage", w: function (c) { return me(c) && c.spoon; }, t: function () { return "Somewhere a Wooden spoon has your name on it. Oh wait, it\u2019s on your profile."; } },
+    { k: "savage", w: function (c) { return me(c) && c.leading; }, t: function () { return "Top of the league and you\u2019re poking a lion. Enjoy it; it ends."; } },
+    { k: "savage", w: function (c) { return me(c) && c.topTen; }, t: function () { return "Top ten. Everybody\u2019s favourite target. Including mine."; } },
+    { k: "savage", w: function (c) { return me(c) && c.best; }, t: function (c) { return "Your best week was GW" + c.best.gw + ". Everything since has been a slow apology."; } },
+    { k: "savage", w: function (c) { return me(c) && c.overall > 3000000; }, t: function (c) { return num(c.overall) + " in the world. There are people who don\u2019t play ranked higher."; } },
+    { k: "savage", w: function (c) { return me(c) && c.seasonTr >= 10; }, t: function (c) { return pl(c.seasonTr, "transfer") + " and nothing to show for them. The definition of busy."; } },
+    { k: "savage", w: function (c) { return me(c) && c.benched; }, t: function () { return "Bench blunder. Plural, eventually. I\u2019m patient."; } },
+    { k: "savage", w: function (c) { return me(c) && c.asleep; }, t: function () { return "A month without a transfer. Even your squad has given up on you."; } },
+    { k: "savage", w: function (c) { return !me(c); }, t: function () { return "You haven\u2019t even picked a team. Sacked before you were hired."; } },
+    { k: "savage", w: function (c) { return me(c) && c.comp && c.comp.classic && c.comp.classic.state === "out"; }, t: function () { return "Out of the Classic money. The stairs are that way, and you\u2019re not climbing them."; } },
+    { k: "savage", w: function (c) { return me(c) && c.inCount === 0 && c.compCount >= 5; }, t: function () { return "Out of the money in all five. That takes a special kind of consistency."; } },
     // only after a tap
     { k: "poke", w: function () { return true; }, t: function () { return "That tickles."; } },
     { k: "poke", w: function () { return true; }, t: function () { return "Again? Fine. Once more."; } },
@@ -344,10 +384,19 @@
     L.forEach(function (l, i) {
       if (i === last) return;
       if (l.k === "poke" && !poked) return;
+      // turned, he says only savage things; calm, he never does
+      if ((l.k === "savage") !== (savage && poked)) return;
       var ok = false; try { ok = !!l.w(ctx); } catch (e) { ok = false; }
       if (ok) can.push(i);
     });
     if (!can.length) return -1;
+    if (savage && poked) {
+      // the first savage line is the turn itself
+      var turn = can.filter(function (i) { return L[i].turn; });
+      if (taps === SAVAGE_AT && turn.length) return turn[0];
+      var rest = can.filter(function (i) { return !L[i].turn; });
+      return rest[Math.floor(Math.random() * rest.length)];
+    }
     var specific = can.filter(function (i) { return ["pre", "lock", "live", "after", "stand", "comp", "price", "player", "mood"].indexOf(L[i].k) !== -1; });
     var pokes = can.filter(function (i) { return L[i].k === "poke"; });
     var pool = can;
@@ -382,19 +431,23 @@
       '<ellipse cx="23" cy="60.5" rx="6.2" ry="3.4" fill="#e6a63b"/><ellipse cx="41" cy="60.5" rx="6.2" ry="3.4" fill="#e6a63b"/>' +
       '<path d="M20 61.5v1.6M23 61.5v1.6M26 61.5v1.6M38 61.5v1.6M41 61.5v1.6M44 61.5v1.6" stroke="#b5741f" stroke-width="1" stroke-linecap="round"/>' +
       '<g class="thead">' +
-        '<path d="' + mane(32, 33, 27, 21, 14, -Math.PI / 2) + '" fill="#8f4512"/>' +
-        '<path d="' + mane(32, 33, 23.5, 19, 12, -Math.PI / 2 + 0.2) + '" fill="#c26d1f"/>' +
+        '<path class="tmane1" d="' + mane(32, 33, 27, 21, 14, -Math.PI / 2) + '" fill="#8f4512"/>' +
+        '<path class="tmane2" d="' + mane(32, 33, 23.5, 19, 12, -Math.PI / 2 + 0.2) + '" fill="#c26d1f"/>' +
         '<g class="tear tearL"><circle cx="19" cy="20" r="5.2" fill="#e6a63b"/><circle cx="19" cy="20.6" r="2.8" fill="#f3c98f"/></g>' +
         '<g class="tear tearR"><circle cx="45" cy="20" r="5.2" fill="#e6a63b"/><circle cx="45" cy="20.6" r="2.8" fill="#f3c98f"/></g>' +
         '<ellipse cx="32" cy="35" rx="15.5" ry="15" fill="#e8ab3d"/>' +
         '<ellipse cx="32" cy="42" rx="9.8" ry="6.8" fill="#f8e3b8"/>' +
-        '<path d="M22 28.5q3.5-2.5 7 0M35 28.5q3.5-2.5 7 0" fill="none" stroke="#7a3d12" stroke-width="1.6" stroke-linecap="round"/>' +
+        '<path class="tbrow" d="M22 28.5q3.5-2.5 7 0M35 28.5q3.5-2.5 7 0" fill="none" stroke="#7a3d12" stroke-width="1.6" stroke-linecap="round"/>' +
+        '<path class="tbrowmad" d="M21.5 26.5l7.5 3M42.5 26.5l-7.5 3" fill="none" stroke="#3a1a08" stroke-width="2" stroke-linecap="round"/>' +
         '<g class="teyes"><ellipse cx="25.8" cy="33" rx="2.5" ry="3" fill="#2b1a0e"/><ellipse cx="38.2" cy="33" rx="2.5" ry="3" fill="#2b1a0e"/>' +
           '<circle cx="26.7" cy="32" r="1" fill="#fff"/><circle cx="39.1" cy="32" r="1" fill="#fff"/></g>' +
         '<path d="M28.5 39.5h7l-3.5 3.6z" fill="#4a2a12"/>' +
         '<path d="M32 42.6v2.2" stroke="#4a2a12" stroke-width="1.3" stroke-linecap="round"/>' +
         '<path class="tsmile" d="M27.5 45.5q4.5 3.6 9 0" fill="none" stroke="#4a2a12" stroke-width="1.4" stroke-linecap="round"/>' +
         '<path class="troar" d="M27.5 45q4.5 8 9 0z" fill="#4a2a12"/>' +
+        '<g class="tsnarl"><path d="M26 44.5q6 8 12 0z" fill="#3a0d0d"/>' +
+          '<path d="M27.5 45l1.6 3.4 1.6-3.4zM33.3 45l1.6 3.4 1.6-3.4z" fill="#fff"/>' +
+          '<path d="M30.5 50.6l1.5-2.6 1.5 2.6z" fill="#fff"/></g>' +
         '<path d="M29 49.5l3 4 3-4z" fill="#c26d1f"/>' +
         '<g stroke="#c98a3c" stroke-width=".9" stroke-linecap="round"><path d="M14.5 40h7.5M15 43.5l7-1.2M42 40h7.5M42 42.3l7 1.2"/></g>' +
       '</g>' +
@@ -428,6 +481,7 @@
     if (!text) return "";
     last = i;
     bub.textContent = text;
+    bub.classList.toggle("savage", savage);
     bub.classList.add("show");
     clearTimeout(bubT);
     bubT = setTimeout(function () { if (bub) bub.classList.remove("show"); }, poked ? 6000 : 8000);
@@ -435,7 +489,15 @@
   }
   function poke() {
     if (!root) return;
-    act(randomAct());
+    taps++;
+    if (!savage && taps >= SAVAGE_AT) {
+      savage = true;
+      root.classList.add("savage");
+      act("roar");
+      say(pick(true), true);
+      return;
+    }
+    act(savage ? (Math.random() < 0.5 ? "roar" : "shake") : randomAct());
     say(pick(true), true);
   }
 
@@ -503,5 +565,7 @@
   T.fits = function (i) { try { return !!L[i].w(ctx); } catch (e) { return false; } };
   T.context = function () { return ctx; };
   T.pick = function (poked) { return pick(!!poked); };
+  T.taps = function () { return taps; };
+  T.savage = function () { return savage; };
   window.GO_THEO = T;
 })();
