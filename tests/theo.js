@@ -41,13 +41,13 @@ const holes = /undefined|NaN|null|\{|\}|—/;
     chk(at.has && at.left >= 0 && at.left < 30 && at.bottom <= at.navTop, "he sits bottom-left, above the tab bar", JSON.stringify({ left: at.left, bottom: at.bottom, navTop: at.navTop }));
     chk(at.greet.length > 8 && !holes.test(at.greet), "he greets, and the line is whole", at.greet);
     const lines = await p.evaluate(() => { const T = window.GO_THEO, ks = T.lines(); return ks.map((k, i) => ({ k, fits: T.fits(i), text: T.text(i) })); });
-    chk(lines.length >= 150, "a hundred and fifty lines or more", lines.length);
+    chk(lines.length >= 240, "two hundred and forty lines or more", lines.length);
     const bad = lines.filter((l) => l.fits && (!l.text || holes.test(l.text)));
     chk(bad.length === 0, "every line that fits the week renders whole", bad.slice(0, 3).map((l) => l.text).join(" | "));
     const fitting = lines.filter((l) => l.fits).length;
     chk(fitting >= 15, "plenty fit this week", fitting + " of 100 fit");
     const kinds = {}; lines.forEach((l) => { kinds[l.k] = (kinds[l.k] || 0) + 1; });
-    chk(kinds.pre >= 10 && kinds.live >= 20 && kinds.after >= 10 && kinds.poke === 10 && kinds.gen >= 10 && kinds.comp >= 15 && kinds.price >= 8 && kinds.player >= 10 && kinds.mood >= 10,
+    chk(kinds.pre >= 10 && kinds.live >= 20 && kinds.after >= 10 && kinds.poke === 10 && kinds.gen >= 10 && kinds.comp >= 15 && kinds.price >= 8 && kinds.player >= 10 && kinds.mood >= 10 && kinds.chant >= 40 && kinds.savage >= 50,
         "lines cover the deadline, the live week, the week after, standing, the five competitions, prices, players, praise and digs, general and taps", JSON.stringify(kinds));
     // the five competitions each get a word, and it is the profile's own figure
     const comp = await p.evaluate(() => { const T = window.GO_THEO, c = T.context(); const ks = T.lines();
@@ -81,7 +81,7 @@ const holes = /undefined|NaN|null|\{|\}|—/;
     const savageKinds = await p.evaluate(() => { const T = window.GO_THEO; const s = new Set(); for (let i = 0; i < 100; i++) { const j = T.pick(true); if (j >= 0) s.add(T.lines()[j]); } return [...s]; });
     chk(savageKinds.length === 1 && savageKinds[0] === "savage" && savageLines.size >= 3 && [...savageLines].every((t) => t && !holes.test(t)), "turned, every tap is a savage line, and they vary", savageKinds.join(",") + " · " + savageLines.size + " distinct");
     const allSavage = await p.evaluate(() => { const T = window.GO_THEO; return T.lines().map((k, i) => ({ k, fits: T.fits(i), text: T.text(i) })).filter((l) => l.k === "savage"); });
-    chk(allSavage.length >= 30 && allSavage.filter((l) => l.fits && (!l.text || holes.test(l.text))).length === 0, "thirty savage lines or more, every fitting one whole", allSavage.length);
+    chk(allSavage.length >= 50 && allSavage.filter((l) => l.fits && (!l.text || holes.test(l.text))).length === 0, "thirty savage lines or more, every fitting one whole", allSavage.length);
     const greetKinds2 = await p.evaluate(() => { const T = window.GO_THEO; const s = new Set(); for (let i = 0; i < 100; i++) { const j = T.pick(false); if (j >= 0) s.add(T.lines()[j]); } return [...s]; });
     chk(greetKinds2.indexOf("savage") === -1, "a greeting is never savage, even from a turned lion", greetKinds2.join(","));
     await p.reload({ waitUntil: "domcontentloaded" }); await p.waitForTimeout(2500);
