@@ -41,13 +41,19 @@ const holes = /undefined|NaN|null|\{|\}|—/;
     chk(at.has && at.left >= 0 && at.left < 30 && at.bottom <= at.navTop, "he sits bottom-left, above the tab bar", JSON.stringify({ left: at.left, bottom: at.bottom, navTop: at.navTop }));
     chk(at.greet.length > 8 && !holes.test(at.greet), "he greets, and the line is whole", at.greet);
     const lines = await p.evaluate(() => { const T = window.GO_THEO, ks = T.lines(); return ks.map((k, i) => ({ k, fits: T.fits(i), text: T.text(i) })); });
-    chk(lines.length === 100, "a hundred lines", lines.length);
+    chk(lines.length >= 150, "a hundred and fifty lines or more", lines.length);
     const bad = lines.filter((l) => l.fits && (!l.text || holes.test(l.text)));
     chk(bad.length === 0, "every line that fits the week renders whole", bad.slice(0, 3).map((l) => l.text).join(" | "));
     const fitting = lines.filter((l) => l.fits).length;
     chk(fitting >= 15, "plenty fit this week", fitting + " of 100 fit");
     const kinds = {}; lines.forEach((l) => { kinds[l.k] = (kinds[l.k] || 0) + 1; });
-    chk(kinds.pre >= 10 && kinds.live >= 20 && kinds.after >= 10 && kinds.poke === 10 && kinds.gen >= 10, "lines cover the deadline, the live week, the week after, standing, general and taps", JSON.stringify(kinds));
+    chk(kinds.pre >= 10 && kinds.live >= 20 && kinds.after >= 10 && kinds.poke === 10 && kinds.gen >= 10 && kinds.comp >= 15 && kinds.price >= 8 && kinds.player >= 10 && kinds.mood >= 10,
+        "lines cover the deadline, the live week, the week after, standing, the five competitions, prices, players, praise and digs, general and taps", JSON.stringify(kinds));
+    // the five competitions each get a word, and it is the profile's own figure
+    const comp = await p.evaluate(() => { const T = window.GO_THEO, c = T.context(); const ks = T.lines();
+      const said = {}; ks.forEach((k, i) => { if (k === "comp" && T.fits(i)) { const t = T.text(i); ["classic","monthly","lms","pyramid","ucl"].forEach((x) => { if (c.comp[x] && (c.comp[x].pos == null || t.indexOf(String(c.comp[x].pos)) !== -1 || /Last Manager/.test(t))) said[x] = (said[x] || 0) + 1; }); } });
+      return { said, comp: Object.keys(c.comp || {}).length }; });
+    chk(comp.comp === 5 && Object.keys(comp.said).length >= 4, "he has a line for each of the competitions, quoting the profile's own position", JSON.stringify(comp.said));
     // greeting never a poke line
     const greetKinds = await p.evaluate(() => { const T = window.GO_THEO; const s = new Set(); for (let i = 0; i < 200; i++) { const j = T.pick(false); if (j >= 0) s.add(T.lines()[j]); } return [...s]; });
     chk(greetKinds.indexOf("poke") === -1 && greetKinds.indexOf("none") === -1, "a greeting is never a tap line, nor the no-team line when a team is picked", greetKinds.join(","));

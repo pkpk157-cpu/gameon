@@ -27,7 +27,15 @@
   var CHIP = { bboost: "Bench Boost", "3xc": "Triple Captain", freehit: "Free Hit", wildcard: "Wildcard" };
 
   /* ---- what he knows: the week, read through the app's own arithmetic ---- */
+  var _built = { key: null, val: null };
   function build(ds, me) {
+    var key = (ds && ds.updatedAt || "") + "|" + (me || "") + "|" + new Date().getHours();
+    if (_built.key === key && _built.val) return _built.val;
+    var val = build0(ds, me);
+    _built = { key: key, val: val };
+    return val;
+  }
+  function build0(ds, me) {
     var c = { me: null, name: null, hour: new Date().getHours(), day: new Date().getDay(), n: 0 };
     var C = window.GO_COMPUTE;
     if (!ds || !ds.managers || !ds.managers.length || !C) return c;
@@ -79,6 +87,64 @@
         c.lmsAlive = !c.lmsOutGw;
         c.lmsLeft = lms.survivors.length; c.lmsOut = c.n - c.lmsLeft;
       }
+    } catch (e) {}
+    // where you stand in each of the five competitions, as the profile prints it
+    try {
+      var P = C.prizeStatus(ds, me) || [];
+      c.comp = {};
+      P.forEach(function (e) {
+        var k = /^Classic/.test(e.comp) ? "classic" : /^Month/.test(e.comp) ? "monthly" : /^Last/.test(e.comp) ? "lms"
+              : /^Pyramid/.test(e.comp) ? "pyramid" : /^UCL/.test(e.comp) ? "ucl" : null;
+        if (k) c.comp[k] = e;
+      });
+      c.inCount = P.filter(function (e) { return e.state === "in" || e.state === "alive"; }).length;
+      c.compCount = P.length;
+      c.xpCourse = P.reduce(function (t, e) { return t + ((e.state === "in" && !e.settled) ? (e.prize || 0) : 0); }, 0);
+      var pyr = c.comp.pyramid;
+      c.division = pyr && pyr.where ? String(pyr.where).split("\u00b7")[0].trim() : null;
+    } catch (e) {}
+    // last night's price moves, and whether any were yours
+    try {
+      var log = ds.priceLog || [];
+      if (log.length) {
+        var latest = log.reduce(function (m, r) { return r[3] > m ? r[3] : m; }, "");
+        var since = Date.parse(latest) - 6 * 36e5;
+        var night = log.filter(function (r) { return Date.parse(r[3]) >= since; });
+        c.rises = night.filter(function (r) { return r[2] > r[1]; }).length;
+        c.falls = night.filter(function (r) { return r[2] < r[1]; }).length;
+        var mine = {};
+        if (pk && pk.p) pk.p.forEach(function (t) { mine[t[0]] = 1; });
+        var nm = function (el) { var e = ds.elements && ds.elements[el]; return e ? e[0] : null; };
+        var up = night.filter(function (r) { return r[2] > r[1] && mine[r[0]]; })[0];
+        var dn = night.filter(function (r) { return r[2] < r[1] && mine[r[0]]; })[0];
+        if (up && nm(up[0])) c.myRise = { name: nm(up[0]), price: up[2] / 10 };
+        if (dn && nm(dn[0])) c.myFall = { name: nm(dn[0]), price: dn[2] / 10 };
+        var big = night.filter(function (r) { return r[2] > r[1]; }).sort(function (a, b) { return (b[5] || 0) - (a[5] || 0); })[0];
+        if (big && nm(big[0])) c.bigRiser = { name: nm(big[0]), price: big[2] / 10 };
+      }
+    } catch (e) {}
+    // the league's players this week
+    try {
+      var H = C.highlights(ds, g), q = H && H.squads;
+      if (q) {
+        var mo = q.mostOwned && q.mostOwned[0]; if (mo) c.mostOwned = { name: mo.name, pct: mo.ownedPct };
+        var mc = q.mostCaptained && q.mostCaptained[0]; if (mc) c.mostCap = { name: mc.name, caps: mc.caps };
+        var bv = q.bestValue && q.bestValue[0]; if (bv) c.bestValue = { name: bv.name, value: bv.value, owners: bv.owners };
+        var df = q.differentials && q.differentials[0]; if (df) c.diff = { name: df.name, pts: df.pts, owners: df.owners };
+        var pr = q.priciest && q.priciest[0]; if (pr) c.priciest = { name: pr.name, price: pr.price / 10, pct: pr.ownedPct };
+      }
+      if (H && H.potw && H.potw.pts > 0) c.potw = { name: H.potw.name, pts: H.potw.pts, pct: H.potw.ownedPct };
+      var els = ds.elements || {}, keys = Object.keys(els);
+      c.nPlayers = keys.length;
+      var best = null;
+      keys.forEach(function (el) { var e = els[el]; var f = +e[9]; if (f > 0 && (!best || f > best.form)) best = { name: e[0], form: f }; });
+      if (best && best.form >= 5) c.topForm = best;
+    } catch (e) {}
+    // the season's habits
+    try {
+      var snr = C.snapshot(ds, me);
+      c.seasonHits = snr ? snr.hits : null; c.seasonTr = snr ? snr.transfers : null;
+      c.gwsPlayed = C.finishedGws(ds).length;
     } catch (e) {}
     try {
       var B = C.badges(ds, me) || [];
@@ -197,6 +263,67 @@
     { k: "gen", w: function () { return true; }, t: function () { return "Tap me. I have opinions."; } },
     { k: "gen", w: function () { return true; }, t: function () { return "I don’t pick players. I just judge."; } },
     { k: "gen", w: function () { return true; }, t: function () { return "Every gameweek is a fresh start, except the ones that aren’t."; } },
+    // where you stand in each of the five competitions
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.classic && c.comp.classic.state === "in"; }, t: function (c) { var e = c.comp.classic; return ord(e.pos) + " in the Classic, " + num(e.gap) + " " + e.gapLabel + ". That\u2019s XP territory. Don\u2019t look down."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.classic && c.comp.classic.state === "out" && c.comp.classic.gap != null; }, t: function (c) { var e = c.comp.classic; return ord(e.pos) + " in the Classic, " + num(e.gap) + " " + e.gapLabel + ". The money\u2019s up there. So are the stairs."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.monthly && c.comp.monthly.state === "in"; }, t: function (c) { var e = c.comp.monthly; return ord(e.pos) + " in the " + e.where + " table. A month is a short race; sprint."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.monthly && c.comp.monthly.state === "out" && c.comp.monthly.pos <= 20; }, t: function (c) { var e = c.comp.monthly; return ord(e.pos) + " for " + e.where + ", " + num(e.gap) + " " + e.gapLabel + ". One big week fixes that."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.monthly && c.comp.monthly.state === "out" && c.comp.monthly.pos > 100; }, t: function (c) { var e = c.comp.monthly; return ord(e.pos) + " in " + e.where + ". Let\u2019s call it a rebuilding month."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.lms && c.comp.lms.state === "alive" && c.lmsOut > 60; }, t: function (c) { return "Still standing in Last Manager, and " + num(c.lmsOut) + " aren\u2019t. Smug is allowed. Briefly."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.lms && c.comp.lms.state !== "alive" && c.lmsOutGw; }, t: function (c) { return "Out of Last Manager in GW" + c.lmsOutGw + ". Four other pots. Five, if you count my respect."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.pyramid && c.comp.pyramid.pos === 1 && c.division; }, t: function (c) { return "Top of the " + c.division + " in the Pyramid. Promotion smells like this."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.pyramid && c.comp.pyramid.state === "in" && c.comp.pyramid.pos > 1 && c.division; }, t: function (c) { return ord(c.comp.pyramid.pos) + " in the " + c.division + ". Promotion places. Hold on to them."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.pyramid && c.comp.pyramid.state === "out" && c.division; }, t: function (c) { return ord(c.comp.pyramid.pos) + " in the " + c.division + ". Not going up. Mind you don\u2019t go down."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.ucl && c.comp.ucl.state === "in" && /UCL$/.test(c.comp.ucl.where); }, t: function (c) { return ord(c.comp.ucl.pos) + " in your group and in the Champions League places. Big nights ahead."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.ucl && /UEL$/.test(c.comp.ucl.where); }, t: function (c) { return ord(c.comp.ucl.pos) + " in your group: the Europa slot. It\u2019s still Europe."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.ucl && c.comp.ucl.state === "out" && c.comp.ucl.pos > 4; }, t: function (c) { return ord(c.comp.ucl.pos) + " in your group. Thursday nights at best, and not even those."; } },
+    { k: "comp", w: function (c) { return me(c) && c.compCount >= 5 && c.inCount === c.compCount; }, t: function () { return "In the money in all five. Insufferable. Deserved."; } },
+    { k: "comp", w: function (c) { return me(c) && c.compCount >= 5 && c.inCount === 0; }, t: function () { return "Out of the money in all five. Bold strategy. Let\u2019s see how it plays out."; } },
+    { k: "comp", w: function (c) { return me(c) && c.compCount >= 5 && c.inCount > 0 && c.inCount < c.compCount; }, t: function (c) { var rest = c.compCount - c.inCount; return "In " + num(c.inCount) + " of the five money spots. " + (rest === 1 ? "The other one is watching." : "The other " + num(rest) + " are watching."); } },
+    { k: "comp", w: function (c) { return me(c) && c.xpCourse > 0; }, t: function (c) { return num(c.xpCourse) + " XP on course. Not in your pocket yet. Mine\u2019s empty too."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.classic && c.comp.classic.pos <= 3 && !c.leading; }, t: function (c) { return ord(c.comp.classic.pos) + " in the Classic, " + num(c.behind) + " off the top. The leader can feel your breath."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.classic && c.comp.classic.pos > c.n - 10; }, t: function (c) { return ord(c.comp.classic.pos) + " of " + num(c.n) + " in the Classic. I\u2019ve seen comebacks. Not from here, but I\u2019ve seen them."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.monthly && c.comp.monthly.pos === 1; }, t: function (c) { return "Leading " + c.comp.monthly.where + ". Manager of the Month has a ring to it."; } },
+    // prices
+    { k: "price", w: function (c) { return me(c) && c.myRise; }, t: function (c) { return c.myRise.name + " rose to \u00a3" + c.myRise.price.toFixed(1) + "m overnight and you own him. Free money, the pretend kind."; } },
+    { k: "price", w: function (c) { return me(c) && c.myFall; }, t: function (c) { return c.myFall.name + " dropped to \u00a3" + c.myFall.price.toFixed(1) + "m last night. You own him. I\u2019d look away."; } },
+    { k: "price", w: function (c) { return c.rises > 0 || c.falls > 0; }, t: function (c) { return pl(c.rises || 0, "price rise") + " and " + pl(c.falls || 0, "fall") + " last night. The market never sleeps; I do."; } },
+    { k: "price", w: function (c) { return !!c.bigRiser; }, t: function (c) { return c.bigRiser.name + " is up to \u00a3" + c.bigRiser.price.toFixed(1) + "m. The bandwagon has a door; it\u2019s closing."; } },
+    { k: "price", w: function (c) { return !!c.priciest; }, t: function (c) { return c.priciest.name + " at \u00a3" + c.priciest.price.toFixed(1) + "m, owned by " + c.priciest.pct + "% of the league. Expensive taste, widely shared."; } },
+    { k: "price", w: function (c) { return c.bestValue && c.bestValue.value > 1; }, t: function (c) { return c.bestValue.name + ": " + c.bestValue.value + " points per million this week. Bargain of the week, held by " + num(c.bestValue.owners) + " of you."; } },
+    { k: "price", w: function (c) { return c.rises === 0 && c.falls === 0 && c.nPlayers > 0; }, t: function () { return "No price moves last night. Even the market took the evening off."; } },
+    { k: "price", w: function (c) { return me(c) && !c.myRise && !c.myFall && c.rises > 0; }, t: function () { return "Prices moved last night and none were yours. Steady squad, or a lucky one."; } },
+    { k: "price", w: function (c) { return me(c) && c.myRise && c.myFall; }, t: function (c) { return c.myRise.name + " up, " + c.myFall.name + " down. Your squad had a night of it."; } },
+    { k: "price", w: function (c) { return c.rises >= 10; }, t: function (c) { return num(c.rises) + " rises in one night. Somebody\u2019s been busy. Everybody, in fact."; } },
+    // the players
+    { k: "player", w: function (c) { return !!c.mostOwned; }, t: function (c) { return c.mostOwned.name + " is in " + c.mostOwned.pct + "% of the league\u2019s squads. Original."; } },
+    { k: "player", w: function (c) { return c.mostCap && c.mostCap.caps > 1; }, t: function (c) { return num(c.mostCap.caps) + " armbands on " + c.mostCap.name + " this week. If he blanks, so does everyone."; } },
+    { k: "player", w: function (c) { return c.potw && c.potw.pct != null; }, t: function (c) { return c.potw.name + " scored " + num(c.potw.pts) + " this week. " + c.potw.pct + "% of the league had him."; } },
+    { k: "player", w: function (c) { return c.potw && c.potw.pct == null; }, t: function (c) { return c.potw.name + " scored " + num(c.potw.pts) + " this week, and not one of you owned him. Awkward."; } },
+    { k: "player", w: function (c) { return me(c) && c.cap && c.mostCap && c.cap !== c.mostCap.name; }, t: function (c) { return "You went " + c.cap + " while " + num(c.mostCap.caps) + " others went " + c.mostCap.name + ". Brave, or contrarian. Same thing."; } },
+    { k: "player", w: function (c) { return me(c) && c.cap && c.mostCap && c.cap === c.mostCap.name; }, t: function (c) { return c.cap + " as captain, like " + num(c.mostCap.caps - 1) + " others. Safety in numbers. Or a herd."; } },
+    { k: "player", w: function (c) { return c.diff && c.diff.pts >= 8; }, t: function (c) { return c.diff.name + ": " + num(c.diff.pts) + " points and under 10% ownership. " + num(c.diff.owners) + " of you saw it coming."; } },
+    { k: "player", w: function (c) { return !!c.topForm; }, t: function (c) { return c.topForm.name + " is averaging " + c.topForm.form + " a game lately. Just saying."; } },
+    { k: "player", w: function (c) { return c.nPlayers > 100; }, t: function (c) { return num(c.nPlayers) + " players in the game and you get fifteen. Choose wisely. Or don\u2019t; it\u2019s more fun for me."; } },
+    { k: "player", w: function (c) { return c.mostOwned && c.mostOwned.pct >= 80; }, t: function (c) { return "Four in five of you own " + c.mostOwned.name + ". Not owning him is the real gamble."; } },
+    { k: "player", w: function (c) { return me(c) && c.capPts != null && c.mostCap && c.cap === c.mostCap.name && c.capPts >= 12; }, t: function (c) { return "The whole league captained " + c.cap + " and he delivered " + num(c.capPts) + ". Nobody gains, nobody loses, everybody cheers."; } },
+    { k: "player", w: function (c) { return c.bestValue && c.bestValue.owners <= 3 && c.bestValue.value > 2; }, t: function (c) { return c.bestValue.name + " returned " + c.bestValue.value + " points per million and " + pl(c.bestValue.owners, "manager") + " had him. Hipsters."; } },
+    // praise, and digs
+    { k: "mood", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts > c.avg + 25 && c.rank <= 5; }, t: function (c) { return "Top five and " + num(c.pts) + " this week. I\u2019d purr if lions purred."; } },
+    { k: "mood", w: function (c) { return me(c) && c.move >= 20; }, t: function (c) { return "Up " + num(c.move) + " places. That\u2019s not a climb, that\u2019s a lift."; } },
+    { k: "mood", w: function (c) { return me(c) && c.move <= -20; }, t: function (c) { return "Down " + num(-c.move) + " places. Did you forget the deadline, or just the football?"; } },
+    { k: "mood", w: function (c) { return me(c) && c.bench >= 25; }, t: function (c) { return num(c.bench) + " on the bench. Your subs are auditioning for the first team, and winning."; } },
+    { k: "mood", w: function (c) { return me(c) && c.hits >= 8; }, t: function (c) { return "\u2212" + num(c.hits) + " in hits this week. Aggressive. Let\u2019s call it aggressive."; } },
+    { k: "mood", w: function (c) { return me(c) && c.leading && typeof c.pts === "number" && c.pts > c.avg; }, t: function () { return "Top, and outscoring the average. Everyone else is playing for second."; } },
+    { k: "mood", w: function (c) { return me(c) && c.bottomTen && typeof c.pts === "number" && c.pts > c.avg; }, t: function () { return "Bottom ten, but above the average this week. Green shoots. Tiny ones."; } },
+    { k: "mood", w: function (c) { return me(c) && c.capPts != null && c.capPts >= 26; }, t: function (c) { return c.cap + " with " + num(c.capPts) + " as captain. You get the credit; he did the running."; } },
+    { k: "mood", w: function (c) { return me(c) && c.best && c.best.points >= 120; }, t: function (c) { return "Your best week was " + num(c.best.points) + ". Once. The FPL gods giveth."; } },
+    { k: "mood", w: function (c) { return me(c) && c.seasonHits === 0 && c.gwsPlayed >= 4; }, t: function () { return "Not a single hit all season. Discipline, or fear? Either works."; } },
+    { k: "mood", w: function (c) { return me(c) && c.seasonHits >= 20; }, t: function (c) { return num(c.seasonHits) + " points of hits this season. You could have bought a small car with those."; } },
+    { k: "mood", w: function (c) { return me(c) && c.seasonTr >= 12; }, t: function (c) { return pl(c.seasonTr, "transfer") + " already. Restless. I respect it. Your rank doesn\u2019t."; } },
+    { k: "mood", w: function (c) { return me(c) && c.topTen && c.climbing; }, t: function () { return "Top ten and still climbing. Leave the settings alone, you\u2019re doing something right."; } },
+    { k: "mood", w: function (c) { return me(c) && c.bottomTen && c.sliding; }, t: function () { return "Bottom ten and sliding. I\u2019m not angry. I\u2019m a lion; I\u2019m disappointed."; } },
+    { k: "mood", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg - 25; }, t: function (c) { return num(c.pts) + " against an average of " + num(c.avg) + ". Was the wildcard active? Was anything?"; } },
     // only after a tap
     { k: "poke", w: function () { return true; }, t: function () { return "That tickles."; } },
     { k: "poke", w: function () { return true; }, t: function () { return "Again? Fine. Once more."; } },
@@ -221,7 +348,7 @@
       if (ok) can.push(i);
     });
     if (!can.length) return -1;
-    var specific = can.filter(function (i) { return ["pre", "lock", "live", "after", "stand"].indexOf(L[i].k) !== -1; });
+    var specific = can.filter(function (i) { return ["pre", "lock", "live", "after", "stand", "comp", "price", "player", "mood"].indexOf(L[i].k) !== -1; });
     var pokes = can.filter(function (i) { return L[i].k === "poke"; });
     var pool = can;
     var r = Math.random();
