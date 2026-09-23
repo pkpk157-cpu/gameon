@@ -50,7 +50,8 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    # 5 pokes, ten minutes apart, plus the handover — comfortably inside this.
+    # Up to ten minutes waiting for its slot, then 5 pokes ten minutes apart,
+    # then the handover — comfortably inside this.
     timeout-minutes: 70
     steps:
       - name: Check the key that keeps the chain alive
@@ -74,6 +75,18 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -u
+          # The Cloudflare cron came back, and it pokes at :00, :10, :20 and
+          # so on, to the second. This chain used to drift across it, and for
+          # the forty minutes at a time that the two coincided every poke was
+          # two runs, two publishes and two Pages deploys a minute apart —
+          # and the second deploy was refused now and then, one red run and
+          # one email a day. So this chain keeps to :05, :15, :25 and so on:
+          # with both clocks alive the data moves every five minutes, evenly,
+          # and never twice at once; with either one down, every ten.
+          now=$(date -u +%s)
+          wait=$(( (300 - now % 600 + 600) % 600 ))
+          echo "first poke at $(date -u -d "@$((now + wait))" +%H:%M:%SZ), in ${wait}s"
+          sleep "$wait"
           for i in 1 2 3 4 5; do
             echo "--- poke $i of 5 at $(date -u +%H:%M:%SZ)"
             # A failed poke costs one cycle; the next one is ten minutes away
