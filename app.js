@@ -4151,9 +4151,12 @@
         '<div class="pshirt">' + jersey(p.team, p.type) + facePic(p.el) + flag + '</div>' +
         '<div class="pname' + (p.flag ? ' flagged ' + p.flag.level : '') + '">' + esc(p.name) + '</div>' +
         footer +
-        // his selling price, when FPL would give back less than he now costs
+        // his selling price, when FPL would give back less than he now costs.
+        // A glyph rather than a word: fifteen cards saying "sells" is a wall
+        // of text on a phone, and the line above the pitch spells it out once.
         (metric === "val" && p.sell != null && p.sell !== p.price
-          ? '<div class="psub">sells ' + mval(p.sell) + '</div>' : '') +
+          ? '<div class="psub" title="Sells for ' + mval(p.sell) + '" aria-label="Sells for ' + mval(p.sell) + '">' +
+            '<span aria-hidden="true">\u21b3</span>' + mval(p.sell) + '</div>' : '') +
       '</div></div>';
   }
 
@@ -4255,7 +4258,7 @@
       midLabel = "Squad value"; mid = mval(pit.squadValue);
       // what the squad would fetch today — FPL keeps half of every rise
       if (pit.sellValue != null && pit.sellValue !== pit.squadValue) {
-        midSub = "Sells for " + mval(pit.sellValue);
+        midSub = "\u21b3 Sells for " + mval(pit.sellValue);
       }
       rightLabel = "In the bank"; right = pit.bank == null ? "—" : mval(pit.bank);
     } else {
