@@ -114,6 +114,18 @@
     return hitsAlreadyOff(ds) ? row.p : row.p - (row.h || 0);
   }
   C.gwScore = gwScore;
+  // A gameweek figure FPL reports on a league table, brought to the same
+  // footing: its event_total is the points before the transfer cost, while
+  // its season total has the cost off. Every number here is net of hits, so
+  // the hit comes off this one too — from the manager's own history row for
+  // that week, which is the only place FPL says what it was.
+  function netEvent(ds, entryId, gw, ev) {
+    if (typeof ev !== "number" || !gw) return ev;
+    var row = ds.history && ds.history[entryId] && ds.history[entryId][gw];
+    if (!row || hitsAlreadyOff(ds)) return ev;
+    return ev - (row.h || 0);
+  }
+  C.netEvent = netEvent;
   function gwBench(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return 0;
@@ -217,21 +229,33 @@
   // the bonus out. Every other competition here already goes through gwScore,
   // so during a live gameweek this brings the standings into line with them.
   // Idempotent and memoised: every view must agree on the same number.
+  //
+  // Between gameweeks the standings are authoritative, but their event_total
+  // is the week's points before the transfer cost — the one figure FPL shows
+  // gross. The season total already has the cost off, and so does every
+  // other score in this app, so the gameweek column is brought to net too.
   function liveAdjust(ds) {
     if (!ds || ds._liveAdj) return;
     try { Object.defineProperty(ds, "_liveAdj", { value: true, enumerable: false }); } catch (e) { return; }
     var gw = C.liveGwId(ds);
-    if (!gw) return;
+    if (!gw) {
+      var cur = C.currentGw(ds);
+      if (!cur) return;
+      (ds.managers || []).forEach(function (m) {
+        m.eventTotal = netEvent(ds, m.id, cur, m.eventTotal);
+      });
+      return;
+    }
     (ds.managers || []).forEach(function (m) {
       var live = gwScore(ds, m.id, gw);
       if (live == null) return;
       var hist = ds.history && ds.history[m.id];
       var prev = (hist && hist[gw - 1] && typeof hist[gw - 1].t === "number")
         ? hist[gw - 1].t
-        // no prior row to build on: take FPL's own total less the event score it
-        // is carrying, which is the same arithmetic from the other end
+        // no prior row to build on: take FPL's own total less the net event
+        // score it is carrying, which is the same arithmetic from the other end
         : (typeof m.total === "number" && typeof m.eventTotal === "number"
-            ? m.total - m.eventTotal : null);
+            ? m.total - netEvent(ds, m.id, gw, m.eventTotal) : null);
       if (prev == null) return;
       m.eventTotal = live;
       m.total = prev + live;
@@ -330,11 +354,14 @@
       : [];
     // FPL has already ordered the league and given joint ranks where managers
     // are level; its order is the one the game itself shows, so it is kept.
+    // The gameweek column is FPL's event_total, the one figure it shows
+    // before the transfer cost; net here, like every other score.
+    var evGw = C.liveGwId(ds) || C.currentGw(ds);
     var rows = joined.slice().sort(function (a, b) {
       return (a.rank - b.rank) || (b.total - a.total);
     }).map(function (r) {
       return { id: r.id, name: r.playerName, entryName: r.entryName,
-               total: r.total, eventTotal: r.eventTotal,
+               total: r.total, eventTotal: netEvent(ds, r.id, evGw, r.eventTotal),
                fplRank: r.rank, lastRank: r.lastRank };
     });
 
@@ -916,8 +943,11 @@
                     .sort(function (a, b) { return a - b; }) : [];
     var sum = function (k) { return gws.reduce(function (s, g) { return s + (+H[g][k] || 0); }, 0); };
     var last = gws.length ? H[gws[gws.length - 1]] : null, prev = gws.length > 1 ? H[gws[gws.length - 2]] : null;
-    var best = null;
-    gws.forEach(function (g) { if (best === null || H[g].p > H[best].p) best = g; });
+    var best = null, bestP = null;
+    gws.forEach(function (g) {
+      var sc = gwScore(ds, id, g);
+      if (sc !== null && (best === null || sc > bestP)) { best = g; bestP = sc; }
+    });
     // The nearest manager strictly above, so a tie reads as shared rather
     // than "0 off"; and the first strictly below, for how far a leader leads.
     var above = null, below = null;
@@ -935,7 +965,7 @@
       played: gws.length,
       hits: gws.length ? sum("h") : null, transfers: gws.length ? sum("tr") : null,
       bench: gws.length ? sum("b") : null,
-      best: best === null ? null : { gw: best, points: H[best].p },
+      best: best === null ? null : { gw: best, points: bestP },
       leading: above === null,
       lead: above === null && below ? me.total - below.total : null,
       behindLeader: rows[0].total - me.total,
@@ -1404,9 +1434,10 @@
         bench += r.b || 0;
         // records come from finished gameweeks only — a half-played
         // afternoon must not become somebody's "worst gameweek"
-        if (g !== cur && typeof r.p === "number") {
-          if (!best || r.p > best.p) best = { gw: g, p: r.p };
-          if (!worst || r.p < worst.p) worst = { gw: g, p: r.p };
+        var sc = g !== cur ? gwScore(ds, id, g) : null;
+        if (sc !== null) {
+          if (!best || sc > best.p) best = { gw: g, p: sc };
+          if (!worst || sc < worst.p) worst = { gw: g, p: sc };
         }
       });
       C.squadGws(ds).forEach(function (g) {
@@ -1817,14 +1848,14 @@
         var tot = 0, hits = 0, bench = 0, cnt = 0, hi = null, lo = null, tr = 0;
         var firstRank = null, lastRank = null;
         played.forEach(function (g) {
-          var r = h[g];
-          if (!r || typeof r.p !== "number") return;
-          tot += r.p; hits += r.h || 0; bench += r.b || 0; tr += r.tr || 0; cnt++;
-          if (!hi || r.p > hi.p) hi = { gw: g, p: r.p };
-          if (!lo || r.p < lo.p) lo = { gw: g, p: r.p };
+          var r = h[g], sc = gwScore(ds, m.id, g);
+          if (!r || sc === null) return;
+          tot += sc; hits += r.h || 0; bench += r.b || 0; tr += r.tr || 0; cnt++;
+          if (!hi || sc > hi.p) hi = { gw: g, p: sc };
+          if (!lo || sc < lo.p) lo = { gw: g, p: sc };
           if (r.r) { if (firstRank === null) firstRank = r.r; lastRank = r.r; }
-          if (!bestGw || r.p > bestGw.p) bestGw = { id: m.id, name: nm(mm, m.id), gw: g, p: r.p };
-          if (!worstGw || r.p < worstGw.p) worstGw = { id: m.id, name: nm(mm, m.id), gw: g, p: r.p };
+          if (!bestGw || sc > bestGw.p) bestGw = { id: m.id, name: nm(mm, m.id), gw: g, p: sc };
+          if (!worstGw || sc < worstGw.p) worstGw = { id: m.id, name: nm(mm, m.id), gw: g, p: sc };
         });
         if (!cnt) return;
         agg.push({ id: m.id, name: nm(mm, m.id), total: tot, hits: hits, bench: bench,
@@ -2065,10 +2096,10 @@
     var cr = classicRankByGw(ds);
     var out = [];
     played.forEach(function (g) {
-      var r = h[g];
-      if (!r || typeof r.p !== "number") return;
+      var sc = gwScore(ds, id, g);
+      if (sc === null) return;
       var band = cr[g];
-      out.push({ gw: g, p: r.p,
+      out.push({ gw: g, p: sc,
                  r: (band && band.rank[id]) || null,
                  of: (band && band.of) || 0 });
     });
@@ -2089,10 +2120,10 @@
       var best = null, worst = null, capBest = null, own = {}, caps = {}, squads = 0;
       var hist = ds.history || {};
       (ds.managers || []).forEach(function (m) {
-        var r = (hist[m.id] || {})[g];
-        if (!r || typeof r.p !== "number") return;
-        if (best === null || r.p > best) best = r.p;
-        if (worst === null || r.p < worst) worst = r.p;
+        var sc = gwScore(ds, m.id, g);
+        if (sc === null) return;
+        if (best === null || sc > best) best = sc;
+        if (worst === null || sc < worst) worst = sc;
       });
       var pk = picksAt(ds, g), lp = liveAt(ds, g) || {};
       if (pk) Object.keys(pk).forEach(function (mid) {
@@ -2216,18 +2247,18 @@
         diffs = [], cleans = [];
     var spoons = [], blanks = [], falls = [], wasted = [], reckless = [], flops = [];
     played.forEach(function (g, i) {
-      var f = F[g] || {}, mine = h[g];
-      if (!mine || typeof mine.p !== "number") return;
+      var f = F[g] || {}, mine = h[g], pts = gwScore(ds, id, g);
+      if (!mine || pts === null) return;
       var sq = f.picks && f.picks[id];
 
-      // The gameweek points FPL reports, before hits — the number the Classic
-      // table's GW column shows.
-      if (f.best !== null && f.best !== undefined && mine.p === f.best) tops.push(g);
-      if (mine.p >= 200) dbls.push(g);
-      if (mine.p >= 100) cents.push(g);
+      // The gameweek points net of hits — the number the Classic table's GW
+      // column shows, and the one every other score here is settled on.
+      if (f.best !== null && f.best !== undefined && pts === f.best) tops.push(g);
+      if (pts >= 200) dbls.push(g);
+      if (pts >= 100) cents.push(g);
       // and its opposite: the league's lowest, and a week under thirty-five
-      if (f.worst !== null && f.worst !== undefined && mine.p === f.worst) spoons.push(g);
-      if (mine.p < 35) blanks.push(g);
+      if (f.worst !== null && f.worst !== undefined && pts === f.worst) spoons.push(g);
+      if (pts < 35) blanks.push(g);
 
       // Comeback: seventy-five places or more up the Classic table in one
       // gameweek. Fifty places is an ordinary week in a field of this size.

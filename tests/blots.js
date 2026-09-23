@@ -22,14 +22,15 @@ const has = (m, k) => m.B.find((b) => b.k === k);
 const count = (k) => all.reduce((s, m) => s + (has(m, k) ? has(m, k).count : 0), 0);
 
 // ---- each settled blot, recomputed ----
-const worst = {}; played.forEach((g) => { let w = null; ds.managers.forEach((m) => { const r = (ds.history[m.id] || {})[g]; if (r && typeof r.p === "number" && (w === null || r.p < w)) w = r.p; }); worst[g] = w; });
+// net of hits, like every score in the app
+const worst = {}; played.forEach((g) => { let w = null; ds.managers.forEach((m) => { const p = C.gwScore(ds, m.id, g); if (p !== null && (w === null || p < w)) w = p; }); worst[g] = w; });
 let spoons = 0, blanks = 0, falls = 0, wasted = 0, reckless = 0;
 all.forEach((m) => {
   const h = ds.history[m.id] || {};
   played.forEach((g, i) => {
-    const r = h[g]; if (!r || typeof r.p !== "number") return;
-    if (r.p === worst[g]) spoons++;
-    if (r.p < 35) blanks++;
+    const r = h[g], p = C.gwScore(ds, m.id, g); if (!r || p === null) return;
+    if (p === worst[g]) spoons++;
+    if (p < 35) blanks++;
     if (i > 0) { const at = cr[g] && cr[g].rank[m.id], before = cr[played[i - 1]] && cr[played[i - 1]].rank[m.id]; if (at && before && at - before >= 75) falls++; }
     const chip = ((ds.chips || {})[m.id] || []).find((c) => c.gw === g); const isBb = chip ? chip.n === "bboost" : ((ds.picks[g] || {})[m.id] || {}).c === "bboost";
     if (!isBb && (r.b || 0) >= 20) wasted++;

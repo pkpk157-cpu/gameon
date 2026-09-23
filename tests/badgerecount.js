@@ -25,8 +25,8 @@ const high = {}, capHigh = {}, own = {}, squads = {}, capWho = {};
 for (const g of played) {
   let best = null;
   for (const m of ds.managers) {
-    const r = (ds.history[m.id] || {})[g];
-    if (r && typeof r.p === "number") best = best === null ? r.p : Math.max(best, r.p);
+    const p = C.gwScore(ds, m.id, g);   // net of hits
+    if (p !== null) best = best === null ? p : Math.max(best, p);
   }
   high[g] = best;
   const pk = (ds.picks || {})[g] || {};
@@ -72,11 +72,11 @@ for (const id of ids) {
   const chip = {};
   ((ds.chips || {})[id] || []).forEach((c) => { chip[c.gw] = c.n; });
   played.forEach((g, i) => {
-    const r = h[g];
-    if (!r || typeof r.p !== "number") return;
-    if (high[g] !== null && r.p === high[g]) e.top.push(g);
-    if (r.p >= 200) e.dbl.push(g);
-    if (r.p >= 100) e.century.push(g);
+    const r = h[g], pts = C.gwScore(ds, id, g);
+    if (!r || pts === null) return;
+    if (high[g] !== null && pts === high[g]) e.top.push(g);
+    if (pts >= 200) e.dbl.push(g);
+    if (pts >= 100) e.century.push(g);
     if (i > 0) {
       const a = rankAt[g][id], b = rankAt[played[i - 1]][id];
       if (a && b && b - a >= 75) e.comeback.push(g);

@@ -41,11 +41,17 @@ const expect = (p, id) => p.evaluate((id) => {
   const avg = Math.round(cnt.reduce((s, r) => s + r.eventTotal, 0) / cnt.length);
   let above = null; for (let k = i - 1; k >= 0; k--) if (rows[k].total > me.total) { above = rows[k]; break; }
   let below = null; for (let k = i + 1; k < rows.length; k++) if (rows[k].total < me.total) { below = rows[k]; break; }
-  const best = gws.reduce((b, g) => H[g].p > H[b].p ? g : b, gws[0]);
+  // the gameweek figure is net of hits everywhere: FPL's event_total less the week's cost
+  const net = (g) => C.gwScore(ds, id, g);
+  const best = gws.reduce((b, g) => net(g) > net(b) ? g : b, gws[0]);
   const last = H[gws[gws.length - 1]], prev = H[gws[gws.length - 2]];
   const chips = C.managerChips(ds, id).filter((c) => c.used);
-  return { total: me.total, ev: me.eventTotal, gw: C.currentGw(ds), avg, rank: me.computedRank, tied: me.tiedWith > 1, move: me.move,
-    overall: last.r, omove: prev ? prev.r - last.r : 0, hits: sum("h"), tr: sum("tr"), bench: sum("b"), best: { gw: best, p: H[best].p },
+  const evGw = C.currentGw(ds), row = H[evGw];
+  return { total: me.total, ev: me.eventTotal, gw: evGw, avg, rank: me.computedRank, tied: me.tiedWith > 1, move: me.move,
+    // the roster's gameweek figure is the net score, and the hit really came off it
+    evNet: !row || C.liveGwId(ds) === evGw ? true : me.eventTotal === net(evGw) && me.eventTotal === row.p - (row.h || 0),
+    hit: row ? row.h || 0 : 0,
+    overall: last.r, omove: prev ? prev.r - last.r : 0, hits: sum("h"), tr: sum("tr"), bench: sum("b"), best: { gw: best, p: net(best) },
     leading: !above, lead: !above && below ? me.total - below.total : null, behind: rows[0].total - me.total,
     above: above ? { rank: above.computedRank, gap: above.total - me.total } : null,
     plays: chips.reduce((s, c) => s + c.gws.length, 0), names: chips.map((c) => c.label).join(", "), v: last.v, bk: last.bk };
@@ -59,16 +65,20 @@ const expect = (p, id) => p.evaluate((id) => {
   const errs = []; p.on("pageerror", (e) => errs.push(e.message));
   await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
   await p.waitForFunction(() => document.querySelector("section.view.active table.t tbody tr"), null, { timeout: 15000 });
-  const ids = await p.evaluate(() => { const r = window.GO_COMPUTE.classic(window.GO_STORE.dataset()); return { leader: r[0].id, mid: r[Math.floor(r.length / 2)].id, tied: (r.find((x) => x.tiedWith > 1) || {}).id, last: r[r.length - 1].id }; });
+  const ids = await p.evaluate(() => { const ds = window.GO_STORE.dataset(), C = window.GO_COMPUTE, r = C.classic(ds), g = C.currentGw(ds);
+    const hit = r.find((x) => { const h = (ds.history[x.id] || {})[g]; return h && h.h > 0; });
+    return { leader: r[0].id, mid: r[Math.floor(r.length / 2)].id, tied: (r.find((x) => x.tiedWith > 1) || {}).id, last: r[r.length - 1].id, hit: hit ? hit.id : null }; });
 
   const open = async (id) => { await p.evaluate((x) => { location.hash = "#profile/" + x; }, id); await p.waitForTimeout(700); return [await read(p), await expect(p, id)]; };
 
-  for (const who of ["mid", "last", "leader"]) {
+  for (const who of ["mid", "last", "leader", "hit"]) {
+    if (!ids[who]) { console.log("  (nobody took a hit this gameweek, the net check runs on the others)"); continue; }
     const [got, exp] = await open(ids[who]);
     console.log("-- " + who + " " + ids[who]);
     chk(got && got.first, who + ": the card is the first thing on the page", got && JSON.stringify(got.order));
     chk(got.total === num(exp.total), who + ": total points", got.total + " vs " + exp.total);
     chk(got.gw === num(exp.ev) && got.gwl === "GW" + exp.gw + " · avg " + num(exp.avg), who + ": this gameweek and the league average", got.gw + " " + got.gwl);
+    chk(exp.evNet, who + ": the gameweek figure is net of hits (" + exp.hit + " off)", got.gw);
     chk(got.pills.length === 2 && got.pills[0].k === "Overall" && got.pills[1].k === "GO", who + ": Overall first, then GO", JSON.stringify(got.pills.map((x) => x.k)));
     chk(got.pills[1].n === ord(exp.rank) && got.pills[1].text.indexOf("=") < 0, who + ": GO rank in words, never with an =", got.pills[1].text);
     chk(got.pills[1].up === exp.move > 0 && got.pills[1].down === exp.move < 0, who + ": GO movement direction", JSON.stringify(got.pills[1]) + " move " + exp.move);

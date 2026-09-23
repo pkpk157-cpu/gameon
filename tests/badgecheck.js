@@ -8,8 +8,9 @@ const all = ds.managers.map(m => ({ id: m.id, name: m.entryName, B: C.badges(ds,
 const count = k => all.reduce((s, m) => s + (m.B.find(b => b.k === k) ? m.B.find(b => b.k === k).count : 0), 0);
 // top scorer: per finished GW the number sharing the max
 let expTop = 0, expCent = 0;
-played.forEach(g => { let best = null; ds.managers.forEach(m => { const r = (ds.history[m.id] || {})[g]; if (r && typeof r.p === "number" && (best === null || r.p > best)) best = r.p; });
-  ds.managers.forEach(m => { const r = (ds.history[m.id] || {})[g]; if (!r || typeof r.p !== "number") return; if (r.p === best) expTop++; if (r.p >= 100) expCent++; }); });
+// net of hits, like every score in the app
+played.forEach(g => { let best = null; ds.managers.forEach(m => { const p = C.gwScore(ds, m.id, g); if (p !== null && (best === null || p > best)) best = p; });
+  ds.managers.forEach(m => { const p = C.gwScore(ds, m.id, g); if (p === null) return; if (p === best) expTop++; if (p >= 100) expCent++; }); });
 chk(count("top") === expTop, "top-scorer badges across the league = managers sharing each GW's max", count("top") + " vs " + expTop);
 chk(count("century") === expCent, "century badges = 100+ gameweeks in history", count("century") + " vs " + expCent);
 const doneMonths = C.monthly(ds).filter(m => m.complete).length;
