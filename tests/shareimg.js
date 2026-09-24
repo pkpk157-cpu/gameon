@@ -67,12 +67,12 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
       return { on: !!b && b.offsetParent !== null, inLine: !!(b && l && l.contains(b)), text: b && b.textContent.trim() }; });
     chk(where.on && where.inLine && where.text === "Export image", "the button sits on the gameweek line", JSON.stringify(where));
     for (const tab of ["value", "season", "fame"]) {
-      await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
+      await p.evaluate((t) => { location.hash = "#stats/" + t; }, tab); await p.waitForTimeout(150);
       const st = await p.evaluate(() => ({ btn: document.querySelector("#stShare").offsetParent !== null,
         sel: document.querySelector("#stGwSel").offsetParent !== null }));
       chk(st.btn && (st.sel === (tab === "value")), tab + " tab: the button shows" + (tab === "value" ? " beside the picker" : " on its own"), JSON.stringify(st));
     }
-    await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(150);
+    await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(150);
     const t0 = Date.now(); const pic = await exportNow(p); const ms = Date.now() - t0;
     chk(!!pic && pic.w === 1080 && pic.h === 1920, "Gameweek tab: a 1080 by 1920 picture opens in the sheet", pic && pic.w + "x" + pic.h + " in " + ms + "ms");
     chk(pic && pic.bytes > 200000, "a real PNG, not a blank", pic && pic.bytes + " bytes");
@@ -85,7 +85,7 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     chk(ms < 8000, "made in under eight seconds", ms + "ms");
     // the Picks picture is its own file with its own title
     await p.click("#modalClose"); await p.waitForTimeout(300);
-    await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+    await p.evaluate(() => { location.hash = "#stats/picks"; }); await p.waitForTimeout(150);
     const pk = await exportNow(p);
     chk(!!pk && pk.w === 1080 && pk.title === "Gameweek " + gw + " picks", "Picks tab: its own picture, titled for the picks", pk && pk.title);
     chk(pk && pk.save && pk.save.name === "gameon-gw" + gw + "-picks.png", "Picks saves as gameon-gw" + gw + "-picks.png", pk && JSON.stringify(pk.save));
@@ -100,20 +100,20 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
                    fame: { title: "All time", file: "gameon-alltime.png" } };
     for (const tab of Object.keys(want)) {
       await p.click("#modalClose"); await p.waitForTimeout(300);
-      await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
+      await p.evaluate((t) => { location.hash = "#stats/" + t; }, tab); await p.waitForTimeout(150);
       const px = await exportNow(p);
       chk(!!px && px.w === 1080 && px.h >= 1400 && px.h <= 2400 && px.title === want[tab].title && px.save && px.save.name === want[tab].file,
           tab + " tab: its own picture, titled and named for it", px && [px.w + "x" + px.h, px.title, px.save && px.save.name].join(" · "));
       chk(px && isPurple(px.bar) && px.wall[0] > 220 && px.wall[1] > 220 && px.wall[2] > 220, tab + ": the bar and the wallpaper", px && JSON.stringify([px.bar, px.wall]));
     }
     await p.click("#modalClose"); await p.waitForTimeout(300);
-    await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+    await p.evaluate(() => { location.hash = "#stats/picks"; }); await p.waitForTimeout(150);
     // close, then export the first gameweek on both tabs, where nothing moved in and the lists fall back
     await p.selectOption("#stGwSel", "1"); await p.waitForTimeout(300);
     const pk1 = await exportNow(p);
     chk(!!pk1 && pk1.w === 1080 && pk1.title === "Gameweek 1 picks", "gameweek 1 picks export too, with their own fallbacks", pk1 && pk1.title);
     await p.click("#modalClose"); await p.waitForTimeout(300);
-    await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(150);
+    await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(150);
     const pic1 = await exportNow(p);
     chk(!!pic1 && pic1.w === 1080 && pic1.title === "Gameweek 1", "gameweek 1 returns export too", pic1 && pic1.title);
     chk(errs.length === 0, "no JS errors", errs.slice(0, 2).join(" | "));
@@ -156,7 +156,7 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
         await p.click("#stShare"); await p.waitForTimeout(2500);
         const out = await p.evaluate(() => ({ sheet: !!document.querySelector("#modalBack.show .shpic img"), toast: document.querySelector("#toast").textContent.trim() }));
         chk(!out.sheet && /^No scores yet for/.test(out.toast) && /Picks picture/.test(out.toast), "Gameweek tab: a toast says there are no scores yet and points at Picks", JSON.stringify(out));
-        await p.click('#stTabs button[data-tab="picks"]'); await p.waitForTimeout(150);
+        await p.evaluate(() => { location.hash = "#stats/picks"; }); await p.waitForTimeout(150);
         const pk = await exportNow(p);
         chk(!!pk && pk.w === 1080 && pk.title === "Gameweek " + cur + " picks", "Picks tab: the picture is made all the same", pk && pk.title);
         chk(errs.length === 0, "no JS errors", errs.slice(0, 2).join(" | "));
@@ -205,7 +205,7 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
       for (const tab of ["picks", "value", "season", "fame"]) {
         if (out.sheet || document_open(p)) { await p.evaluate(() => { const x = document.querySelector("#modalClose"); if (x) x.click(); }); await p.waitForTimeout(250); }
         await p.evaluate(() => { const t = document.querySelector("#toast"); if (t) { t.textContent = ""; t.classList.remove("show"); } });
-        await p.click('#stTabs button[data-tab="' + tab + '"]'); await p.waitForTimeout(150);
+        await p.evaluate((t) => { location.hash = "#stats/" + t; }, tab); await p.waitForTimeout(150);
         if (!(await p.evaluate(() => document.querySelector("#stShare").offsetParent !== null))) { said.push(tab + ":hidden"); continue; }
         await p.click("#stShare"); await p.waitForTimeout(2000);
         const o = await p.evaluate(() => ({ sheet: !!document.querySelector("#modalBack.show .shpic img"), toast: document.querySelector("#toast").textContent.trim() }));

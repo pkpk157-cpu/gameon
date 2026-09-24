@@ -45,7 +45,7 @@ const measure = (p) => p.evaluate(() => [...document.querySelectorAll("section.v
   const views = [["profile/" + two[0], 1], ["compare", 2], ["stats", 1]];
   for (const [v, want] of views) {
     await p.evaluate((x) => { location.hash = "#" + x; }, v); await p.waitForTimeout(900);
-    if (v === "stats") { await p.evaluate(() => { const b = document.querySelector('button[data-tab="picks"]'); if (b) b.click(); }); await p.waitForTimeout(800); }
+    if (v === "stats") { await p.evaluate(() => { location.hash = "#stats/picks"; }); await p.waitForTimeout(800); }
     await p.evaluate(() => { const el = document.querySelector("section.view.active .pitch"); if (el) el.scrollIntoView({ block: "center" }); });
     await p.waitForLoadState("networkidle").catch(() => {}); await p.waitForTimeout(300);
     const ms = await measure(p);

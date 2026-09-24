@@ -22,6 +22,7 @@ const STATES = [[6, "pre"], [12, "final"], [13, "live"], [19, "final"], [20, "lo
                 [26, "final"], [29, "live"], [29, "final"], [30, "live"], [31, "final"], [33, "bonus"], [37, "final"],
                 [38, "live"], [38, "bonus"], [38, "final"]];
 const VIEWS = ["classic", "monthly", "lms", "pyramid", "h2h", "vol", "stats", "compare", "prices", "prices/stats",
+               "stats/gw", "stats/picks", "stats/value", "stats/season", "stats/fame",
                "pl", "pl/table", "winnings", "gwstatus", "rules", "chips/1/3xc"];
 let fails = 0;
 const chk = (ok, m, x) => { if (!ok) { fails++; console.log("  FAIL " + m + (x ? "  " + String(x).slice(0, 300) : "")); } };
@@ -67,7 +68,7 @@ const chk = (ok, m, x) => { if (!ok) { fails++; console.log("  FAIL " + m + (x ?
           const host = document.querySelector("section.view.active");
           if (!host) return;
           const click = async (el) => { el.click(); await sleep(120); };
-          for (const el of [...host.querySelectorAll("#stTabs [data-tab], .segb, .pseg [data-metric], [data-stab]")].slice(0, 14)) await click(el);
+          for (const el of [...host.querySelectorAll(".segb, .pseg [data-metric], [data-stab]")].slice(0, 14)) await click(el);
           for (const sel of [...host.querySelectorAll("select")].slice(0, 4)) {
             const opts = [...sel.options];
             for (const o of opts.slice(0, Math.min(opts.length, 6))) { sel.value = o.value; sel.dispatchEvent(new Event("change", { bubbles: true })); await sleep(120); }

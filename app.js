@@ -2663,6 +2663,11 @@
       if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
     if (state.view === "prices" && state.prTab === "stats") title = "Player stats";
+    // Each stats page carries its own name in the bar, as the tab row is gone
+    if (state.view === "stats") {
+      var stTab = STAT_TABS.filter(function (t) { return t.k === state.statsTab; })[0];
+      if (stTab) title = stTab.label;
+    }
     // A player's page carries his name and club in the bar, as a manager's does
     if (state.view === "player" && state.playerId) {
       var pm = (S.dataset() || {}).elements;
@@ -5830,11 +5835,11 @@
   }
 
   var STAT_TABS = [
-    { k: "gw",     label: "Returns",    gwPicker: true, share: "gw" },
-    { k: "picks",  label: "Selections", gwPicker: true, share: "picks" },
-    { k: "value",  label: "Value",    gwPicker: true, share: "value" },
-    { k: "season", label: "Season",   share: "season" },
-    { k: "fame",   label: "All time", share: "fame" }
+    { k: "gw",     label: "Gameweek returns",    gwPicker: true, share: "gw" },
+    { k: "picks",  label: "Gameweek selections", gwPicker: true, share: "picks" },
+    { k: "value",  label: "Squad values",        gwPicker: true, share: "value" },
+    { k: "season", label: "Season",              share: "season" },
+    { k: "fame",   label: "All time",            share: "fame" }
   ];
 
   function renderStats(host, ds) {
@@ -5850,12 +5855,10 @@
     if (!state.statsGw || all.indexOf(+state.statsGw) === -1) state.statsGw = all[all.length - 1];
     if (!STAT_TABS.some(function (t) { return t.k === state.statsTab; })) state.statsTab = "gw";
 
-    var h = '<div class="tabrow" id="stTabs">' + STAT_TABS.map(function (t) {
-      return '<button type="button" class="tabbtn' + (state.statsTab === t.k ? ' on' : '') +
-        '" data-tab="' + t.k + '">' + esc(t.label) + '</button>';
-    }).join("") + '</div>';
-    // The pictures are the organisers' to make: the button is theirs alone.
-    h += '<div class="pgwline" id="stGwLine" style="margin-bottom:4px">' +
+    // Each page is reached from the profile sheet and named in the bar, so
+    // there is no row of tabs here. The pictures are the organisers' to make:
+    // the button is theirs alone.
+    var h = '<div class="pgwline" id="stGwLine" style="margin-bottom:4px">' +
       '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
         return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
       }).join("") + '</select>' +
@@ -5864,13 +5867,6 @@
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
-    $("#stTabs", host).addEventListener("click", function (e) {
-      var b = e.target.closest("button[data-tab]");
-      if (!b) return;
-      state.statsTab = b.getAttribute("data-tab");
-      $all(".tabbtn", this).forEach(function (x) { x.classList.toggle("on", x === b); });
-      drawStats(ds);
-    });
     $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
     var shareBtn = $("#stShare", host);
     if (shareBtn) shareBtn.addEventListener("click", function () {

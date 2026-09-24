@@ -24,7 +24,7 @@ const digits = (s) => String(s).replace(/[^\d.,]/g, "").replace(/,/g, "");
     const ctx = await b.newContext({ viewport: { width: w, height: 760 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto("http://localhost:" + PORT + "/index.html#stats", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(1500);
-    await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(300);
+    await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(300);
     // the series agrees with the tab, week by week
     const agree = await p.evaluate(() => {
       const ds = window.GO_STORE.dataset(), C = window.GO_COMPUTE, S = C.gwSeries(ds);
@@ -75,7 +75,7 @@ const digits = (s) => String(s).replace(/[^\d.,]/g, "").replace(/,/g, "");
     const live = await p.evaluate(() => { const ds = window.GO_STORE.dataset(); return window.GO_COMPUTE.liveGwId(ds); });
     if (live) {
       await p.evaluate(() => { location.hash = "#stats"; }); await p.waitForTimeout(800);
-      await p.click('#stTabs button[data-tab="gw"]'); await p.waitForTimeout(200);
+      await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(200);
       await p.click('#stBox .hcard[data-trend="average"]'); await p.waitForTimeout(350);
       const hatched = await p.evaluate(() => !!document.querySelector("#modalBody .barP.live") && !!document.querySelector("#modalBody #trhatch"));
       chk(hatched, w + ": the live week's bar is hatched");
