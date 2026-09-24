@@ -43,8 +43,13 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
 (async () => {
   await new Promise((r) => srv.listen(PORT, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
+  // the pictures are the organisers' alone, so every run signs in as one
+  // unless it says otherwise
+  const ORG = (require("./audit/harness.js").loadCompute().cfg.organisers || [])[0] || null;
   const run = async (opts, fn) => {
     const ctx = await b.newContext({ ...(opts.device || devices["iPhone 12"]), serviceWorkers: "block", colorScheme: opts.scheme || "light" });
+    const me = opts.me === undefined ? ORG : opts.me;
+    await ctx.addInitScript((id) => { try { if (id) localStorage.setItem("go12.me", String(id)); } catch (e) {} }, me);
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto("http://localhost:" + PORT + "/index.html#stats", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(1200);
     await fn(p, errs); await ctx.close();
@@ -159,6 +164,22 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
       DATA = null;
     }
   }
+
+  // 4b. not an organiser: no export anywhere on the stats page
+  DATA = null;
+  await run({ me: null }, async (p, errs) => {
+    console.log("-- nobody signed in");
+    const has = await p.evaluate(() => ({ st: !!document.querySelector("#stShare"), lms: !!document.querySelector("#stLmsShare") }));
+    chk(!has.st && !has.lms && errs.length === 0, "no export buttons for a reader who is not an organiser", JSON.stringify(has));
+  });
+  await run({ me: 1379307 }, async (p, errs) => {
+    const has = await p.evaluate(() => ({ st: !!document.querySelector("#stShare"), lms: !!document.querySelector("#stLmsShare") }));
+    chk(!has.st && !has.lms && errs.length === 0, "no export buttons for a manager who is not an organiser", JSON.stringify(has));
+  });
+  await run({}, async (p, errs) => {
+    const has = await p.evaluate(() => ({ st: !!document.querySelector("#stShare"), lms: !!document.querySelector("#stLmsShare") }));
+    chk(has.st && has.lms && errs.length === 0, "both exports for an organiser", JSON.stringify(has));
+  });
 
   // 5. hostile states: nothing to draw says so; bad names and nulls still draw
   const states = { "no-picks": false, "gw2-current-no-picks": null, "hostile-names": true, "nulls-everywhere": null, "unknown-elements": null, "one-manager": null };

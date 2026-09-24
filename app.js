@@ -5836,12 +5836,13 @@
       return '<button type="button" class="tabbtn' + (state.statsTab === t.k ? ' on' : '') +
         '" data-tab="' + t.k + '">' + esc(t.label) + '</button>';
     }).join("") + '</div>';
+    // The pictures are the organisers' to make: the button is theirs alone.
     h += '<div class="pgwline" id="stGwLine" style="margin-bottom:4px">' +
       '<select class="in gwsel" id="stGwSel" aria-label="Gameweek">' + all.map(function (g) {
         return '<option value="' + g + '"' + (+g === +state.statsGw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
       }).join("") + '</select>' +
-      '<button type="button" class="btn sm" id="stShare" title="A picture of this gameweek to share">' +
-        svg("download", 15) + 'Export image</button></div>';
+      (isOrganiser() ? '<button type="button" class="btn sm" id="stShare" title="A picture of this gameweek to share">' +
+        svg("download", 15) + 'Export image</button>' : '') + '</div>';
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
@@ -5853,11 +5854,19 @@
       drawStats(ds);
     });
     $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
-    $("#stShare", host).addEventListener("click", function () {
+    var shareBtn = $("#stShare", host);
+    if (shareBtn) shareBtn.addEventListener("click", function () {
       var t = STAT_TABS.filter(function (x) { return x.k === state.statsTab; })[0];
       shareStats(ds, state.statsGw, (t && t.share) || "gw");
     });
     drawStats(ds);
+  }
+
+  // Whether the signed-in manager runs the league: the config names them by
+  // entry id.
+  function isOrganiser() {
+    var ids = S.config().organisers || [];
+    return !!state.me && ids.some(function (id) { return +id === +state.me; });
   }
 
   function drawStats(ds) {
@@ -5865,7 +5874,7 @@
     if (!box) return;
     var tab = STAT_TABS.filter(function (t) { return t.k === state.statsTab; })[0] || STAT_TABS[0];
     var line = $("#stGwLine"), sel = $("#stGwSel"), sb = $("#stShare");
-    if (line) line.style.display = (tab.gwPicker || tab.share) ? "" : "none";
+    if (line) line.style.display = (tab.gwPicker || (tab.share && sb)) ? "" : "none";
     if (sel) sel.style.display = tab.gwPicker ? "" : "none";
     if (sb) { sb.style.display = tab.share ? "" : "none"; sb.classList.toggle("alone", !tab.gwPicker); }
 
@@ -6016,8 +6025,7 @@
       note = 'The eliminations are decided when FPL finalises the gameweek.';
     }
     // The poster is the organisers' to make.
-    var organisers = S.config().organisers || [];
-    var poster = rows.length > 0 && !!state.me && organisers.some(function (id) { return +id === +state.me; });
+    var poster = rows.length > 0 && isOrganiser();
     var h = '<div class="section-title"><h2>Last Manager Standing</h2><div class="rule"></div>' +
       (poster ? '<button type="button" class="btn sm" id="stLmsShare" title="A poster of this gameweek\u2019s eliminations">' +
                 svg("download", 15) + 'Export image</button>'
