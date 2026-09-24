@@ -44,7 +44,7 @@ const sides = (p) => p.evaluate(() => ({
     chk(s.labels.indexOf("You") === -1, w + ": no You heading", s.labels.join(" | "));
     chk(s.items.some(i => i.id === "pfMine" && /My profile/i.test(i.t)), w + ": My profile is still there and still says so");
     chk(s.items.some(i => i.id === "pfCompare" && /Head to head/i.test(i.t)), w + ": Head to head is still there");
-    chk(s.labels.join("|") === "League|Players", w + ": the headings left are the ones over more than one row", s.labels.join(" | "));
+    chk(s.labels.join("|") === "League insights|League|Players", w + ": the headings left are the ones over more than one row", s.labels.join(" | "));
 
     // my own name, as the sheet prints it, to check against the compare box
     myName = await p.evaluate(() => (document.querySelector("#youBody .profile-hd .who") || {}).textContent);
