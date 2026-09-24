@@ -1821,6 +1821,20 @@
 
       squads = {
         managers: n, chips: chips,
+        // how owned the average starting eleven in the league is, on the
+        // same plain ownership the sides above carry, so a side drawn from
+        // these squads reads against the same measure
+        leagueAvgOwned: (function () {
+          var sum = 0, cnt = 0;
+          ids.forEach(function (mid) {
+            var xi = (pk[mid].p || []).filter(function (t) { return t[1] > 0; });
+            if (!xi.length) return;
+            var s = 0;
+            xi.forEach(function (t) { s += n ? (own[t[0]] || 0) / n * 100 : 0; });
+            sum += s / xi.length; cnt++;
+          });
+          return cnt ? Math.round((sum / cnt) * 10) / 10 : 0;
+        })(),
         movedIn: movedIn, movedOut: movedOut, churn: churn,
         mostVice: ownedList.slice().filter(function (x) { return x.vices > 0; })
           .sort(function (a, b) { return b.vices - a.vices; }).slice(0, 5),

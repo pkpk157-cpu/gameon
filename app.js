@@ -5884,6 +5884,72 @@
     box.innerHTML = fn(H, ds) || '<div class="callout">Nothing to show yet.</div>';
     var lb = $("#stLmsShare", box);
     if (lb) lb.addEventListener("click", function () { shareStats(ds, state.statsGw, "lms", lb); });
+    wireXi(box);
+  }
+
+  /* A side that is nobody's squad — the template XI, the team of the week —
+     drawn the way a profile draws a squad: the three figures above it and the
+     Points / Ownership / Value switch, with the cards changing under it. The
+     figures are the eleven's own; there is no bench, bank or hit here. */
+  var XI_BLOCKS = {};
+  function xiBlock(key, lines, ctx) {
+    XI_BLOCKS[key] = { lines: lines, ctx: ctx || {} };
+    return '<div class="xiblock" data-xi="' + key + '">' + xiBlockInner(key) + '</div>';
+  }
+  function xiBlockInner(key) {
+    var B = XI_BLOCKS[key];
+    if (!B) return "";
+    var metric = (state.xiMetric || {})[key] || B.ctx.metric || "pts";
+    if (!METRICS[metric]) metric = "pts";
+    var players = [];
+    B.lines.forEach(function (l) { l.players.forEach(function (p) { players.push(p); }); });
+    var n = players.length || 1, total = 0, eoSum = 0, val = 0, top = null, most = null, pricey = null;
+    players.forEach(function (p) {
+      total += p.pts || 0; eoSum += p.eo || 0; val += p.price || 0;
+      if (!top || (p.pts || 0) > top.pts) top = p;
+      if (!most || (p.eo || 0) > most.eo) most = p;
+      if (!pricey || (p.price || 0) > pricey.price) pricey = p;
+    });
+    var stat = function (v, l, sub, main) {
+      return '<div class="pstat' + (main ? ' main' : '') + '"><div class="v">' + esc(v) + '</div>' +
+        (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '<div class="l">' + l + '</div></div>';
+    };
+    var strip;
+    if (metric === "eo") {
+      strip = stat(B.ctx.leagueAvgOwned != null ? B.ctx.leagueAvgOwned + "%" : "\u2014", "League avg") +
+        stat(Math.round((eoSum / n) * 10) / 10 + "%", "Average owned", null, true) +
+        stat(most ? most.eo + "%" : "\u2014", "Most owned", most ? most.name : "");
+    } else if (metric === "val") {
+      strip = stat(mval(Math.round(val / n)), "Per player") +
+        stat(mval(val), "XI value", null, true) +
+        stat(pricey ? mval(pricey.price) : "\u2014", "Priciest", pricey ? pricey.name : "");
+    } else {
+      strip = stat(B.ctx.average != null ? num(B.ctx.average) : "\u2014", "League avg") +
+        stat(num(total), "Total Pts", null, true) +
+        stat(top ? num(top.pts) : "\u2014", "Top scorer", top ? top.name : "");
+    }
+    var h = '<div class="psegrow"><div class="pseg sm">' + Object.keys(METRICS).map(function (k) {
+      return '<button type="button"' + (metric === k ? ' class="on"' : '') +
+        ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
+    }).join("") + '</div></div>';
+    h += '<div class="pstats' + (metric === "val" ? ' money' : '') + '">' + strip + '</div>';
+    if (metric === "eo") h += '<div class="note" style="margin:-6px 2px 8px">Ownership here is within Game On\u2019s 245 managers.</div>';
+    h += '<div class="card pitchcard"><div class="bd">' + pitchHtml({ lines: B.lines, bench: [] }, metric) + '</div></div>';
+    return h;
+  }
+  // The switch under either side, wired once on the stats box: the box is
+  // redrawn on every tab and gameweek change, the listener is not.
+  function wireXi(box) {
+    if (box._xiWired) return;
+    box._xiWired = true;
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest(".xiblock .pseg button[data-metric]");
+      if (!b) return;
+      var blk = b.closest(".xiblock"), key = blk.getAttribute("data-xi");
+      state.xiMetric = state.xiMetric || {};
+      state.xiMetric[key] = b.getAttribute("data-metric");
+      blk.innerHTML = xiBlockInner(key);
+    });
   }
 
   /* ---- one tab each ----------------------------------------------------- */
@@ -5981,8 +6047,7 @@
       h += '<div class="note" style="margin:-4px 2px 10px">The highest-scoring legal eleven from players anyone in the league held, a ' +
         esc(tw.shape) + ' worth ' + num(tw.total) + ' points' +
         (mine !== null ? ' \u00b7 ' + mine + ' of them in your squad' : '') + '.</div>';
-      h += '<div class="card pitchcard"><div class="bd">' +
-        pitchHtml({ lines: tw.lines, bench: [] }, "pts") + '</div></div>';
+      h += xiBlock("totw", tw.lines, { metric: "pts", average: g.average, leagueAvgOwned: sq.leagueAvgOwned });
     }
 
     if (sq && (sq.topScorers.length || sq.differentials.length)) {
@@ -6111,8 +6176,7 @@
     if (sq.templateXi) {
       h += '<div class="section-title"><h2>The template XI</h2><div class="rule"></div></div>';
       h += '<div class="note" style="margin:-4px 2px 10px">The most-owned player in each position, with how much of the league has them.</div>';
-      h += '<div class="card pitchcard"><div class="bd">' +
-        pitchHtml({ lines: sq.templateXi, bench: [] }, "eo") + '</div></div>';
+      h += xiBlock("template", sq.templateXi, { metric: "eo", average: H.gwStats ? H.gwStats.average : null, leagueAvgOwned: sq.leagueAvgOwned });
     }
 
     h += '<div class="card"><div class="bd hcols">';
