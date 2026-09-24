@@ -478,8 +478,9 @@ function buildWeek(S, gw, phase) {
     const nTr = (S.moves[gw][id] || []).length;
     const free = 1;
     const h = (chip === "wildcard" || chip === "freehit") ? 0 : Math.max(0, nTr - free) * 4;
-    const v = sq.p.reduce((s, x) => s + (P.els[x[0]][3] || 0), 0);
+    // FPL's value counts the bank in, so the row carries players plus bank
     const bk = Math.max(0, Math.round(prev.bk + (R() - 0.5) * 6));
+    const v = sq.p.reduce((s, x) => s + (P.els[x[0]][3] || 0), 0) + bk;
     S.history[id] = S.history[id] || {};
     S.history[id][gw] = { p, h, b, t: prev.t + p - h, v, bk, tr: nTr, r: 0, pl: played, plt: total };
     sumP += p;

@@ -31,7 +31,7 @@ cd "$(dirname "$(readlink -f "$0")")" || exit 1
 LOG=${1:-bat.log}; JOBS=${2:-4}; shift 2 2>/dev/null
 TIMES=bat-times.txt; SEED=bat-times.seed.txt; PROG=bat.progress
 
-ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook pflags overlap twosheets youme younull drawer drawerfit drawertheme livecard match pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pplayer pltable pltcrests mevents prsplit prnotoggle prmine prfavs prfill lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills menuart pfhead errsweep statesweep nullstack2 xplat gcopt snapshot turf usage shareimg grpsync subsplan ppresult blots scored trend theo xitap season seasonsweep"
+ALL="tblfit faceaudit facefit face404 realface pitchfit pitchlook cmppitchlook pflags overlap twosheets youme younull drawer drawerfit drawertheme livecard match pstats volun overview profile winnings h2h ko rules domaudit nav views gwstatus plinfo pplayer pltable pltcrests mevents prsplit prnotoggle prmine prfavs prfill lmsstates lmstie ties tiefix stickyhdr sorthdr search audit3 badgecheck badgerecount badgestates badgeform totwcheck rivals livemotion crests ptr bubble profnav sheetcrest splash facehide barpills menuart pfhead errsweep statesweep nullstack2 xplat gcopt snapshot turf usage shareimg grpsync subsplan ppresult blots scored trend theo xitap worth season seasonsweep"
 SUITES=${*:-$ALL}
 
 # Two batteries at once means two servers on every port, and a page of

@@ -963,6 +963,7 @@
                     .sort(function (a, b) { return a - b; }) : [];
     var sum = function (k) { return gws.reduce(function (s, g) { return s + (+H[g][k] || 0); }, 0); };
     var last = gws.length ? H[gws[gws.length - 1]] : null, prev = gws.length > 1 ? H[gws[gws.length - 2]] : null;
+    var lastWorth = gws.length ? C.squadWorth(ds, id, gws[gws.length - 1]) : null;
     var best = null, bestP = null;
     gws.forEach(function (g) {
       var sc = gwScore(ds, id, g);
@@ -991,8 +992,8 @@
       behindLeader: rows[0].total - me.total,
       above: above ? { rank: above.computedRank, gap: above.total - me.total } : null,
       chipPlays: plays, chipNames: chips.map(function (c) { return c.label; }).join(", "),
-      value: last && typeof last.v === "number" ? last.v : null,
-      bank: last && typeof last.bk === "number" ? last.bk : null
+      value: lastWorth ? lastWorth.value : null,
+      bank: lastWorth ? lastWorth.bank : null
     };
   };
 
@@ -1004,6 +1005,49 @@
     if (ds.picksV >= 2) return ds.picks[gw] || null;
     return (+gw === +ds.pitchGw) ? ds.picks : null;
   }
+  /* What a squad is worth in a gameweek: the fifteen players, with the bank
+     apart. The newest squad is valued at today's prices, the figure its cards
+     show and FPL's own Pick Team page gives. An older squad is valued as FPL
+     recorded it when that gameweek was played: the history row's value less
+     its bank, because FPL's value counts the bank in (every squad that left
+     money unspent in Gameweek 1 still reads 100.0 there). Today's prices hung
+     on last month's team would be a number nobody ever held. One rule, used by
+     the profile, the stats and the pictures alike, so they cannot disagree. */
+  C.squadWorth = function (ds, id, gw) {
+    if (!ds) return null;
+    var h = ((ds.history || {})[id] || {})[gw] || null;
+    var bank = h && typeof h.bk === "number" ? h.bk : null;
+    if (+gw === +ds.pitchGw) {
+      var pk = picksAt(ds, gw), sq = pk && pk[id], els = ds.elements || {};
+      if (sq && sq.p && sq.p.length) {
+        var sum = 0, ok = true;
+        sq.p.forEach(function (t) {
+          var e = els[t[0]];
+          if (e && typeof e[3] === "number") sum += e[3]; else ok = false;
+        });
+        if (ok) return { value: sum, bank: bank, now: true };
+      }
+    }
+    if (h && typeof h.v === "number" && h.v > 0) return { value: h.v - (bank || 0), bank: bank, now: false };
+    return null;
+  };
+  // The league's squads in one gameweek by that rule: the average squad and
+  // bank, over the managers who have a figure. Kept, as every profile asks.
+  var _worth = { key: null, val: null };
+  C.leagueWorth = function (ds, gw) {
+    if (!ds || !ds.managers) return null;
+    var key = (ds.updatedAt || "") + "|" + gw + "|" + ds.pitchGw;
+    if (_worth.key === key) return _worth.val;
+    var vs = 0, bs = 0, n = 0;
+    ds.managers.forEach(function (m) {
+      var w = C.squadWorth(ds, m.id, gw);
+      if (!w) return;
+      vs += w.value; bs += w.bank || 0; n++;
+    });
+    var out = n ? { average: Math.round(vs / n), averageBank: Math.round(bs / n), count: n } : null;
+    _worth = { key: key, val: out };
+    return out;
+  };
   function liveAt(ds, gw) {
     if (!ds || !ds.livePoints) return {};
     if (ds.picksV >= 2) return ds.livePoints[gw] || {};
@@ -1084,23 +1128,20 @@
       eo[el] = Math.round((mult[el] / n) * 1000) / 10;
     });
 
-    var eoSum = 0, valSum = 0, counted = 0;
+    var eoSum = 0, counted = 0;
     ids.forEach(function (mid) {
       var picks = pk[mid].p || [];
-      var xi = 0, xiEo = 0, val = 0;
+      var xi = 0, xiEo = 0;
       picks.forEach(function (t) {
-        var m = els[t[0]];
-        val += (m && m[3]) || 0;
         if (t[1] > 0) { xi++; xiEo += eo[t[0]] || 0; }
       });
       if (!xi) return;
-      eoSum += xiEo / xi; valSum += val; counted++;
+      eoSum += xiEo / xi; counted++;
     });
 
     var out = {
       eo: eo, managers: n,
-      leagueAvgEo: counted ? Math.round((eoSum / counted) * 10) / 10 : 0,
-      leagueAvgValue: counted ? Math.round(valSum / counted) : 0
+      leagueAvgEo: counted ? Math.round((eoSum / counted) * 10) / 10 : 0
     };
     _eo = { key: key, val: out };
     return out;
@@ -1420,6 +1461,7 @@
       else everyone.forEach(function (p) { delete p.sell; });
     }
 
+    var worth = C.squadWorth(ds, id, gw), lw = C.leagueWorth(ds, gw);
     var provTotal = 0;
     scoring.forEach(function (p) { provTotal += (p.prov || 0) * p.mult; });
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live, provisional: provTotal,
@@ -1427,10 +1469,10 @@
              total: total, hits: hits, net: net,
              average: n ? Math.round(sum / n) : null, highest: top,
              avgEo: scoring.length ? Math.round((eoSum / scoring.length) * 10) / 10 : 0,
-             topEo: topEo || 0, squadValue: valSum, topPrice: topPrice || 0,
+             topEo: topEo || 0, squadValue: worth ? worth.value : valSum, topPrice: topPrice || 0,
              bank: bank, sellValue: sellValue, swaps: swaps.length,
              leagueAvgEo: eot ? eot.leagueAvgEo : 0,
-             leagueAvgValue: eot ? eot.leagueAvgValue : 0 };
+             leagueAvgValue: lw ? lw.average : 0 };
   };
 
   // Side-by-side comparison of two managers for a gameweek, plus season totals
@@ -1591,10 +1633,11 @@
     ds.managers.forEach(function (m) {
       var r = (ds.history[m.id] || {})[gw];
       if (!r || typeof r.p !== "number") return;
-      var sc = gwScore(ds, m.id, gw);
+      var sc = gwScore(ds, m.id, gw), wth = C.squadWorth(ds, m.id, gw);
       rows.push({ id: m.id, name: nm(mm, m.id), player: pl(mm, m.id),
                   p: sc === null ? r.p : sc, hits: r.h || 0, bench: gwBench(ds, m.id, gw) || r.b || 0,
-                  value: r.v || 0, bank: r.bk || 0, transfers: r.tr || 0 });
+                  value: wth ? wth.value : 0, bank: wth && wth.bank != null ? wth.bank : (r.bk || 0),
+                  transfers: r.tr || 0 });
     });
     var gwStats = null;
     if (rows.length) {
@@ -1689,7 +1732,9 @@
         top: withVal.slice().sort(function (a, b) { return b.value - a.value; }).slice(0, 5),
         richest: best(withVal, "value"), poorest: worst(withVal, "value"),
         average: Math.round(vs / withVal.length), averageBank: Math.round(bs / withVal.length),
-        mostBanked: best(withVal, "bank"), count: withVal.length
+        mostBanked: best(withVal, "bank"), count: withVal.length,
+        // the newest squads are at today's prices, older ones as FPL recorded
+        now: +gw === +ds.pitchGw
       };
     }
 

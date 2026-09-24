@@ -5038,9 +5038,10 @@
       var v = H.value;
       if (!v) return "Squad values appear after the next data refresh";
       var flat = v.richest.value === v.poorest.value;
+      // the same figures as the page: players only, the bank apart
       var vals = ds.managers.map(function (m) {
-        var r = (ds.history[m.id] || {})[gw];
-        return r && r.v > 0 ? { name: m.entryName, v: r.v, bk: r.bk || 0 } : null;
+        var w = K.squadWorth(ds, m.id, gw);
+        return w && w.value > 0 ? { name: m.entryName, v: w.value, bk: w.bank || 0 } : null;
       }).filter(Boolean);
       var span = Math.max(1, v.richest.value - v.poorest.value);
       base.hero = { title: "Most valuable teams", rows: vals.slice().sort(function (a, b) { return b.v - a.v; }).slice(0, 8)
@@ -6218,6 +6219,11 @@
   function statsValue(H) {
     var v = H.value, sq = H.squads;
     var h = '<div class="statlead">' + esc(H.gwName) + '</div>';
+    // Which prices these are, once: the newest squads today, older ones as
+    // FPL recorded them that week. Every figure is players only.
+    if (v) h += '<div class="note" style="margin:-4px 2px 10px">' + (v.now
+      ? 'Squad values are the fifteen players at today\u2019s prices, the bank shown apart.'
+      : 'Squad values are the fifteen players as FPL valued them in ' + esc(H.gwName) + ', the bank shown apart.') + '</div>';
     if (v && v.richest.value === v.poorest.value) {
       // Before anyone has transferred, every squad is still worth the same —
       // naming a "richest" and "leanest" here would just look broken.
@@ -6234,7 +6240,7 @@
         mval(v.poorest.bank) + " in the bank", "down");
       if (v.mostBanked && v.mostBanked.bank > 0) {
         h += hcard("Most in the bank", mval(v.mostBanked.bank), v.mostBanked.name, v.mostBanked.id,
-          mval(v.mostBanked.value) + " on the pitch", "bank");
+          mval(v.mostBanked.value) + " in players", "bank");
       }
       h += '</div>';
     } else {
