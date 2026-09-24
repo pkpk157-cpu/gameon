@@ -1725,19 +1725,8 @@
       b.parentNode.insertBefore(row, b.nextSibling);
     });
     paint();
-
-    // The gameweek the reader tapped, opened and brought into view. Cleared
-    // once used: coming back here later should not keep reopening a row from a
-    // journey that is over.
-    if (state.playerGw) {
-      var want = panel.querySelector('[data-ppgw="' + state.playerGw + '"]');
-      state.playerGw = null;
-      if (want) {
-        want.click();
-        var card = want.closest(".card");
-        if (card) card.scrollIntoView({ block: "center", behavior: "instant" in window ? "instant" : "auto" });
-      }
-    }
+    // The page always opens condensed, every gameweek closed: a row opens only
+    // when the reader taps it, wherever the tap that brought them here was.
   }
 
   // What he has done: every gameweek played, newest first, each opening its
@@ -2581,11 +2570,9 @@
     if (view === "stats" && parts[1]) state.statsTab = parts[1];
     if (view === "vol" && parts[1]) state.volKey = parts[1];
     if (view === "player") {
+      // A tap on a card adds the gameweek it came from (player/<id>/<gw>); the
+      // page no longer opens that row, so only the id is read.
       state.playerId = +parts[1] || null;
-      // Arriving from a card means "what did he do in *that* gameweek", so the
-      // page opens with that row already open rather than making the reader
-      // find it again. Read once and cleared, so later taps are free.
-      state.playerGw = +parts[2] || null;
     }
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";

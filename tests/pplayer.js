@@ -225,8 +225,8 @@ async function open(b, hash, w, waitFor) {
   /* --- the way in: a tap on a card, landing on that gameweek -------------
      There used to be a sheet between the two, holding a points breakdown and a
      season table — most of what this page does and less of it. The tap comes
-     straight here now, and because a card is a question about one gameweek,
-     it arrives with that gameweek already open. */
+     straight here now, and the page opens condensed at the top, every
+     gameweek closed, whichever gameweek the card came from. */
   {
     const { ctx, p, errs } = await open(b, "profile/" + ME, 390, ".pcard");
     const tapped = await p.evaluate(() => {
@@ -244,17 +244,19 @@ async function open(b, hash, w, waitFor) {
       hash: location.hash,
       page: !!document.querySelector(".pphead"),
       sheet: document.querySelector("#modalBack").classList.contains("show"),
-      openGw: (document.querySelector("tr[data-ppgw].open") || {}).getAttribute
-        ? document.querySelector("tr[data-ppgw].open").getAttribute("data-ppgw") : null,
-      expanded: document.querySelectorAll(".ppexp").length
+      openRows: document.querySelectorAll("tr[data-ppgw].open").length,
+      expanded: document.querySelectorAll(".ppexp").length,
+      y: window.scrollY
     }));
     chk(where.page && where.hash === "#player/" + tapped.el + "/" + tapped.gw,
       "a tap on a card opens his page, carrying the gameweek it came from", where.hash);
     chk(!where.sheet, "and no sheet is left over the top of it");
-    chk(where.openGw === tapped.gw && where.expanded === 1,
-      "with that gameweek already open, not left to be found again",
-      where.openGw + " / " + where.expanded + " open");
-    // and the breakdown shown is that gameweek's, not whichever was newest
+    chk(where.openRows === 0 && where.expanded === 0,
+      "condensed: no gameweek opened on arrival", where.openRows + " rows / " + where.expanded + " open");
+    chk(where.y < 40, "and the page starts at the top, not scrolled to a row", "scrollY " + where.y);
+    // a row still opens on a tap, with its own gameweek's breakdown
+    await p.evaluate((gw) => { const r = document.querySelector('tr[data-ppgw="' + gw + '"]'); if (r) r.click(); }, tapped.gw);
+    await p.waitForTimeout(300);
     const shown = await p.evaluate(() => {
       const row = document.querySelector("tr[data-ppgw].open");
       const exp = document.querySelector(".ppexp");
@@ -262,7 +264,7 @@ async function open(b, hash, w, waitFor) {
                total: exp ? (exp.querySelector(".bdtotal") || {}).textContent : null };
     });
     chk(shown.forGw === tapped.gw && shown.rowGw === tapped.gw,
-      "the breakdown belongs to the gameweek tapped", JSON.stringify(shown));
+      "a tap on that gameweek's row opens its breakdown", JSON.stringify(shown));
     chk(!!shown.total && /pts/.test(shown.total), "and it totals", shown.total);
     // back lands where he was tapped, not at the top of the profile
     await p.evaluate(() => document.querySelector("#barBack").click());

@@ -142,8 +142,8 @@ function expect(home, away) {
       hash: location.hash,
       title: (document.querySelector("#barTitle") || {}).textContent,
       rows: document.querySelectorAll(".ppexp .bdtbl tbody tr").length }));
-    chk("row tap opens his page on this gameweek",
-        page.open && page.hash === "#player/" + first.el + "/" + first.gw && page.rows > 0,
+    chk("row tap opens his page, condensed, carrying this gameweek",
+        page.open && page.hash === "#player/" + first.el + "/" + first.gw && page.rows === 0,
         JSON.stringify(page));
     chk("and the bar names him", page.title === first.name, page.title + " vs " + first.name);
     // back to the match
