@@ -5194,7 +5194,8 @@
 
   // Draws the picture. Resolves with the canvas.
   function shareDraw(ds, gw, kind) {
-    var M = shareModel(ds, gw, kind);
+    var poster = kind === "lms";
+    var M = poster ? shareLmsModel(ds, gw) : shareModel(ds, gw, kind);
     if (!M) return Promise.reject(new Error("nothing to draw"));
     if (typeof M === "string") return Promise.reject(new Error(M));
     var T = shareTheme();
@@ -5208,10 +5209,10 @@
       var logo = imgs[0], faces = {};
       players.forEach(function (p, i) { faces[p.el] = imgs[i + 1]; });
       var cv = document.createElement("canvas");
-      cv.width = SHARE_W * 2; cv.height = shareHeight(M) * 2;
+      cv.width = SHARE_W * 2; cv.height = (poster ? shareLmsHeight(M) : shareHeight(M)) * 2;
       var c = cv.getContext("2d");
       c.scale(2, 2);
-      sharePaint(c, M, T, logo, faces);
+      if (poster) shareLmsPaint(c, M, T, logo); else sharePaint(c, M, T, logo, faces);
       cv.shareModel = M;
       return cv;
     });
@@ -5231,8 +5232,9 @@
     return M.pitch ? Math.max(960, y) : y;
   }
 
-  function sharePaint(c, M, T, logo, faces) {
-    var W = SHARE_W, H = shareHeight(M), PAD = 16;
+  // The drawing tools every picture shares: fonts, rounded boxes, text that
+  // fits or shrinks, and the glass card.
+  function shareTools(c, T) {
     var F = function (w, s) { return w + " " + s + "px " + T.font; };
     var rr = function (x, y, w, h, r) {
       c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
@@ -5263,8 +5265,13 @@
       rr(x, y, w, h, 18); c.fillStyle = T.glass; c.fill(); c.restore();
       rr(x + .5, y + .5, w - 1, h - 1, 17.5); c.strokeStyle = T.border; c.lineWidth = 1; c.stroke();
     };
+    return { F: F, rr: rr, fit: fit, shrink: shrink, text: text, card: card };
+  }
 
-    /* wallpaper: the theme's own gradient, blobs and all */
+  // The frame every picture sits in: the theme's wallpaper, blobs and all,
+  // and the app's own bar with its logo and the picture's title.
+  function shareFrame(c, W, H, T, logo, league, sub) {
+    var U = shareTools(c, T), PAD = 16;
     var base = c.createLinearGradient(0, 0, 0, H);
     if (T.dark) { base.addColorStop(0, "#16011c"); base.addColorStop(1, "#0b0010"); }
     else { base.addColorStop(0, "#f8f5fc"); base.addColorStop(1, "#edeaf5"); }
@@ -5277,16 +5284,284 @@
     if (T.dark) { blob(40, -40, 420, "rgba(69,9,81,.5)"); blob(W + 20, 20, 470, "rgba(18,49,63,.5)"); blob(W / 2, H + 60, 380, "rgba(58,10,61,.5)"); }
     else { blob(30, -40, 400, "#f6d8ff"); blob(W + 10, 20, 450, "#ffd7e6"); blob(W / 2, H + 60, 360, "#d2f8ff"); }
 
-    /* the bar */
     var bar = c.createLinearGradient(0, 0, W, 0);
     bar.addColorStop(0, "#37003c"); bar.addColorStop(.55, "#4a0050"); bar.addColorStop(1, "#6a0a5c");
     c.fillStyle = bar; c.fillRect(0, 0, W, 96);
     var rule = c.createLinearGradient(0, 0, W, 0);
     rule.addColorStop(0, "#e90052"); rule.addColorStop(.5, "#04f5ff"); rule.addColorStop(1, "#00ff87");
     c.fillStyle = rule; c.fillRect(0, 96, W, 3);
-    if (logo) { c.save(); rr(PAD, 22, 52, 52, 12); c.clip(); c.drawImage(logo, PAD, 22, 52, 52); c.restore(); }
-    text(M.league, 84, 44, F(800, 21), "#fff", "left", W - 84 - PAD);
-    text(M.sub, 84, 70, F(600, 14), "rgba(255,255,255,.78)", "left", W - 84 - PAD);
+    if (logo) { c.save(); U.rr(PAD, 22, 52, 52, 12); c.clip(); c.drawImage(logo, PAD, 22, 52, 52); c.restore(); }
+    U.text(league, 84, 44, U.F(800, 21), "#fff", "left", W - 84 - PAD);
+    U.text(sub, 84, 70, U.F(600, 14), "rgba(255,255,255,.78)", "left", W - 84 - PAD);
+  }
+
+  // The stamp every picture ends on.
+  function shareStamp(c, W, H, T) {
+    var U = shareTools(c, T);
+    var when = new Date().toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    U.text("Game On V12 · " + when, W / 2, H - 9, U.F(600, 11), T.faint, "center");
+  }
+
+  /* ---- the eliminations poster ------------------------------------------
+     Who went out of Last Manager Standing in a gameweek, as a poster: the
+     headline, the count of the field, a card per manager with his club and
+     score, and how many are left. Only a checked gameweek has eliminations
+     to picture; a live one has a drop zone, which is not the same claim. */
+  var DIV_COLOUR = { elite: "#d69a00", championship: "#7c3aed", challenger: "#22a559", conference: "#2f7fe0" };
+  function shareLmsModel(ds, gw) {
+    var lms = K.lms(ds);
+    var week = lms.perGw.filter(function (w) { return +w.gw === +gw; })[0];
+    if (!week) return "No eliminations yet: the gameweek is decided when FPL finalises it";
+    var outs = week.table.filter(function (r) { return r.eliminated; });
+    if (!outs.length) return "No eliminations in this gameweek";
+    var row = lms.grid.filter(function (g) { return +g.gw === +gw; })[0] || {};
+    // the division each man was playing in when he went out
+    var div = {}, divName = {};
+    K.pyramid(ds).seasons.forEach(function (se) {
+      if (se.gws.indexOf(+gw) === -1) return;
+      se.divisions.forEach(function (dv) { dv.rows.forEach(function (r) { div[r.id] = dv.key; divName[r.id] = dv.name; }); });
+    });
+    var started = ds.managers.length;
+    return {
+      kind: "lms", gw: +gw, league: (ds.league && ds.league.name) || "Game On",
+      file: "gameon-gw" + gw + "-eliminated.png", title: "Gameweek " + gw + " eliminations",
+      sub: "Last Manager Standing \u00b7 GW" + gw + " \u00b7 Final",
+      started: started, outSoFar: started - (row.eog != null ? row.eog : started), left: row.eog != null ? row.eog : started,
+      carry: week.unresolved ? week.unresolved.places : 0,
+      rows: outs.map(function (r) {
+        return { id: r.id, name: r.player || r.name, team: r.name, score: r.score,
+                 div: div[r.id] || null, divName: divName[r.id] || "" };
+      })
+    };
+  }
+  // The poster's shape follows the league's own: the stadium at night, the
+  // headline on a brush stroke, four cards across. Two rows of cards for
+  // the usual eight; more if a carried tie makes a bigger week.
+  var POSTER = { top: 92, head: 126, stats: 84, banner: 44, card: 196, gap: 8, hunt: 112, strip: 76, foot: 40 };
+  function shareLmsHeight(M) {
+    var rows = Math.ceil(M.rows.length / 4), P = POSTER;
+    return P.top + P.head + P.stats + 14 + P.banner + 12 + rows * P.card + Math.max(0, rows - 1) * P.gap + 18 + P.hunt + P.strip + P.foot;
+  }
+  function shareLmsPaint(c, M, T, logo) {
+    var W = SHARE_W, H = shareLmsHeight(M), PAD = 16, cw = W - PAD * 2, P = POSTER;
+    // The poster is always the night version, whatever the app is set to:
+    // it is the league's colours on the app's palette, not a page.
+    var K2 = { pink: "#e90052", pink2: "#ff2d6f", ink: "#ffffff", soft: "#c9c2d6", faint: "#8f87a0",
+               card: "rgba(20,8,28,.82)", line: "rgba(255,255,255,.14)", font: T.font };
+    var U = shareTools(c, { font: T.font, dark: true, glass: K2.card, border: K2.line });
+    var F = U.F, rr = U.rr, text = U.text, shrink = U.shrink;
+    var FI = function (w, s) { return "italic " + w + " " + s + "px " + T.font; };
+    // a seeded scatter, so the same week draws the same poster
+    var seed = 7919 + M.gw * 31;
+    var rnd = function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+    /* the stadium at night */
+    var base = c.createLinearGradient(0, 0, 0, H);
+    base.addColorStop(0, "#1a0424"); base.addColorStop(.35, "#0e0214"); base.addColorStop(1, "#06000a");
+    c.fillStyle = base; c.fillRect(0, 0, W, H);
+    var glow = function (x, y, r, col) {
+      var g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+    };
+    glow(40, 20, 260, "rgba(255,240,255,.22)"); glow(W - 40, 20, 260, "rgba(255,240,255,.22)");
+    glow(W / 2, H - 40, 320, "rgba(233,0,82,.22)"); glow(W / 2, H * .55, 420, "rgba(90,10,120,.18)");
+    // floodlight beams
+    c.save(); c.globalAlpha = .07; c.fillStyle = "#ffffff";
+    [[20, 0, 250, H * .5, 120, H * .5], [W - 20, 0, W - 250, H * .5, W - 120, H * .5]].forEach(function (b) {
+      c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(b[2], b[3]); c.lineTo(b[4], b[5]); c.closePath(); c.fill();
+    });
+    c.restore();
+    // the crowd: a scatter of faint points over the stands
+    c.save();
+    for (var d = 0; d < 1400; d++) {
+      var dx = rnd() * W, dy = rnd() * H * .42;
+      c.globalAlpha = .05 + rnd() * .16; c.fillStyle = rnd() < .8 ? "#ffffff" : K2.pink;
+      c.fillRect(dx, dy, 1.4, 1.4);
+    }
+    c.restore();
+    // a few sparks over the pitch end
+    c.save();
+    for (var d2 = 0; d2 < 60; d2++) {
+      c.globalAlpha = .25 + rnd() * .5; c.fillStyle = rnd() < .5 ? K2.pink2 : "#ffd0a0";
+      c.beginPath(); c.arc(rnd() * W, H - rnd() * 200, .8 + rnd() * 1.2, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+
+    /* a brush stroke: a slab with rough edges, tilted a little */
+    var brush = function (x, y, w, h, col, tilt) {
+      c.save(); c.translate(x + w / 2, y + h / 2); c.rotate(tilt || 0);
+      c.beginPath();
+      var steps = 18, i;
+      for (i = 0; i <= steps; i++) c.lineTo(-w / 2 + (w * i) / steps, -h / 2 + (rnd() - .5) * h * .18);
+      for (i = steps; i >= 0; i--) c.lineTo(-w / 2 + (w * i) / steps, h / 2 + (rnd() - .5) * h * .18);
+      c.closePath(); c.fillStyle = col; c.fill(); c.restore();
+    };
+    var shadowText = function (s, x, y, font, col, align, shadow) {
+      c.save(); c.shadowColor = shadow || "rgba(0,0,0,.6)"; c.shadowBlur = 10; c.shadowOffsetY = 3;
+      text(s, x, y, font, col, align); c.restore();
+    };
+
+    /* the crest and the corner lines */
+    if (logo) { c.save(); rr(W / 2 - 30, 14, 60, 60, 14); c.clip(); c.drawImage(logo, W / 2 - 30, 14, 60, 60); c.restore(); }
+    var tag = function (x, y, a, b, tilt, align) {
+      c.save(); c.translate(x, y); c.rotate(tilt);
+      text(a, 0, 0, FI(800, 13), K2.ink, align); text(b, 0, 17, FI(900, 14), K2.pink2, align);
+      c.restore();
+    };
+    tag(PAD + 6, 40, "SAME MANAGERS.", "BIGGER BATTLES.", -0.1, "left");
+    tag(W - PAD - 6, 40, "SURVIVE. ADAPT.", "CONQUER.", 0.1, "right");
+    var y = P.top;
+
+    /* the headline */
+    c.font = FI(900, 44);
+    var gwLbl = "GW" + M.gw, elim = "ELIMINATION";
+    var gwW = c.measureText(gwLbl).width, elW = c.measureText(elim).width;
+    var totalW = gwW + 18 + elW, scale = Math.min(1, cw / totalW), fs = Math.floor(44 * scale);
+    c.font = FI(900, fs); gwW = c.measureText(gwLbl).width; elW = c.measureText(elim).width;
+    var hx = W / 2 - (gwW + 18 + elW) / 2;
+    brush(hx - 10, y + 6, gwW + 22, fs + 6, K2.pink, -0.04);
+    shadowText(gwLbl, hx, y + 8 + fs * .82, FI(900, fs), K2.ink, "left", "rgba(0,0,0,.5)");
+    shadowText(elim, hx + gwW + 18, y + 8 + fs * .82, FI(900, fs), K2.ink, "left", "rgba(233,0,82,.55)");
+    var n = M.rows.length;
+    c.font = FI(900, 21);
+    var s1 = "THE ", s2 = "BOTTOM " + num(n), s3 = (n === 1 ? " IS OUT!" : " ARE OUT!");
+    var w1 = c.measureText(s1).width, w2 = c.measureText(s2).width, w3 = c.measureText(s3).width;
+    var sx = W / 2 - (w1 + w2 + w3) / 2, sy = y + fs + 44;
+    shadowText(s1, sx, sy, FI(900, 21), K2.ink, "left"); shadowText(s2, sx + w1, sy, FI(900, 21), K2.pink2, "left");
+    shadowText(s3, sx + w1 + w2, sy, FI(900, 21), K2.ink, "left");
+    y += P.head;
+
+    /* the field: started, out, still in */
+    rr(PAD, y, cw, P.stats, 12); c.fillStyle = K2.card; c.fill();
+    rr(PAD + .5, y + .5, cw - 1, P.stats - 1, 11.5); c.strokeStyle = "rgba(233,0,82,.7)"; c.lineWidth = 1.5; c.stroke();
+    var icon = function (kind, x, cy) {
+      c.save(); c.strokeStyle = K2.soft; c.fillStyle = K2.soft; c.lineWidth = 2.2; c.lineCap = "round"; c.lineJoin = "round";
+      if (kind === "people") {
+        [[-9, 3], [9, 3], [0, -1]].forEach(function (o, i) {
+          var r = i === 2 ? 6 : 4.5, ox = x + o[0], oy = cy + o[1] - 6;
+          c.beginPath(); c.arc(ox, oy, r, 0, Math.PI * 2); c.fill();
+          c.beginPath(); c.arc(ox, oy + r + 8, r + 3, Math.PI, 0); c.fill();
+        });
+      } else if (kind === "x") {
+        c.strokeStyle = K2.pink2; c.lineWidth = 4;
+        c.beginPath(); c.moveTo(x - 9, cy - 9); c.lineTo(x + 9, cy + 9); c.moveTo(x + 9, cy - 9); c.lineTo(x - 9, cy + 9); c.stroke();
+      } else if (kind === "shield") {
+        c.beginPath(); c.moveTo(x, cy - 12); c.lineTo(x + 11, cy - 8); c.lineTo(x + 10, cy + 3);
+        c.quadraticCurveTo(x + 7, cy + 11, x, cy + 14); c.quadraticCurveTo(x - 7, cy + 11, x - 10, cy + 3);
+        c.lineTo(x - 11, cy - 8); c.closePath(); c.stroke();
+        c.beginPath(); c.moveTo(x - 4, cy); c.lineTo(x - 1, cy + 3); c.lineTo(x + 5, cy - 4); c.stroke();
+      } else if (kind === "target") {
+        c.beginPath(); c.arc(x, cy, 9, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.arc(x, cy, 4, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.moveTo(x, cy - 12); c.lineTo(x, cy - 7); c.moveTo(x + 7, cy); c.lineTo(x + 12, cy); c.stroke();
+      } else if (kind === "arrow") {
+        c.beginPath(); c.moveTo(x - 10, cy + 8); c.lineTo(x - 2, cy); c.lineTo(x + 2, cy + 4); c.lineTo(x + 10, cy - 7); c.stroke();
+        c.beginPath(); c.moveTo(x + 4, cy - 8); c.lineTo(x + 10, cy - 7); c.lineTo(x + 9, cy - 1); c.stroke();
+      } else if (kind === "trophy") {
+        c.beginPath(); c.moveTo(x - 8, cy - 11); c.lineTo(x + 8, cy - 11); c.lineTo(x + 6, cy);
+        c.quadraticCurveTo(x, cy + 7, x - 6, cy); c.closePath(); c.stroke();
+        c.beginPath(); c.moveTo(x - 8, cy - 8); c.quadraticCurveTo(x - 14, cy - 8, x - 10, cy - 1);
+        c.moveTo(x + 8, cy - 8); c.quadraticCurveTo(x + 14, cy - 8, x + 10, cy - 1); c.stroke();
+        c.beginPath(); c.moveTo(x, cy + 6); c.lineTo(x, cy + 11); c.moveTo(x - 6, cy + 12); c.lineTo(x + 6, cy + 12); c.stroke();
+      }
+      c.restore();
+    };
+    var stats = [["people", M.started, "MANAGERS", "STARTED"], ["x", M.outSoFar, "OUT AFTER", "GW" + M.gw], ["shield", M.left, "STILL IN", "THE HUNT"]];
+    var sw = cw / 3;
+    stats.forEach(function (st, i) {
+      var x0 = PAD + sw * i, cx = x0 + sw / 2, cy = y + P.stats / 2;
+      icon(st[0], x0 + 26, cy);
+      text(num(st[1]), x0 + 46, cy + 6, F(900, 27), i === 1 ? K2.pink2 : K2.ink, "left");
+      c.font = F(900, 27); var nw = c.measureText(num(st[1])).width;
+      text(st[2], x0 + 52 + nw, cy - 4, F(700, 8), K2.soft, "left", sw - 60 - nw);
+      text(st[3], x0 + 52 + nw, cy + 8, F(700, 8), K2.soft, "left", sw - 60 - nw);
+      if (i) { c.fillStyle = K2.line; c.fillRect(x0, y + 18, 1, P.stats - 36); }
+    });
+    y += P.stats + 14;
+
+    /* the banner */
+    c.save(); c.beginPath();
+    c.moveTo(PAD + 40, y); c.lineTo(W - PAD - 40, y); c.lineTo(W - PAD - 52, y + P.banner - 8); c.lineTo(PAD + 52, y + P.banner - 8); c.closePath();
+    c.fillStyle = K2.pink; c.fill(); c.restore();
+    shadowText("THE ELIMINATED " + num(n), W / 2, y + P.banner - 16, FI(900, 19), K2.ink, "center");
+    y += P.banner + 12;
+
+    /* one card each, worst first */
+    var cols = 4, colw = (cw - P.gap * (cols - 1)) / cols, ch = P.card;
+    M.rows.forEach(function (r, i) {
+      var x = PAD + (i % cols) * (colw + P.gap), cy = y + Math.floor(i / cols) * (ch + P.gap), mx = x + colw / 2;
+      rr(x, cy, colw, ch, 10); c.fillStyle = K2.card; c.fill();
+      rr(x + .5, cy + .5, colw - 1, ch - 1, 9.5); c.strokeStyle = "rgba(233,0,82,.75)"; c.lineWidth = 1.5; c.stroke();
+      text(String(i + 1), x + 8, cy + 30, FI(900, 30), "rgba(255,255,255,.14)");
+      // the silhouette
+      c.save(); c.fillStyle = "#3b2f47";
+      c.beginPath(); c.arc(mx, cy + 34, 15, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.moveTo(mx - 30, cy + 78); c.quadraticCurveTo(mx - 30, cy + 52, mx - 8, cy + 50);
+      c.lineTo(mx + 8, cy + 50); c.quadraticCurveTo(mx + 30, cy + 52, mx + 30, cy + 78); c.closePath(); c.fill();
+      c.restore();
+      // the stamp
+      c.save(); c.translate(mx, cy + 66); c.rotate(-0.1);
+      rr(-44, -9, 88, 18, 3); c.fillStyle = K2.pink; c.fill();
+      rr(-44 + 1.5, -9 + 1.5, 88 - 3, 18 - 3, 2); c.strokeStyle = "rgba(255,255,255,.75)"; c.lineWidth = 1; c.stroke();
+      text("ELIMINATED", 0, 4, F(900, 9.5), K2.ink, "center");
+      c.restore();
+      var nf = shrink(r.name, colw - 12, 800, [12, 11, 10, 9]);
+      text(nf.s, mx, cy + 100, F(800, nf.px), K2.ink, "center");
+      var tf = shrink("(" + r.team + ")", colw - 12, 600, [9.5, 8.5, 7.5]);
+      text(tf.s, mx, cy + 114, F(600, tf.px), K2.soft, "center");
+      if (r.div) {
+        var col = DIV_COLOUR[r.div] || K2.pink2, lbl = String(r.divName).toUpperCase();
+        c.font = F(900, 9); var lw = c.measureText(lbl).width;
+        var ix = mx - (lw + 16) / 2;
+        c.save(); c.fillStyle = col;
+        if (r.div === "elite") { c.beginPath(); for (var k = 0; k < 10; k++) { var ang = -Math.PI / 2 + k * Math.PI / 5, rad = k % 2 ? 2.6 : 6; c.lineTo(ix + 6 + Math.cos(ang) * rad, cy + 131 + Math.sin(ang) * rad); } c.closePath(); c.fill(); }
+        else if (r.div === "championship") { c.beginPath(); c.moveTo(ix + 1, cy + 125); c.lineTo(ix + 11, cy + 125); c.lineTo(ix + 9, cy + 133); c.lineTo(ix + 3, cy + 133); c.closePath(); c.fill(); c.fillRect(ix + 3, cy + 135, 6, 2); }
+        else if (r.div === "challenger") { c.beginPath(); c.moveTo(ix + 6, cy + 124); c.lineTo(ix + 12, cy + 127); c.lineTo(ix + 11, cy + 134); c.quadraticCurveTo(ix + 6, cy + 139, ix + 1, cy + 134); c.lineTo(ix, cy + 127); c.closePath(); c.fill(); }
+        else { c.beginPath(); c.arc(ix + 3.5, cy + 128, 2.6, 0, Math.PI * 2); c.arc(ix + 9, cy + 128, 2.6, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(ix + 6, cy + 137, 6, Math.PI, 0); c.fill(); }
+        c.restore();
+        text(lbl, ix + 16, cy + 134, F(900, 9), col, "left");
+      }
+      text("GW" + M.gw + " PTS", mx, cy + 156, F(700, 7.5), K2.soft, "center");
+      rr(mx - 26, cy + 162, 52, 24, 5); c.fillStyle = "rgba(0,0,0,.5)"; c.fill();
+      rr(mx - 25.5, cy + 162.5, 51, 23, 4.5); c.strokeStyle = "rgba(255,255,255,.7)"; c.lineWidth = 1; c.stroke();
+      text(num(r.score), mx, cy + 179, F(900, 15), K2.ink, "center");
+    });
+    var rows = Math.ceil(n / cols);
+    y += rows * ch + Math.max(0, rows - 1) * P.gap + 18;
+
+    /* what is left */
+    var hunt = num(M.left) + " STILL IN THE HUNT";
+    var hf = shrink(hunt, cw - 24, 900, [34, 30, 26]);
+    c.font = FI(900, hf.px); var hw = c.measureText(hunt).width;
+    brush(W / 2 - hw / 2 - 12, y + 18, hw + 24, hf.px + 8, "rgba(233,0,82,.85)", -0.02);
+    shadowText(hunt, W / 2, y + 22 + hf.px * .82, FI(900, hf.px), K2.ink, "center", "rgba(0,0,0,.6)");
+    text(M.carry ? (num(M.carry) + (M.carry === 1 ? " place carries" : " places carry") + " to the next gameweek — a tie the rules could not break")
+                 : "IT GOES ON…", W / 2, y + hf.px + 56, FI(800, 12), K2.soft, "center", cw - 24);
+    y += P.hunt;
+
+    /* the strip */
+    c.fillStyle = K2.line; c.fillRect(PAD, y, cw, 1);
+    var strip = [["target", "SAME PASSION"], ["arrow", "HIGHER STAKES"], ["people", "TOUGHER OPPONENTS"], ["trophy", "A GREATER CHAMPION"]];
+    var qw = cw / 4;
+    strip.forEach(function (it, i) {
+      var x0 = PAD + qw * i, cy2 = y + 30;
+      icon(it[0], x0 + 18, cy2);
+      var lf = shrink(it[1], qw - 44, 800, [8.5, 7.5, 7]);
+      text(lf.s, x0 + 34, cy2 + 3, F(800, lf.px), K2.ink, "left");
+      if (i) { c.fillStyle = K2.line; c.fillRect(x0, y + 14, 1, 32); }
+    });
+    c.fillStyle = K2.line; c.fillRect(PAD, y + P.strip - 16, cw, 1);
+    y += P.strip;
+    c.save(); c.letterSpacing = "4px"; text("PLAY. PLAN. PERFORM. REPEAT.", W / 2, y + 6, F(700, 9.5), K2.soft, "center"); c.restore();
+    var when = new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    text("Game On V12 · " + when, W / 2, H - 8, F(600, 9), K2.faint, "center");
+  }
+
+  function sharePaint(c, M, T, logo, faces) {
+    var W = SHARE_W, H = shareHeight(M), PAD = 16;
+    var U = shareTools(c, T), F = U.F, rr = U.rr, shrink = U.shrink, text = U.text, card = U.card;
+    shareFrame(c, W, H, T, logo, M.league, M.sub);
 
     var y = 116, cw = W - PAD * 2;
 
@@ -5390,9 +5665,7 @@
       text(wf.s, x + 10, ty + 70 * k, F(600, wf.px), T.soft);
     });
 
-    /* who made it */
-    var when = new Date().toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    text("Game On V12 · " + when, W / 2, H - 9, F(600, 11), T.faint, "center");
+    shareStamp(c, W, H, T);
   }
 
   // The pitch as the app draws it: hoarding, goal, perspective turf and the
@@ -5500,8 +5773,8 @@
   // Sharing needs the tap it is answering, so the picture is made first and
   // the buttons in the sheet each answer a fresh tap of their own.
   var _shareUrl = null;
-  function shareStats(ds, gw, kind) {
-    var btn = $("#stShare");
+  function shareStats(ds, gw, kind, from) {
+    var btn = from || $("#stShare");
     if (btn) btn.disabled = true;
     var M = null;
     shareDraw(ds, gw, kind).then(function (cv) {
@@ -5534,7 +5807,7 @@
     }).catch(function (e) {
       // a reason the model gave is said as it is; anything else is one line
       var why = e && e.message;
-      toast(why && /^(No scores yet|No gameweeks|Squad values|Past-season)/.test(why) ? why : "Couldn’t make the picture");
+      toast(why && /^(No scores yet|No gameweeks|Squad values|Past-season|No eliminations)/.test(why) ? why : "Couldn’t make the picture");
     }).then(function () { if (btn) btn.disabled = false; });
   }
 
@@ -5600,6 +5873,8 @@
     if (!H) { box.innerHTML = '<div class="callout">Nothing to show yet.</div>'; return; }
     var fn = { gw: statsGw, picks: statsPicks, value: statsValue, season: statsSeason, fame: statsFame }[tab.k];
     box.innerHTML = fn(H, ds) || '<div class="callout">Nothing to show yet.</div>';
+    var lb = $("#stLmsShare", box);
+    if (lb) lb.addEventListener("click", function () { shareStats(ds, state.statsGw, "lms", lb); });
   }
 
   /* ---- one tab each ----------------------------------------------------- */
@@ -5613,7 +5888,7 @@
     return '<div class="statgrp">' + esc(title) + '</div><div class="hgrid">' + body + '</div>';
   }
 
-  function statsGw(H) {
+  function statsGw(H, ds) {
     var g = H.gwStats;
     if (!g) return '<div class="callout">No scores recorded for this gameweek yet.</div>';
     // The dropdown above already names the gameweek; repeating it here was
@@ -5713,6 +5988,42 @@
     }
 
     h += bucketTable(g);
+    h += statsLms(H, ds || S.dataset());
+    return h;
+  }
+
+  // Who went out of Last Manager Standing this gameweek — the same rows the
+  // LMS page shows, cut to the eliminated, worst first — with a poster of
+  // them to share. While the gameweek is live it is the drop zone as it
+  // stands, said as such, and there is no poster: nobody is out yet.
+  function statsLms(H, ds) {
+    if (!ds) return "";
+    var lms = K.lms(ds);
+    var week = lms.perGw.filter(function (w) { return +w.gw === +H.gw; })[0];
+    var live = (lms.live && +lms.live.gw === +H.gw) ? lms.live : null;
+    // Nothing is listed until FPL has finalised the gameweek: the drop zone
+    // during a live afternoon is not a list of anyone who is out.
+    if (!week && !live) return "";
+    var rows = week ? week.table.filter(function (r) { return r.eliminated; }) : [];
+    var note;
+    if (week) {
+      var row = lms.grid.filter(function (x) { return +x.gw === +H.gw; })[0];
+      note = (rows.length ? num(rows.length) + ' eliminated after GW' + H.gw : 'Nobody was eliminated this gameweek') +
+        (row ? ' \u00b7 ' + num(row.eog) + ' still in' : '');
+      if (week.unresolved) note += ' \u00b7 ' + num(week.unresolved.places) +
+        (week.unresolved.places === 1 ? ' place carries' : ' places carry') + ' to the next gameweek';
+    } else {
+      note = 'The eliminations are decided when FPL finalises the gameweek.';
+    }
+    // The poster is the organisers' to make.
+    var organisers = S.config().organisers || [];
+    var poster = rows.length > 0 && !!state.me && organisers.some(function (id) { return +id === +state.me; });
+    var h = '<div class="section-title"><h2>Last Manager Standing</h2><div class="rule"></div>' +
+      (poster ? '<button type="button" class="btn sm" id="stLmsShare" title="A poster of this gameweek\u2019s eliminations">' +
+                svg("download", 15) + 'Export image</button>'
+              : (live ? '<span class="pill live">Live</span>' : '')) + '</div>';
+    h += '<div class="note" style="margin:-4px 2px 10px">' + esc(note) + '</div>';
+    if (rows.length) h += '<div class="card">' + lmsGwTable({ table: rows }, {}) + '</div>';
     return h;
   }
 

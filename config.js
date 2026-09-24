@@ -57,6 +57,11 @@
       831357, 831362, 831367, 831369, 831370, 831372, 831383, 831385
     ],
     expectedManagers: 245,
+    // The managers who run the league. A few things are theirs alone — the
+    // eliminations poster, for one — and show only when one of them is the
+    // signed-in manager. Entry ids, so a display-name change cannot lock
+    // them out.
+    organisers: [21743, 29925],
     joiningFee: null,          // set if you want the pot shown on Home
 
     totalGameweeks: 38,

@@ -34,7 +34,9 @@ const chk = (ok, m, x) => { if (!ok) { fails++; console.log("  FAIL " + m + (x ?
   for (const [gw, phase] of STATES) {
     const st = sim.stateAt(S, gw, phase);
     DATA = JSON.stringify({ generatedAt: st.dataset.updatedAt, dataset: st.dataset });
-    const me = st.dataset.managers[Math.floor(st.dataset.managers.length / 2)].id;
+    // signed in as an organiser, so the pages that are theirs alone open too
+    const orgs = (require(GOENV.APP + "/tests/audit/harness.js").loadCompute().cfg.organisers) || [];
+    const me = (st.dataset.managers.find((m) => orgs.indexOf(m.id) !== -1) || st.dataset.managers[Math.floor(st.dataset.managers.length / 2)]).id;
     const label = "GW" + gw + " " + phase;
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     // the page's clock reads the moment the state describes
