@@ -455,9 +455,19 @@
       h += '<div class="menu">' + menuItem("pfMine", "person", "My profile") + '</div>';
     }
 
-    // 3 — the league
+    // 3 — the stats, one entry per tab, each saying what it holds: "Gameweek"
+    // and "Picks" on their own told nobody which was the returns and which
+    // the selections.
+    h += '<div class="menu"><div class="lab-sm">Stats &amp; highlights</div>' +
+      menuSub("pfStGw", "chart", "Gameweek returns", "Scores, bench, movement, captains, team of the week, eliminations") +
+      menuSub("pfStPicks", "captain", "Gameweek selections", "Template XI, captains, transfers and chips before the deadline") +
+      menuSub("pfStValue", "tag", "Squad values", "Richest squads, the bank, and the best value") +
+      menuSub("pfStSeason", "trophy", "Season", "Where everyone has landed over the year") +
+      menuSub("pfStFame", "star", "All time", "Past seasons and best-ever finishes") +
+      '</div>';
+
+    // 4 — the league
     h += '<div class="menu"><div class="lab-sm">League</div>' +
-      menuItem("pfStats", "classic", "Stats & highlights") +
       menuItem("pfWinnings", "coin", "Winnings") +
       menuItem("pfCompare", "h2h", "Head to head") +
       menuItem("pfRules", "book", "Game rules") +
@@ -509,7 +519,9 @@
     syncLock();
 
     function go(hash) { closeProfile(true); navFromOverlay(hash); }
-    $("#pfStats").addEventListener("click", function () { go("stats"); });
+    [["pfStGw", "gw"], ["pfStPicks", "picks"], ["pfStValue", "value"], ["pfStSeason", "season"], ["pfStFame", "fame"]].forEach(function (x) {
+      $("#" + x[0]).addEventListener("click", function () { go("stats/" + x[1]); });
+    });
     $("#pfWinnings").addEventListener("click", function () { go("winnings"); });
     // Arriving from here, the first side is you — the comparison anyone opening
     // this has in mind. Only the first: whoever you were looking at last is
@@ -614,6 +626,11 @@
   }
   function menuItem(id, icon, label) {
     return '<button id="' + id + '">' + svg(icon, 19) + esc(label) + '</button>';
+  }
+  // An item with a line under it saying what the page holds.
+  function menuSub(id, icon, label, hint) {
+    return '<button id="' + id + '" class="withhint">' + svg(icon, 19) +
+      '<span class="mtx">' + esc(label) + '<span class="mh">' + esc(hint) + '</span></span></button>';
   }
   function importFile(after) {
     var inp = document.createElement("input");
@@ -2561,6 +2578,7 @@
     if (view === "profile") state.profileId = parts[1] || null;
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
     if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
+    if (view === "stats" && parts[1]) state.statsTab = parts[1];
     if (view === "vol" && parts[1]) state.volKey = parts[1];
     if (view === "player") {
       state.playerId = +parts[1] || null;
@@ -5812,8 +5830,8 @@
   }
 
   var STAT_TABS = [
-    { k: "gw",     label: "Gameweek", gwPicker: true, share: "gw" },
-    { k: "picks",  label: "Picks",    gwPicker: true, share: "picks" },
+    { k: "gw",     label: "Returns",    gwPicker: true, share: "gw" },
+    { k: "picks",  label: "Selections", gwPicker: true, share: "picks" },
     { k: "value",  label: "Value",    gwPicker: true, share: "value" },
     { k: "season", label: "Season",   share: "season" },
     { k: "fame",   label: "All time", share: "fame" }

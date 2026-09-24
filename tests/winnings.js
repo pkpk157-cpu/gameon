@@ -57,9 +57,16 @@ const bare = JSON.parse(JSON.stringify(JSON.parse(fs.readFileSync(APP + "/data.j
       });
       console.log("\ndrawer, League group: " + (league || []).join(" | "));
       chk("there is a League group", !!league);
-      chk("Winnings sits directly under Stats & highlights",
-          league && league.indexOf("Winnings") === league.indexOf("Stats & highlights") + 1,
-          (league || []).join(","));
+      chk("Winnings heads the League group", league && league[0] === "Winnings", (league || []).join(","));
+      // the stats sit in a group of their own above it, one entry per tab
+      const stats = await p.evaluate(() => {
+        const groups = [...document.querySelectorAll("#youBody .menu")];
+        const g = groups.filter((x) => /Stats & highlights/.test((x.querySelector(".lab-sm") || {}).textContent || ""))[0];
+        return g ? [...g.querySelectorAll("button")].map((b) => b.querySelector(".mtx").firstChild.textContent.trim()) : null;
+      });
+      chk("a Stats & highlights group with five entries, returns and selections named",
+          !!stats && stats.length === 5 && stats[0] === "Gameweek returns" && stats[1] === "Gameweek selections",
+          (stats || []).join(","));
       // and it is not doubled up in the section tiles
       // the section tiles live in the burger; open it to read them
       await p.evaluate(() => document.querySelector("#youBack").click());
