@@ -5906,9 +5906,13 @@
      Points / Ownership / Value switch, with the cards changing under it. The
      figures are the eleven's own; there is no bench, bank or hit here. */
   var XI_BLOCKS = {};
+  // ctx.gw is the gameweek the side belongs to: carried as data-bgw, so a
+  // tapped player opens his own page on that gameweek, as on any pitch.
   function xiBlock(key, lines, ctx) {
     XI_BLOCKS[key] = { lines: lines, ctx: ctx || {} };
-    return '<div class="xiblock" data-xi="' + key + '">' + xiBlockInner(key) + '</div>';
+    var gw = +(ctx && ctx.gw) || 0;
+    return '<div class="xiblock" data-xi="' + key + '"' + (gw ? ' data-bgw="' + gw + '"' : '') + '>' +
+      xiBlockInner(key) + '</div>';
   }
   function xiBlockInner(key) {
     var B = XI_BLOCKS[key];
@@ -6061,7 +6065,7 @@
       h += '<div class="note" style="margin:-4px 2px 10px">The highest-scoring legal eleven from players anyone in the league held, a ' +
         esc(tw.shape) + ' worth ' + num(tw.total) + ' points' +
         (mine !== null ? ' \u00b7 ' + mine + ' of them in your squad' : '') + '.</div>';
-      h += xiBlock("totw", tw.lines, { metric: "pts", average: g.average, leagueAvgOwned: sq.leagueAvgOwned });
+      h += xiBlock("totw", tw.lines, { gw: H.gw, metric: "pts", average: g.average, leagueAvgOwned: sq.leagueAvgOwned });
     }
 
     if (sq && (sq.topScorers.length || sq.differentials.length)) {
@@ -6190,7 +6194,7 @@
     if (sq.templateXi) {
       h += '<div class="section-title"><h2>The template XI</h2><div class="rule"></div></div>';
       h += '<div class="note" style="margin:-4px 2px 10px">The most-owned player in each position, with how much of the league has them.</div>';
-      h += xiBlock("template", sq.templateXi, { metric: "eo", average: H.gwStats ? H.gwStats.average : null, leagueAvgOwned: sq.leagueAvgOwned });
+      h += xiBlock("template", sq.templateXi, { gw: H.gw, metric: "eo", average: H.gwStats ? H.gwStats.average : null, leagueAvgOwned: sq.leagueAvgOwned });
     }
 
     h += '<div class="card"><div class="bd hcols">';
