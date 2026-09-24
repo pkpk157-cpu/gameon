@@ -2994,9 +2994,22 @@
 
 
     if (lms.champion) {
+      var pod = lms.podium || [];
       h += '<div class="card" style="margin-top:14px;border-color:var(--gold)"><div class="bd" style="text-align:center">' +
-        '<div class="champcrown">' + svg("crown", 40) + '</div><h3 style="margin:6px 0">' + esc(lms.champion.name) + '</h3>' +
-        '<div class="note">The Last Manager Standing</div></div></div>';
+        '<div class="champcrown">' + svg("crown", 40) + '</div><h3 style="margin:6px 0"><span data-entry="' + lms.champion.id + '" role="button" tabindex="0">' + esc(lms.champion.name) + '</span></h3>' +
+        '<div class="note">The Last Manager Standing</div>' +
+        (pod.length > 1 ? '<div class="podium">' +
+          (pod[1] ? '<span class="pill"><b data-entry="' + pod[1].id + '" role="button" tabindex="0">' + esc(pod[1].name) + '</b> runner-up' + (pod[1].gw ? ' \u00b7 out GW' + pod[1].gw : '') + '</span>' : '') +
+          (pod[2] ? '<span class="pill"><b data-entry="' + pod[2].id + '" role="button" tabindex="0">' + esc(pod[2].name) + '</b> third' + (pod[2].gw ? ' \u00b7 out GW' + pod[2].gw : '') + '</span>' : '') +
+          '</div>' : '') +
+        '</div></div>';
+    } else if (lms.undecided) {
+      // Every gameweek checked and still more than one alive: the last
+      // eliminations came down to a tie the rules could not break.
+      h += '<div class="callout warn-callout" style="margin-top:14px"><b>' + num(lms.survivorsCount) +
+        ' managers are still standing after GW' + cfg.totalGameweeks + '.</b> They finished level on every ' +
+        'tie-breaker in the last gameweek, so the champion is the league\u2019s to name: ' +
+        esc(lms.survivors.map(function (s) { return s.name; }).join(", ")) + '.</div>';
     }
 
     // Gameweek dropdown — Live GW first, then finished GWs (review past weeks).
@@ -3268,9 +3281,19 @@
     if (!B.drawn) {
       h += '<div class="callout" style="margin-bottom:12px"><b>The ' + esc(B.label) +
         ' draw has not been made.</b> It is made when the group stage ends in GW' +
-        (B.groupEndsGw || (B.startsGw - 1)) + ' \u2014 ' +
+        (B.groupEndsGw || (B.startsGw - 1)) + ' — ' +
         (B.gwsLeft === 1 ? 'one gameweek to go' : num(B.gwsLeft) + ' gameweeks to go') +
         '. The rounds and their gameweeks are below.</div>';
+    }
+    // The final decided: the winner and the runner-up, and whether the money
+    // has settled or waits on FPL's check of the last gameweek.
+    if (B.champion) {
+      h += '<div class="card" style="margin-bottom:12px;border-color:var(--gold)"><div class="bd" style="text-align:center">' +
+        '<div class="champcrown">' + svg("crown", 40) + '</div>' +
+        '<h3 style="margin:6px 0"><span data-entry="' + B.champion.id + '" role="button" tabindex="0">' + esc(B.champion.name) + '</span></h3>' +
+        '<div class="note">' + esc(B.label) + ' winner' +
+        (B.runnerUp ? ' · runner-up <b data-entry="' + B.runnerUp.id + '" role="button" tabindex="0">' + esc(B.runnerUp.name) + '</b>' : '') +
+        (B.settled ? '' : ' · XP settles when FPL checks the gameweek') + '</div></div></div>';
     }
     if (B.prizes) {
       h += '<div class="korow"><span class="pill gold">Winner ' + xpa(B.prizes.winner) + '</span>' +
@@ -3279,34 +3302,55 @@
     var only = B.rounds[idx] ? [B.rounds[idx]] : B.rounds;
     h += only.map(function (r) {
       if (!r.ties.length) {
-        return '<div class="koline">GW\u00a0' + r.gws.join("\u2013") +
-          (r.legs === 2 ? ' \u00b7 two legs' : ' \u00b7 one leg') + '</div>' +
+        return '<div class="koline">GW ' + r.gws.join("–") +
+          (r.legs === 2 ? ' · two legs' : ' · one leg') + '</div>' +
           '<div class="card"><div class="bd"><div class="note" style="text-align:center;padding:6px 0">' +
           'Waiting on the draw</div></div></div>';
       }
       var body = r.ties.map(function (t) {
-        if (t.home !== undefined) {
-          return '<div class="tie">' + '<span class="tn">' + t.n + '</span>' +
-            '<div class="ts">' + koSide(t.home) + koSide(t.away) + '</div></div>';
-        }
-        return '<div class="tie pending"><span class="tn">' + t.n + '</span>' +
-          '<div class="ts"><div class="side"><span class="nm">Winner of tie ' + t.fromA + '</span></div>' +
-          '<div class="side"><span class="nm">Winner of tie ' + t.fromB + '</span></div></div></div>';
+        var live = (t.legs || []).some(function (l) { return l.live; });
+        var cls = 'tie' + (t.winner ? ' decided' : '') + (live ? ' live' : '') + (t.level ? ' level' : '');
+        var note = '';
+        if (t.winner && t.decidedBy && t.decidedBy !== "aggregate") note = 'Level on aggregate — decided on ' + esc(t.decidedBy);
+        else if (t.level) note = 'Level on everything the rules hold — the league settles it';
+        else if (t.bye) note = 'No opponent — goes through';
+        return '<div class="' + cls + '"><span class="tn">' + t.n + '</span>' +
+          '<div class="ts">' + koSide(t, "home") + koSide(t, "away") + '</div></div>' +
+          (note ? '<div class="tienote">' + note + '</div>' : '');
       }).join("");
       var n = r.ties.length;
       return '<div class="koline">' + n + (n === 1 ? ' tie' : ' ties') +
-        ' \u00b7 GW ' + r.gws.join("\u2013") + (r.legs === 2 ? ' \u00b7 two legs' : '') + '</div>' +
+        ' · GW ' + r.gws.join("–") + (r.legs === 2 ? ' · two legs' : '') + '</div>' +
         '<div class="card"><div class="bd kobody">' + body + '</div></div>';
     }).join("");
     return h;
   }
-  function koSide(s) {
-    if (!s) return '<div class="side"><span class="nm">\u2014</span></div>';
+  // One side of a tie: the manager, where he came from, and his score in
+  // each leg with the aggregate — or the tie he has to win to be here.
+  function koSide(t, which) {
+    var s = t[which];
+    if (!s) {
+      var from = which === "home" ? t.fromA : t.fromB;
+      return '<div class="side pending"><span class="nm">' + (from ? 'Winner of tie ' + from : '—') + '</span></div>';
+    }
     // just the group's letter — the full name does not fit beside a team
     var m = /group\s+([A-Za-z0-9]+)/i.exec(s.group || "");
     var badge = (m ? m[1].toUpperCase() : "?") + " #" + s.place;
-    return '<div class="side' + (isMe(s.id) ? ' me' : '') + '" data-entry="' + s.id + '"><span class="nm">' + esc(s.name) + '</span>' +
-      '<span class="sd">' + esc(badge) + '</span></div>';
+    var won = t.winner && t.winner.id === s.id, lost = t.loser && t.loser.id === s.id;
+    var sc = '';
+    if (t.legs && t.legs.length) {
+      var parts = t.legs.map(function (l) {
+        var v = l[which];
+        return v == null ? '–' : num(v);
+      });
+      // the aggregate only once there is more than one leg to add up
+      var played = t.legs.filter(function (l) { return l.home != null && l.away != null; }).length;
+      var agg = (t.aggregate && played > 1) ? num(t.aggregate[which]) : null;
+      sc = '<span class="sc">' + parts.join(' · ') + (agg != null ? ' <b>' + agg + '</b>' : '') + '</span>';
+    }
+    return '<div class="side' + (isMe(s.id) ? ' me' : '') + (won ? ' w' : '') + (lost ? ' l' : '') +
+      '" data-entry="' + s.id + '"><span class="nm">' + esc(s.name) + '</span>' +
+      '<span class="sd">' + esc(badge) + '</span>' + sc + '</div>';
   }
 
   // A gameweek's fixtures. A played tie shows both scores with the winner

@@ -262,12 +262,22 @@
       var oldP = (cur.livePoints || {})[gw] || {}, oldB = (cur.liveBonus || {})[gw] || {};
       // Same nine-slot tuple the updater publishes, so the Premier League
       // page's scores and minutes tick between full syncs as well.
+      // The difficulty ratings the updater appends are not in the live feed,
+      // so they are carried over from the published tuple for the same
+      // match; without that a player's page lost its rating for the week
+      // being played.
+      var wasList = (cur.gwFixtures || {})[gw] || [];
       var fxTuple = function (f) {
-        return [cur.teams[f.team_h] || "?", cur.teams[f.team_a] || "?",
+        var h = cur.teams[f.team_h] || "?", a = cur.teams[f.team_a] || "?", was = null;
+        for (var i = 0; i < wasList.length; i++) {
+          if (wasList[i] && wasList[i][0] === h && wasList[i][1] === a) { was = wasList[i]; break; }
+        }
+        return [h, a,
                 f.started ? 1 : 0, f.finished ? 1 : 0,
                 f.team_h_score == null ? null : +f.team_h_score,
                 f.team_a_score == null ? null : +f.team_a_score,
-                +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0];
+                +f.minutes || 0, f.kickoff_time || null, f.finished_provisional ? 1 : 0,
+                was ? (was[9] || 0) : 0, was ? (was[10] || 0) : 0];
       };
       var oldFx = JSON.stringify((cur.gwFixtures || {})[gw] || null);
       var newFx = cur.teams ? JSON.stringify((fixtures || []).map(fxTuple)) : oldFx;

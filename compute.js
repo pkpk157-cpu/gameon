@@ -576,16 +576,32 @@
     var survivors = Object.keys(alive).map(function (id) {
       return { id: +id, name: nm(mm, +id) };
     });
+    // The podium: the last one standing, then the two who went out last —
+    // read off the final week's table in the order the eliminations were
+    // decided, so the runner-up is the best placed of them.
+    var podium = null;
+    if (survivors.length === 1) {
+      podium = [{ id: survivors[0].id, name: survivors[0].name, gw: null }];
+      for (var pi = perGw.length - 1; pi >= 0 && podium.length < 3; pi--) {
+        var outs = perGw[pi].table.filter(function (r) { return r.eliminated; });
+        for (var oi = outs.length - 1; oi >= 0 && podium.length < 3; oi--) {
+          podium.push({ id: outs[oi].id, name: outs[oi].name, gw: perGw[pi].gw });
+        }
+      }
+    }
 
     // Build the full published grid (all 38 GWs) with expected numbers, so the
     // elimination grid renders even before the season starts.
     var fullGrid = [];
-    var running = ds.managers.length;
+    var running = ds.managers.length, owed = carryOver;
     for (var g = 1; g <= cfg().totalGameweeks; g++) {
       var actual = grid.find(function (x) { return x.gw === g; });
-      var exp = elimGrid[g] || 0;
       if (actual) { fullGrid.push(actual); running = actual.eog; }
       else {
+        // places a tie left open are owed to the next week that is played,
+        // and no week takes the last manager standing
+        var exp = Math.max(0, Math.min((elimGrid[g] || 0) + owed, running - 1));
+        owed = 0;
         fullGrid.push({ gw: g, sog: running, eliminated: null, expected: exp, eog: running - exp });
         running = running - exp;
       }
@@ -598,7 +614,7 @@
     var live = null;
     if (liveGw != null) {
       var aliveIds = Object.keys(alive).map(Number);
-      var need = elimGrid[liveGw] || 0;
+      var need = Math.max(0, Math.min((elimGrid[liveGw] || 0) + carryOver, aliveIds.length - 1));
       var ltable = aliveIds.map(function (id) {
         var hh = (ds.history[id] && ds.history[id][liveGw]) ? ds.history[id][liveGw] : null;
         // The same live-aware scoring every other view uses — FPL's history
@@ -625,6 +641,10 @@
       perGw: perGw,
       live: live,
       champion: survivors.length === 1 ? survivors[0] : null,
+      podium: podium,
+      // every gameweek checked and still more than one alive: a tie the
+      // rules could not break at the very end, which is the league's to settle
+      undecided: survivors.length > 1 && finished.length >= (cfg().totalGameweeks || 38),
       prizes: cfg().lms.prizes
     };
   };
@@ -2014,11 +2034,25 @@
       });
     });
 
-    // Last Manager Standing pays when a champion exists.
-    var lms = C.lms(ds);
+    // Last Manager Standing pays when a champion exists: the last one left,
+    // and the two who went out last — the best placed of the final week's
+    // eliminations first.
+    var lms = C.lms(ds), lp = cfg().lms.prizes || {};
     if (lms.champion) {
-      add(lms.champion.id, "Last Manager", "Champion", (cfg().lms.prizes || {}).champion, true);
+      add(lms.champion.id, "Last Manager", "Champion", lp.champion, true);
+      var pod = lms.podium || [];
+      if (pod[1]) add(pod[1].id, "Last Manager", "Runner-up", lp.runnerUp, true);
+      if (pod[2]) add(pod[2].id, "Last Manager", "Third", lp.third, true);
     }
+
+    // The knockouts pay their winner and runner-up once the final is decided;
+    // settled once FPL has checked the final's gameweek.
+    ["ucl", "uel"].forEach(function (comp) {
+      var B = C.knockout(ds, comp);
+      if (!B || !B.champion || !B.prizes) return;
+      add(B.champion.id, B.label, "Winner", B.prizes.winner, B.settled);
+      if (B.runnerUp) add(B.runnerUp.id, B.label, "Runner-up", B.prizes.runnerUp, B.settled);
+    });
     return out;
   };
 
@@ -2484,7 +2518,11 @@
     /* Last Manager Standing — being alive is the whole contest */
     var lms = C.lms(ds);
     var elimGw = lms.eliminatedAt[id];
-    if (elimGw) {
+    var podAt = (lms.podium || []).map(function (p) { return +p.id; }).indexOf(id);
+    if (podAt === 1 || podAt === 2) {
+      entry("Last Manager", podAt === 1 ? "runner-up" : "third", podAt + 1,
+        podAt === 1 ? (conf.lms.prizes || {}).runnerUp : (conf.lms.prizes || {}).third, true, "in", null, "");
+    } else if (elimGw) {
       entry("Last Manager", "eliminated GW" + elimGw, null, 0, true, "out", null, "");
     } else if (lms.survivors.some(function (s) { return +s.id === id; })) {
       var champ = lms.champion && +lms.champion.id === id;
@@ -2509,10 +2547,31 @@
       });
     }
 
-    /* UCL — group stage decides which knockout you land in */
+    /* UCL — the group stage decides which knockout you land in; once the
+       draw is made, the bracket says where you are in it */
     var q = conf.h2h.qualify || { uclPerGroup: 2, uelPerGroup: 2 };
     var ucl = q.uclPerGroup, uel = ucl + (q.uelPerGroup || 0);
-    C.h2h(ds).groups.forEach(function (g) {
+    var inBracket = false;
+    ["ucl", "uel"].forEach(function (comp) {
+      var B = C.knockout(ds, comp);
+      if (!B || !B.drawn) return;
+      var last = null, lastRound = null;
+      B.rounds.forEach(function (r) {
+        r.ties.forEach(function (t) {
+          if ((t.home && +t.home.id === id) || (t.away && +t.away.id === id)) { last = t; lastRound = r; }
+        });
+      });
+      if (!last) return;
+      inBracket = true;
+      var won = !!(last.winner && +last.winner.id === id), lost = !!(last.loser && +last.loser.id === id);
+      var isFinal = lastRound.index === B.rounds.length - 1;
+      var pz = B.prizes || {};
+      var prize = isFinal ? (won ? pz.winner : (lost ? pz.runnerUp : 0)) : 0;
+      entry("UCL", B.label + " \u00b7 " + lastRound.name + (lost ? " \u00b7 out" : (won && isFinal ? " \u00b7 winner" : "")),
+        null, prize || 0, !!(B.settled && isFinal && (won || lost)),
+        lost ? "out" : (isFinal && won ? "in" : "alive"), null, "");
+    });
+    if (!inBracket) C.h2h(ds).groups.forEach(function (g) {
       var t = g.table.filter(function (x) { return +x.id === id; })[0];
       if (!t) return;
       var state = t.pos <= ucl ? "in" : (t.pos <= uel ? "alive" : "out");
@@ -2743,7 +2802,7 @@
         var home = a.slots[k] || null;
         var away = b.slots[take - 1 - k] || null;
         if (a === b && home && away && home.id === away.id) away = null;
-        ties.push({ n: n++, home: home, away: away });
+        ties.push({ n: n++, home: home, away: away, fromA: null, fromB: null });
       }
     }
 
@@ -2752,20 +2811,89 @@
     });
     if (!rounds.length) return null;
     if (drawn) rounds[0].ties = ties;
-    // later rounds are placeholders until the round before them is decided
+    // Later rounds are ties between the winners of the ties before them. A
+    // side is named once its tie is decided, and reads as "winner of tie N"
+    // until then.
     var count = ties.length;
     for (var r2 = 1; r2 < rounds.length; r2++) {
       count = Math.ceil(count / 2);
-      var prev = rounds[r2 - 1];
+      var prevR = rounds[r2 - 1];
       for (var t = 0; t < count; t++) {
         rounds[r2].ties.push({
-          n: t + 1,
-          fromA: prev.ties[t * 2] ? prev.ties[t * 2].n : null,
-          fromB: prev.ties[t * 2 + 1] ? prev.ties[t * 2 + 1].n : null,
-          prevRound: prev.name
+          n: t + 1, home: null, away: null,
+          fromA: prevR.ties[t * 2] ? prevR.ties[t * 2].n : null,
+          fromB: prevR.ties[t * 2 + 1] ? prevR.ties[t * 2 + 1].n : null,
+          prevRound: prevR.name
         });
       }
     }
+
+    /* Scoring a tie. Each leg is a gameweek and each side's score in it is
+       the same net gameweek score every table uses. A leg being played is
+       shown but not counted; the tie is decided once every one of its
+       gameweeks has its points standing. Level on aggregate, the rules run
+       the Last Manager tie-breakers over the tie's gameweeks — bench
+       points, then goals, clean sheets and assists in the eleven that
+       played — then group points, then group score. Level after all of that
+       is the organiser's to settle, and the tie says so. */
+    var scoredSet = {}; C.scoredGws(ds).forEach(function (g) { scoredSet[g] = 1; });
+    var liveGw = C.liveGwId(ds);
+    var inGroup = {};
+    groups.forEach(function (g) {
+      (g.table || []).forEach(function (t2) { inGroup[t2.id] = { pts: t2.pts || 0, gwPts: t2.gwPts || 0 }; });
+    });
+    function playTie(tie, gws) {
+      tie.legs = gws.map(function (gw) {
+        var sh = gwScore(ds, tie.home.id, gw), sa = gwScore(ds, tie.away.id, gw);
+        return { gw: gw, home: sh, away: sa, scored: !!scoredSet[gw],
+                 live: sh != null && liveGw === gw && !scoredSet[gw] };
+      });
+      var ah = 0, aw = 0, any = false;
+      tie.legs.forEach(function (l) { if (l.home != null && l.away != null) { ah += l.home; aw += l.away; any = true; } });
+      tie.aggregate = any ? { home: ah, away: aw } : null;
+      if (!gws.every(function (g) { return scoredSet[g]; })) return;
+      var pick = null, by = null;
+      if (ah !== aw) { pick = ah > aw ? "home" : "away"; by = "aggregate"; }
+      else {
+        var bh = benchSum(ds, tie.home.id, gws), ba = benchSum(ds, tie.away.id, gws);
+        if (bh !== ba) { pick = bh > ba ? "home" : "away"; by = "bench points"; }
+        else {
+          var xh = xiStats(ds, tie.home.id, gws), xa = xiStats(ds, tie.away.id, gws);
+          if (xh.goals !== xa.goals) { pick = xh.goals > xa.goals ? "home" : "away"; by = "goals"; }
+          else if (xh.cs !== xa.cs) { pick = xh.cs > xa.cs ? "home" : "away"; by = "clean sheets"; }
+          else if (xh.assists !== xa.assists) { pick = xh.assists > xa.assists ? "home" : "away"; by = "assists"; }
+          else {
+            var gh = inGroup[tie.home.id] || {}, ga = inGroup[tie.away.id] || {};
+            if ((gh.pts || 0) !== (ga.pts || 0)) { pick = (gh.pts || 0) > (ga.pts || 0) ? "home" : "away"; by = "group points"; }
+            else if ((gh.gwPts || 0) !== (ga.gwPts || 0)) { pick = (gh.gwPts || 0) > (ga.gwPts || 0) ? "home" : "away"; by = "group score"; }
+          }
+        }
+      }
+      if (pick) { tie.winner = tie[pick]; tie.loser = tie[pick === "home" ? "away" : "home"]; tie.decidedBy = by; }
+      else tie.level = true;
+    }
+    var champion = null, runnerUp = null;
+    if (drawn) {
+      rounds.forEach(function (r, ri) {
+        if (ri > 0) {
+          var prev = rounds[ri - 1];
+          r.ties.forEach(function (tie) {
+            var A = tie.fromA ? prev.ties[tie.fromA - 1] : null, B = tie.fromB ? prev.ties[tie.fromB - 1] : null;
+            tie.home = A && A.winner ? A.winner : null;
+            tie.away = B && B.winner ? B.winner : null;
+            // an odd round: the tie without an opponent goes straight through
+            if (tie.home && !tie.fromB) { tie.winner = tie.home; tie.bye = true; }
+          });
+        }
+        r.ties.forEach(function (tie) {
+          if (tie.home && tie.away) playTie(tie, r.gws);
+          else if (ri === 0 && tie.home && !tie.away) { tie.winner = tie.home; tie.bye = true; }
+        });
+      });
+      var fin = rounds[rounds.length - 1].ties[0];
+      if (fin && fin.winner && !fin.bye) { champion = fin.winner; runnerUp = fin.loser || null; }
+    }
+    var lastGws = rounds[rounds.length - 1].gws || [];
 
     return {
       comp: comp,
@@ -2779,6 +2907,9 @@
       gwsLeft: left.length,
       groupEndsGw: gs.length ? gs[gs.length - 1] : null,
       startsGw: rounds[0].gws ? rounds[0].gws[0] : null,
+      champion: champion, runnerUp: runnerUp,
+      // decided once the final's points stand; settled once FPL has checked it
+      settled: !!champion && lastGws.every(function (g) { return done[g]; }),
       prizes: (conf.h2h.prizes || {})[comp] || null
     };
   };

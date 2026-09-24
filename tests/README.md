@@ -55,6 +55,13 @@ an environment where a broken suite means a change goes out unchecked.
 - `audit/harness.js` — loads `compute.js` in a sandbox, for the suites that
   check arithmetic rather than pixels
 - `fixture.js`, `now.json`, `vol.json` — datasets a few suites read
+- `season/sim.js` — plays the real dataset forward to GW38, every gameweek at
+  every phase (before the deadline, locked, live, full time, bonus, checked),
+  with both halves' chips, a double and a blank gameweek, automatic
+  substitutions and the standings of every league; `season/audit.js` runs
+  every compute entry point over those states and checks the arithmetic
+  (`season` in the battery), and `seasonsweep.js` opens every view on the
+  pivotal ones with the page's clock set to that moment
 - everything else — one suite per file
 
 ## Adding one
