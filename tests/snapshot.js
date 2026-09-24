@@ -51,10 +51,17 @@ const expect = (p, id) => p.evaluate((id) => {
     // the roster's gameweek figure is the net score, and the hit really came off it
     evNet: !row || C.liveGwId(ds) === evGw ? true : me.eventTotal === net(evGw) && me.eventTotal === row.p - (row.h || 0),
     hit: row ? row.h || 0 : 0,
-    overall: last.r, omove: prev ? prev.r - last.r : 0, hits: sum("h"), tr: sum("tr"), bench: sum("b"), best: { gw: best, p: net(best) },
+    overall: last.r, omove: prev ? prev.r - last.r : 0, hits: sum("h"), tr: sum("tr"),
+    // bench points as every table counts them: live-aware in a live week
+    bench: gws.reduce((s, g) => s + C.gwBench(ds, id, g), 0), best: { gw: best, p: net(best) },
     leading: !above, lead: !above && below ? me.total - below.total : null, behind: rows[0].total - me.total,
     above: above ? { rank: above.computedRank, gap: above.total - me.total } : null,
-    plays: chips.reduce((s, c) => s + c.gws.length, 0), names: chips.map((c) => c.label).join(", "), v: last.v, bk: last.bk };
+    plays: chips.reduce((s, c) => s + c.gws.length, 0), names: chips.map((c) => c.label).join(", "),
+    // the squad is players only, the bank apart: the newest squad at today's
+    // prices, an older one as FPL recorded it (FPL's value counts the bank in)
+    v: (() => { const lg = gws[gws.length - 1], sq = ((ds.picks || {})[lg] || {})[id];
+      return +lg === +ds.pitchGw && sq ? sq.p.reduce((s, t) => s + ds.elements[t[0]][3], 0) : last.v - (last.bk || 0); })(),
+    bk: last.bk };
 }, id);
 
 (async () => {

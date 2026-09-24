@@ -68,7 +68,7 @@
       c.best = sn.best;
     }
     var g = live || c.gw, row = ((ds.history || {})[me] || {})[g];
-    c.hits = row ? (row.h || 0) : 0; c.bench = row ? (row.b || 0) : 0; c.tr = row ? (row.tr || 0) : 0;
+    c.hits = row ? (row.h || 0) : 0; c.bench = row ? C.gwBench(ds, me, g) : 0; c.tr = row ? (row.tr || 0) : 0;
     var pk = ds.picks && ds.picks[g] && ds.picks[g][me];
     if (pk && pk.p) {
       var cap = null, mult = 0;
@@ -77,7 +77,8 @@
         var lp = ds.picksV >= 2 ? ((ds.livePoints || {})[g] || {}) : ((+g === +ds.pitchGw) ? (ds.livePoints || {}) : {});
         var el = ds.elements && ds.elements[cap];
         c.cap = el ? el[0] : null;
-        c.capPts = typeof lp[cap] === "number" ? lp[cap] * mult : null;
+        var cp = C.playerPts(ds, g, cap);
+        c.capPts = typeof cp === "number" ? cp * mult : null;
         c.tc = mult === 3;
       }
       c.chipNow = pk.c || null;

@@ -181,7 +181,7 @@ function season(base) {
   S.entries.forEach((m) => {
     const last = Object.keys(base.picks).map(Number).sort((a, b) => b - a)[0];
     const anyPick = base.picks[last][base.managers[m.extra ? extras.indexOf(m) : 0].id];
-    S.squads[m.id] = clone((base.picks[last] && base.picks[last][m.id]) || anyPick || { c: "", p: [] }).p;
+    S.squads[m.id] = plainSquad(clone((base.picks[last] && base.picks[last][m.id]) || anyPick || { c: "", p: [] }).p);
     const h = base.history[m.id] || {};
     const lg = Object.keys(h).map(Number).sort((a, b) => b - a)[0];
     S.overall[m.id] = lg ? h[lg].r : 3000000;
@@ -233,22 +233,57 @@ function playerPoints(S, gw, fx, phase) {
 
 const minutesOf = (bd, e) => { const r = (bd[e] || []).find((x) => x[0] === "minutes"); return r ? r[1] : 0; };
 
-// FPL's automatic substitutions: a starter who did not play swaps with the
-// first bench player who did, goalkeepers only with goalkeepers.
+// A squad as a manager holds it between weeks: eleven starters, the captain
+// doubled, four on the bench. The real squads the season starts from are
+// FPL's settled ones, which carry that week's chip and substitutions (a
+// Bench Boost's bench at 1, a triple captain at 3, a substitute swapped into
+// the eleven with the armband passed to the vice); none of that belongs to
+// the weeks after, so it is taken off here.
+function plainSquad(p) {
+  const out = p.map((x, i) => [x[0], i < 11 ? 1 : 0, x[2] ? 1 : 0, x[3] ? 1 : 0]);
+  let cap = out.findIndex((x) => x[2]);
+  if (cap >= 11 || cap < 0) {
+    out.forEach((x) => { x[2] = 0; });
+    const v = out.findIndex((x, i) => i < 11 && x[3]);
+    cap = v >= 0 ? v : 1;
+    out[cap][2] = 1; out[cap][3] = 0;
+  }
+  if (!out.some((x, i) => i < 11 && x[3])) { const v = out.findIndex((x, i) => i < 11 && i !== cap); out.forEach((x) => { x[3] = 0; }); out[v][3] = 1; }
+  out[cap][1] = 2;
+  return out;
+}
+
+// FPL's automatic substitutions, stored the way FPL stores them once the week
+// settles: a starter who did not play changes places with the first bench
+// player who did (goalkeepers only with goalkeepers), the substitute counting
+// once, the starter going to the bench at nothing. A captain who did not play
+// hands his multiplier to the vice if the vice played. Nobody ever takes a
+// captain's multiplier by coming off the bench.
 function autoSub(S, p, bd) {
   const els = S.P.els;
   const out = clone(p);
-  const xi = out.filter((x) => x[1] > 0), bench = out.filter((x) => x[1] === 0);
+  if (out.length > 11 && out.slice(11).some((x) => x[1] > 0)) return out;   // Bench Boost: all fifteen count
   const used = {};
-  xi.forEach((x) => {
-    if (minutesOf(bd, x[0]) > 0) return;
+  let capMult = 0;
+  for (let i = 0; i < 11 && i < out.length; i++) {
+    const x = out[i];
+    if (minutesOf(bd, x[0]) > 0) continue;
+    if (x[2] && x[1] >= 2) { capMult = x[1]; x[1] = 1; }
     const isGk = els[x[0]][1] === 1;
-    const sub = bench.find((b) => !used[b[0]] && minutesOf(bd, b[0]) > 0 && ((els[b[0]][1] === 1) === isGk));
-    if (!sub) return;
-    used[sub[0]] = 1;
-    const m = x[1]; x[1] = 0; sub[1] = m;
-    if (x[2]) { x[2] = 0; sub[2] = 1; }
-  });
+    let j = -1;
+    for (let k = 11; k < out.length; k++) {
+      if (!used[k] && minutesOf(bd, out[k][0]) > 0 && ((els[out[k][0]][1] === 1) === isGk)) { j = k; break; }
+    }
+    if (j < 0) continue;
+    used[j] = 1;
+    const sub = out[j];
+    out[i] = [sub[0], 1, sub[2], sub[3]];
+    out[j] = [x[0], 0, x[2], x[3]];
+  }
+  if (capMult) {
+    const v = out.findIndex((x, i) => i < 11 && x[3] && minutesOf(bd, x[0]) > 0);
+    if (v >= 0) out[v][1] = capMult;
+  }
   return out;
 }
 

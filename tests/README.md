@@ -62,7 +62,21 @@ an environment where a broken suite means a change goes out unchecked.
   every compute entry point over those states and checks the arithmetic
   (`season` in the battery), and `seasonsweep.js` opens every view on the
   pivotal ones with the page's clock set to that moment
+- `agree.js` and `worth.js` — the rule that every page tells the same story:
+  a figure shown in more than one place (a total, a rank, a gameweek's points,
+  bench points, hits, a player's points, a squad's value and bank) is computed
+  once in `compute.js` and read everywhere. They check each page's figure
+  against that one source on the real data and through the simulated season
 - everything else — one suite per file
+
+## One figure, one source
+
+A page never reads FPL's raw fields for a figure another page also shows. It
+asks `compute.js`, which holds the one rule for it: `gwScore` for a manager's
+points (net of hits, live-aware), `gwBench` for bench points, `playerPts` for
+a player's points (provisional bonus in), `squadWorth` for a squad's value
+(players only, the bank apart). A new figure gets its rule there first, and a
+check in `agree.js` that every page showing it reads the same number.
 
 ## Adding one
 

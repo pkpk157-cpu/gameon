@@ -985,7 +985,8 @@
       overallMove: last && prev && typeof last.r === "number" && typeof prev.r === "number" ? prev.r - last.r : null,
       played: gws.length,
       hits: gws.length ? sum("h") : null, transfers: gws.length ? sum("tr") : null,
-      bench: gws.length ? sum("b") : null,
+      // live-aware, like the classic table's and the stats page's bench
+      bench: gws.length ? gws.reduce(function (s, g) { return s + gwBench(ds, id, g); }, 0) : null,
       best: best === null ? null : { gw: best, points: bestP },
       leading: above === null,
       lead: above === null && below ? me.total - below.total : null,
@@ -1060,6 +1061,16 @@
     return (ds && ds.liveBonus && ds.liveBonus[gw]) || {};
   }
   C.provisionalBonus = bonusAt;
+  // What a player is on in a gameweek, the same on every screen: FPL's live
+  // points plus any bonus ranked from bps for a match FPL has not confirmed
+  // yet. It is the rule the scores already use, so a card, a stats list, the
+  // player page and the table cannot disagree about the same afternoon.
+  function playerPts(ds, gw, el) {
+    var v = liveAt(ds, gw)[el], b = bonusAt(ds, gw)[el] || 0;
+    if (typeof v !== "number") return b ? b : null;
+    return v + b;
+  }
+  C.playerPts = playerPts;
 
   // The Last Manager Standing tie-breakers after bench points: goals, then
   // clean sheets, then assists, counted across the playing XI.
@@ -1240,8 +1251,8 @@
       // Provisional bonus is part of what he is on right now, and the gameweek
       // tab counts it, so the season tab has to agree or the two disagree
       // about the same afternoon.
-      var prov = (!bonus && live === g) ? ((bonusAt(ds, g) || {})[el] || 0) : 0;
-      var pts = (lp[g] || {})[el];
+      var prov = (bonusAt(ds, g) || {})[el] || 0;
+      var pts = playerPts(ds, g, el);
       // How much of the league held him that week. This one really is history:
       // it is counted from that gameweek's own squads, so it says whether the
       // league was on him before he scored or piled in afterwards. FPL's own
@@ -1254,7 +1265,7 @@
         return { opp: f[0] === club ? f[1] : f[0], home: f[0] === club,
                  started: !!f[2], done: !!(f[3] || f[8]) };
       });
-      return { gw: g, pts: (pts == null ? null : pts + prov), mins: mins,
+      return { gw: g, pts: pts, mins: mins,
                go: own ? (own.pct[el] == null ? null : own.pct[el]) : null,
                goals: goals, assists: assists, bonus: bonus + prov, prov: prov > 0,
                played: mins > 0, fixtures: fx, blank: !fx.length,
@@ -1493,7 +1504,7 @@
         var r = hist[g];
         if (!r) return;
         hits += r.h || 0;
-        bench += r.b || 0;
+        bench += gwBench(ds, id, g);
         // records come from finished gameweeks only — a half-played
         // afternoon must not become somebody's "worst gameweek"
         var sc = g !== cur ? gwScore(ds, id, g) : null;
@@ -1529,7 +1540,7 @@
         // pitches beneath it were already counting the afternoon
         gwPts: gwScore(ds, id, gw),
         gwHits: row ? (row.h || 0) : 0,
-        gwBench: row ? (row.b || 0) : 0,
+        gwBench: row ? gwBench(ds, id, gw) : 0,
         total: last, hits: hits, bench: bench, best: best, worst: worst, chips: chips,
         seasons: seasons, seasonCount: seasons.length,
         bestRank: pBestRank, bestPts: pBestPts, career: career,
@@ -1606,7 +1617,9 @@
     gw = gw ? +gw : +ds.pitchGw;
     var mm = managerMap(ds);
     var els = ds.elements || {};
-    var lp = liveAt(ds, gw);
+    // a player's points as the pitches count them, provisional bonus in
+    var lp = {};
+    Object.keys(liveAt(ds, gw)).concat(Object.keys(bonusAt(ds, gw))).forEach(function (el) { lp[el] = playerPts(ds, gw, el); });
     var pk = picksAt(ds, gw);
     var eot = eoTable(ds, gw);
     var played = C.finishedGws(ds);
@@ -3185,7 +3198,7 @@
     // actually holds, so the number agrees with the table underneath it.
     var lp = ds.livePoints || {}, total = 0, any = false;
     Object.keys(lp).forEach(function (g) {
-      var v = lp[g][el];
+      var v = playerPts(ds, g, el);
       if (typeof v === "number") { total += v; any = true; }
     });
 
@@ -3855,9 +3868,10 @@
       var pts = 0, form = 0, mins = 0, bonus = 0, starts = 0, goals = 0, assists = 0;
       var best = null;
       gws.forEach(function (g) {
-        var p = (lp[g] || {})[id];
+        var p = playerPts(ds, g, id);
         if (p == null) return;
         pts += p;
+        bonus += (bonusAt(ds, g) || {})[id] || 0;
         if (recent.indexOf(g) !== -1) form += p;
         if (best == null || p > best.pts) best = { gw: g, pts: p };
         var lines = (bd[g] || {})[id];
@@ -3881,7 +3895,7 @@
         Object.keys(mine).forEach(function (g) {
           var n = mine[g];
           caps += n;
-          capReturn += n * (((lp[g] || {})[id]) || 0);
+          capReturn += n * (playerPts(ds, g, id) || 0);
         });
       }
       return {
