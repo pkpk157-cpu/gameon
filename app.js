@@ -458,7 +458,7 @@
     // 3 — the stats, one entry per tab, each saying what it holds: "Gameweek"
     // and "Picks" on their own told nobody which was the returns and which
     // the selections.
-    h += '<div class="menu"><div class="lab-sm">Stats &amp; highlights</div>' +
+    h += '<div class="menu"><div class="lab-sm">League insights</div>' +
       menuSub("pfStGw", "chart", "Gameweek returns", "Scores, bench, movement, captains, team of the week, eliminations") +
       menuSub("pfStPicks", "captain", "Gameweek selections", "Template XI, captains, transfers and chips before the deadline") +
       menuSub("pfStValue", "tag", "Squad values", "Richest squads, the bank, and the best value") +
@@ -2637,7 +2637,7 @@
     settings:{ t: "Settings" },
     profile: { t: "Profile" },
     compare: { t: "Head to head" },
-    stats:   { t: "Stats & highlights" },
+    stats:   { t: "League insights" },
     // Two errands on one view: the bar names whichever is open, so arriving
     // from either item in the profile sheet lands on a page that agrees with
     // the thing that was tapped.

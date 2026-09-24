@@ -61,10 +61,10 @@ const bare = JSON.parse(JSON.stringify(JSON.parse(fs.readFileSync(APP + "/data.j
       // the stats sit in a group of their own above it, one entry per tab
       const stats = await p.evaluate(() => {
         const groups = [...document.querySelectorAll("#youBody .menu")];
-        const g = groups.filter((x) => /Stats & highlights/.test((x.querySelector(".lab-sm") || {}).textContent || ""))[0];
+        const g = groups.filter((x) => /League insights/.test((x.querySelector(".lab-sm") || {}).textContent || ""))[0];
         return g ? [...g.querySelectorAll("button")].map((b) => b.querySelector(".mtx").firstChild.textContent.trim()) : null;
       });
-      chk("a Stats & highlights group with five entries, returns and selections named",
+      chk("a League insights group with five entries, returns and selections named",
           !!stats && stats.length === 5 && stats[0] === "Gameweek returns" && stats[1] === "Gameweek selections",
           (stats || []).join(","));
       // and it is not doubled up in the section tiles

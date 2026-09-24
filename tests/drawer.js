@@ -93,7 +93,7 @@ const chk = (n, ok, d) => { if (!ok) { fails++; console.log("   FAIL " + n + (d 
   // the control on the right of the bar. The burger is navigation and the two
   // settings now, and must not carry any of it.
   chk("who-you-are is NOT here — it has its own sheet", !open.hasIdentity);
-  chk("nor is anything of the league", !/Stats & highlights|Winnings|Head to head|Game rules/.test(open.text),
+  chk("nor is anything of the league", !/League insights|Winnings|Head to head|Game rules/.test(open.text),
       open.groups.join(","));
   chk("and no credit line, which was removed by request", !open.hasCredit);
 

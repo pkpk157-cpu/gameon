@@ -61,7 +61,7 @@ const ok = (c, m) => { if (!c) { bad++; console.log("  FAIL " + m); } else conso
     ok(menu.open, "burger opens");
     ok(JSON.stringify(menu.labels) === JSON.stringify(["Sections", "Appearance"]),
        "burger heads exactly Sections / Appearance, Gameweek status unheaded — got " + JSON.stringify(menu.labels));
-    ok(!/My profile|Compare me|Stats & highlights|Winnings|Head to head|Game rules|Who are you/.test(menu.text),
+    ok(!/My profile|Compare me|League insights|Winnings|Head to head|Game rules|Who are you/.test(menu.text),
        "burger holds nothing of You or League");
     await p.keyboard.press("Escape").catch(() => {});
     await p.evaluate(() => document.querySelector("#menuBack").click());

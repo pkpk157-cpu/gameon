@@ -11,9 +11,9 @@ your league runs:
 - **Pyramid Battle** — 4 divisions × 3 mini-seasons, promotion/relegation
 - **General Rules** + every prize table for reference
 
-Alongside those, from the burger menu and from any manager's name:
+Alongside those, from the burger menu, the profile sheet and any manager's name:
 
-- **Stats & highlights** — the gameweek and the season in cards, with the
+- **League insights** — the gameweek and the season in cards, with the
   league sorted into bands
 - **Premier League** — the 20 clubs' fixtures, live scores and minutes
 - **Player prices** — every player's ownership and how close his price is to
