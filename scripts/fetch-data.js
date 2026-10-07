@@ -51,7 +51,11 @@ async function getJSON(path, tries = 7) {
       return await res.json();
     } catch (e) { last = e; await sleep(700 * (i + 1)); }
   }
-  throw last || new Error("gave up after " + tries + " tries for " + path);
+  // Marked, so the run can tell "FPL did not answer" (keep what is live and
+  // try again in five minutes) from a fault in this script (fail loudly).
+  const err = last || new Error("gave up after " + tries + " tries for " + path);
+  err.fplUnavailable = true;
+  throw err;
 }
 
 async function pool(items, worker, concurrency = 6) {
@@ -1127,14 +1131,29 @@ if (require.main === module) (async () => {
   if (prev.managers && prev.managers.length) {
     const before = prev.managers.length, now = managers.length;
     if (now < before * 0.9) {
-      throw new Error("refusing to publish: " + now + " managers vs " + before + " already live");
+      throw Object.assign(new Error("refusing to publish: " + now + " managers vs " + before + " already live"), { keepLive: true });
     }
     const withHistory = Object.keys(history).filter((k) => Object.keys(history[k] || {}).length).length;
     if (now && withHistory < now * 0.8) {
-      throw new Error("refusing to publish: only " + withHistory + "/" + now + " managers have history");
+      throw Object.assign(new Error("refusing to publish: only " + withHistory + "/" + now + " managers have history"), { keepLive: true });
     }
   }
   fs.writeFileSync("data.json", JSON.stringify({ generatedAt: dataset.updatedAt, dataset }));
   console.log("Wrote data.json — " + managers.length + " managers, " + H2H.length +
     " H2H leagues, pitch GW " + (pitchGw || "none") + ", failed " + (hist.failed || 0));
-})().catch((e) => { console.error("FATAL:", e); process.exit(1); });
+})().catch((e) => {
+  // FPL down, busy or answering half a league: nothing is wrong here, and the
+  // data already live is the best there is. Keep it, say why, and leave the
+  // run green; the next one is five minutes away. The workflow reads "skip"
+  // and publishes nothing. Anything else is a fault in this script, and fails.
+  if (e && (e.fplUnavailable || e.keepLive)) {
+    const why = (e.keepLive ? "" : "FPL is unavailable: ") + (e.message || String(e));
+    console.log("::warning::Kept the data already live. " + why);
+    if (process.env.GITHUB_OUTPUT) {
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, "skip=true\nreason=" + why.replace(/[\r\n]+/g, " ") + "\n");
+    }
+    process.exit(0);
+  }
+  console.error("FATAL:", e);
+  process.exit(1);
+});

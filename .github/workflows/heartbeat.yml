@@ -49,7 +49,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   tick:
-    runs-on: ubuntu-latest
+    # Pinned for the season: GitHub moves "ubuntu-latest" to a new release
+    # from 19 October 2026, and nothing here should change under the app
+    # mid-season without being asked to. 24.04 is supported into 2029.
+    runs-on: ubuntu-24.04
     # Up to ten minutes waiting for its slot, then 5 pokes ten minutes apart,
     # then the handover — comfortably inside this.
     timeout-minutes: 70
@@ -87,7 +90,30 @@ jobs:
           wait=$(( (300 - now % 600 + 600) % 600 ))
           echo "first poke at $(date -u -d "@$((now + wait))" +%H:%M:%SZ), in ${wait}s"
           sleep "$wait"
+          # A run that never finishes holds the lock every later update waits
+          # on. On 6 October one sat "waiting" for a Pages deployment approval
+          # that nobody is asked for (no reviewers, no timer) and blocked every
+          # update for eighteen hours: its 30-minute timeout never started,
+          # because the job itself never did. So before each poke, any update
+          # or deploy run unfinished after 25 minutes is cancelled. A normal
+          # run takes under five. Runs older than a week are left alone: GitHub
+          # keeps the odd ghost it will not cancel, and it blocks nothing.
+          heal() {
+            for wf in update-data.yml pages.yml; do
+              ids=$(gh api "repos/$REPO/actions/workflows/$wf/runs?per_page=50" --jq '.workflow_runs[]
+                | select(.status != "completed")
+                | select((now - (.created_at | fromdateiso8601)) > 1500 and (now - (.created_at | fromdateiso8601)) < 604800)
+                | .id' 2>/dev/null) || { echo "::warning::could not list $wf runs"; continue; }
+              for id in $ids; do
+                echo "::warning::$wf run $id has been stuck over 25 minutes, cancelling it so updates can continue"
+                gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null 2>&1 \
+                  || gh api -X POST "repos/$REPO/actions/runs/$id/force-cancel" >/dev/null 2>&1 \
+                  || echo "::warning::could not cancel run $id"
+              done
+            done
+          }
           for i in 1 2 3 4 5; do
+            heal
             echo "--- poke $i of 5 at $(date -u +%H:%M:%SZ)"
             # A failed poke costs one cycle; the next one is ten minutes away
             # and the loop keeps its own time, so it is never fatal on its own.
@@ -113,6 +139,22 @@ jobs:
           AGE=$(( $(date -u +%s) - $(date -u -d "$LAST" +%s) ))
           echo "data.json last published $LAST — ${AGE}s ago"
           if [ "$AGE" -gt 2700 ]; then
+            # If the newest finished update kept the live data because FPL
+            # was down, there is nothing to fix here: the app shows the last
+            # data and says how old it is, and the next run catches up.
+            # the newest update that actually ran: a duplicate cancelled in
+            # the queue has no steps to read
+            LASTRUN=$(gh api "repos/$REPO/actions/workflows/update-data.yml/runs?status=completed&per_page=15" \
+                        --jq '[.workflow_runs[] | select(.conclusion == "success" or .conclusion == "failure")][0].id // empty' 2>/dev/null || echo "")
+            FPLDOWN=""
+            if [ -n "$LASTRUN" ]; then
+              FPLDOWN=$(gh api "repos/$REPO/actions/runs/$LASTRUN/jobs" \
+                --jq '[.jobs[].steps[] | select(.name == "FPL unavailable, the last data stays live" and .conclusion == "success")] | length' 2>/dev/null || echo "")
+            fi
+            if [ "$FPLDOWN" = "1" ]; then
+              echo "::warning::data.json is $((AGE / 60)) minutes old because FPL is unavailable; the last data stays live."
+              exit 0
+            fi
             echo "::error::data.json has not been published for $((AGE / 60)) minutes."
             echo "::error::The clock is running, so the updater itself is failing —"
             echo "::error::check the most recent 'Update FPL data' run."

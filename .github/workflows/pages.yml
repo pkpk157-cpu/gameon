@@ -21,7 +21,10 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
-    runs-on: ubuntu-latest
+    # Pinned for the season: GitHub moves "ubuntu-latest" to a new release
+    # from 19 October 2026, and nothing here should change under the app
+    # mid-season without being asked to. 24.04 is supported into 2029.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       # The app is served from the repo root, so whatever is in the checkout is

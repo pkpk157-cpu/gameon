@@ -24,7 +24,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   update:
-    runs-on: ubuntu-latest
+    # Pinned for the season: GitHub moves "ubuntu-latest" to a new release
+    # from 19 October 2026, and nothing here should change under the app
+    # mid-season without being asked to. 24.04 is supported into 2029.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment:
       name: github-pages
@@ -34,13 +37,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      # FPL down or busy (it answers 503 around deadlines and during its own
+      # maintenance) is not a failure: the script keeps the data already live,
+      # says why, and sets "skip", so nothing below runs and the run stays
+      # green. The next run is five minutes away. A fault in the script itself
+      # still fails the run.
       - name: Fetch FPL data
+        id: fetch
         run: node scripts/fetch-data.js
+      - name: FPL unavailable, the last data stays live
+        if: steps.fetch.outputs.skip == 'true'
+        env:
+          REASON: ${{ steps.fetch.outputs.reason }}
+        run: echo "$REASON"
       - name: Verify against FPL's own numbers
+        if: steps.fetch.outputs.skip != 'true'
         # Never blocks publishing — fresh data beats stale data — but any
         # disagreement with FPL's standings shows up as a warning on the run.
         run: node scripts/verify-data.js
       - name: Commit data.json if changed
+        if: steps.fetch.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -78,9 +94,12 @@ jobs:
           exit 1
       # Same as in pages.yml: the test suites are not part of the served app.
       # This runs after the push above, so it only trims the runner's checkout.
-      - run: rm -rf tests
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - if: steps.fetch.outputs.skip != 'true'
+        run: rm -rf tests
+      - if: steps.fetch.outputs.skip != 'true'
+        uses: actions/configure-pages@v5
+      - if: steps.fetch.outputs.skip != 'true'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: "."
       # Pages now and then still calls the previous deployment "in progress"
@@ -90,6 +109,7 @@ jobs:
       # run and one email, for a deploy that would have gone through a minute
       # later. So it is asked again, twice, with a pause each time.
       - id: deployment
+        if: steps.fetch.outputs.skip != 'true'
         uses: actions/deploy-pages@v4
         continue-on-error: true
       - if: steps.deployment.outcome == 'failure'
