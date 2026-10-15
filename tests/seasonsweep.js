@@ -18,7 +18,8 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     r.writeHead(200, { "content-type": T[path.extname(u)] || "text/plain", "cache-control": "no-store" }); r.end(b); }); });
 
 // the moments
-const STATES = [[6, "pre"], [12, "final"], [13, "live"], [19, "final"], [20, "locked"], [24, "live"], [24, "final"],
+// the first simulated week (FIRST, set below) stands in for "the next deadline"
+const STATES = [["FIRST", "pre"], [12, "final"], [13, "live"], [19, "final"], [20, "locked"], [24, "live"], [24, "final"],
                 [26, "final"], [29, "live"], [29, "final"], [30, "live"], [31, "final"], [33, "bonus"], [37, "final"],
                 [38, "live"], [38, "bonus"], [38, "final"]];
 const VIEWS = ["classic", "monthly", "lms", "pyramid", "h2h", "vol", "stats", "compare", "prices", "prices/stats",
@@ -31,8 +32,11 @@ const chk = (ok, m, x) => { if (!ok) { fails++; console.log("  FAIL " + m + (x ?
   await new Promise((r) => srv.listen(PORT, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
   const base = sim.loadBase();
+  const FIRST = sim.firstGw(base);
   const S = sim.season(base);
-  for (const [gw, phase] of STATES) {
+  // moments the real season has already passed are real data now, not simulated
+  const moments = STATES.map(([g, ph]) => [g === "FIRST" ? FIRST : g, ph]).filter(([g]) => g >= FIRST);
+  for (const [gw, phase] of moments) {
     const st = sim.stateAt(S, gw, phase);
     DATA = JSON.stringify({ generatedAt: st.dataset.updatedAt, dataset: st.dataset });
     // signed in as an organiser, so the pages that are theirs alone open too

@@ -16,10 +16,13 @@ const sim = require("./sim.js");
 
 const APP = GOENV.APP;
 const BATTERY = process.argv[2] === "battery";
-const FROM = BATTERY ? 6 : +(process.argv[2] || 6), TO = BATTERY ? sim.LAST : +(process.argv[3] || sim.LAST);
+// The first simulated week moves on as the real season does: it is the first
+// gameweek FPL has not finalised. A later start can still be asked for.
+const ARG_FROM = BATTERY ? 0 : +(process.argv[2] || 0), TO = BATTERY ? sim.LAST : +(process.argv[3] || sim.LAST);
+let FROM = 0;
 // the weeks where something changes hands: a mini-season ends, the draw is
 // made, a double and a blank gameweek, the first knockout round, the final
-const PIVOTAL = { 6: 1, 12: 1, 13: 1, 24: 1, 29: 1, 30: 1, 38: 1 };
+const PIVOTAL = { 12: 1, 13: 1, 24: 1, 29: 1, 30: 1, 38: 1 };
 let fails = 0, checks = 0;
 const seenFail = {};
 function fail(state, m, x) {
@@ -456,6 +459,8 @@ function audit(app, st) {
 (async () => {
   const app = loadApp();
   const base = sim.loadBase();
+  FROM = Math.max(ARG_FROM, sim.firstGw(base));
+  PIVOTAL[FROM] = 1;       // the first simulated week, at every phase
   const t0 = Date.now();
   let n = 0;
   const S = sim.season(base);

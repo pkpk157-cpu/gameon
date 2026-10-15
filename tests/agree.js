@@ -131,8 +131,11 @@ function audit(L, ds, now) {
 const real = JSON.parse(fs.readFileSync(path.join(ROOT, "data.json"), "utf8")).dataset;
 audit("real", real);
 console.log("  ok   real data" + (fails ? " (with failures above)" : ""));
-const S = sim.season(sim.loadBase());
-for (const [gw, phase] of [[6, "live"], [6, "ft"], [6, "bonus"], [6, "final"], [13, "live"], [24, "live"], [24, "bonus"], [29, "live"], [38, "live"], [38, "bonus"], [38, "final"]]) {
+const BASE = sim.loadBase(), S = sim.season(BASE), F = sim.firstGw(BASE);
+// the first simulated week at each phase, then the moments still to come
+const moments = [[F, "live"], [F, "ft"], [F, "bonus"], [F, "final"], [13, "live"], [24, "live"], [24, "bonus"], [29, "live"], [38, "live"], [38, "bonus"], [38, "final"]]
+  .filter(([g]) => g >= F && g <= sim.LAST);
+for (const [gw, phase] of moments) {
   const before = fails;
   const st = sim.stateAt(S, gw, phase);
   audit("sim GW" + gw + " " + phase, st.dataset, st.now);

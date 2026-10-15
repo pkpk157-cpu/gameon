@@ -97,12 +97,16 @@ audit("real", real, rgws, { pitches: true });
 console.log("  ok   real data, gameweeks " + rgws.join(","));
 
 // simulated weeks: the pitch gameweek moving on, a double and a blank, the end
-const base = sim.loadBase(), S = sim.season(base);
-for (const [gw, phase] of [[6, "pre"], [6, "live"], [7, "final"], [24, "live"], [29, "final"], [38, "final"]]) {
+const base = sim.loadBase(), S = sim.season(base), F = sim.firstGw(base);
+// the first simulated week stands in for "the coming deadline"; moments the
+// real season has already passed are real data now, checked above
+const moments = [[F, "pre"], [F, "live"], [F + 1, "final"], [24, "live"], [29, "final"], [38, "final"]]
+  .filter(([g], i, a) => g >= F && g <= sim.LAST && a.findIndex((x) => x[0] === g && x[1] === a[i][1]) === i);
+for (const [gw, phase] of moments) {
   const st = sim.stateAt(S, gw, phase);
   const ds = st.dataset;
   const gws = [1, Math.max(1, gw - 2), gw - 1, gw].filter((g, i, a) => g > 0 && a.indexOf(g) === i && ds.picks[g]);
-  audit("sim GW" + gw + " " + phase, ds, gws, { pitches: gw === 38 || gw === 6 });
+  audit("sim GW" + gw + " " + phase, ds, gws, { pitches: gw === 38 || gw === F });
   console.log("  ok   sim GW" + gw + " " + phase);
 }
 console.log("\n" + checks + " checks, " + fails + " failed");

@@ -1,7 +1,9 @@
 /* The rest of the season, played out on the real dataset.
 
-   Starting from the published data.json (five gameweeks played), every later
-   gameweek is generated the way the updater would publish it: squads that
+   Starting from the published data.json, from the first gameweek FPL has not
+   yet finalised (anything the real data holds for that week or later is set
+   aside, so a half-played real week never mixes with a simulated one), every
+   later gameweek is generated the way the updater would publish it: squads that
    move week to week (transfers, hits, captains, both halves' chips, a free
    hit that reverts), points for every player that follow the fixture list,
    a double gameweek and a blank one, FPL's automatic substitutions once the
@@ -47,8 +49,23 @@ const iso = (ms) => new Date(ms).toISOString();
 
 function loadBase() {
   const raw = JSON.parse(fs.readFileSync(path.join(GOENV.APP, "data.json"), "utf8"));
-  return raw.dataset;
+  const ds = raw.dataset;
+  // The simulation takes over at the first gameweek FPL has not finalised.
+  // Whatever the real data holds for that week or later (a live week's
+  // squads, scores, stamps and chips) belongs to the simulation instead.
+  const evs = (ds.bootstrap && ds.bootstrap.events) || [];
+  let first = 1;
+  while (first <= LAST && evs[first - 1] && evs[first - 1].finished && evs[first - 1].data_checked) first++;
+  const cut = (o) => { if (o) Object.keys(o).forEach((g) => { if (+g >= first) delete o[g]; }); };
+  ["picks", "livePoints", "breakdown", "liveStats", "gwStamps", "picksFinal", "liveBonus", "gwEvents", "moves"]
+    .forEach((k) => cut(ds[k]));
+  Object.keys(ds.history || {}).forEach((id) => cut(ds.history[id]));
+  Object.keys(ds.chips || {}).forEach((id) => { ds.chips[id] = (ds.chips[id] || []).filter((c) => c.gw < first); });
+  ds._simFrom = first;
+  return ds;
 }
+// The first simulated gameweek for a base.
+function firstGw(base) { return base._simFrom || 1; }
 
 /* ---- the plan: everything that is decided once for the whole season ---- */
 function plan(base) {
@@ -63,7 +80,8 @@ function plan(base) {
   // a permutation of players within each position so no two weeks repeat.
   const realGws = Object.keys(base.livePoints).map(Number).filter((g) => Object.keys(base.livePoints[g]).length);
   const weeks = {};
-  for (let g = 6; g <= LAST; g++) {
+  const F = firstGw(base);
+  for (let g = F; g <= LAST; g++) {
     const perm = {};
     Object.keys(byType).forEach((t) => {
       const ids = byType[t].slice(), shuffled = ids.slice();
@@ -80,7 +98,8 @@ function plan(base) {
     const had = (base.chips[m.id] || []).map((c) => c.n);
     const mine = [];
     ["wildcard", "freehit", "bboost", "3xc"].forEach((n) => {
-      if (had.indexOf(n) === -1 && R() < 0.6) mine.push({ n, gw: 6 + Math.floor(R() * 14) });
+      // the first set must go by GW19, so only while there is time left
+      if (F <= 19 && had.indexOf(n) === -1 && R() < 0.6) mine.push({ n, gw: F + Math.floor(R() * (20 - F)) });
       if (R() < 0.8) mine.push({ n, gw: 20 + Math.floor(R() * 19) });
     });
     // one chip a week at most
@@ -187,6 +206,7 @@ function season(base) {
     S.overall[m.id] = lg ? h[lg].r : 3000000;
     S.lastRank[m.id] = m.rank;
   });
+  S.first = firstGw(base);
   return S;
 }
 
@@ -397,7 +417,8 @@ function voluntaryStandings(S, cfgVol, gw) {
 // whole season up to it. Cached, so asking for the phases of one week in
 // order costs one pass.
 function stateAt(S, gw, phase) {
-  if (!S._done) S._done = 5;
+  if (gw < S.first) throw new Error("GW" + gw + " is real, not simulated: the simulation starts at GW" + S.first);
+  if (S._done == null) S._done = S.first - 1;
   while (S._done < gw - 1) playWeek(S, S._done + 1, "final");
   return playWeek(S, gw, phase, true);
 }
@@ -601,7 +622,7 @@ function assemble(S, gw, now, extra) {
 /* ---- every state of the season, in order ------------------------------- */
 function* states(base, opts) {
   const S = season(base);
-  const from = (opts && opts.from) || 6, to = (opts && opts.to) || LAST;
+  const from = (opts && opts.from) || S.first, to = (opts && opts.to) || LAST;
   const phases = (opts && opts.phases) || PHASES;
   for (let gw = from; gw <= to; gw++) {
     for (const ph of phases) {
@@ -610,7 +631,7 @@ function* states(base, opts) {
   }
 }
 
-module.exports = { loadBase, states, stateAt, season, PHASES, LAST, DGW, BGW };
+module.exports = { loadBase, firstGw, states, stateAt, season, PHASES, LAST, DGW, BGW };
 
 if (require.main === module) {
   // node sim.js <gw> <phase> <out.json>  — writes one state as a data.json
