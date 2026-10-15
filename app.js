@@ -4391,12 +4391,16 @@
     return h;
   }
 
+  // The profile's head-to-head follows the squad: whichever week the squad
+  // is showing, the match beside it is that week's. Set by renderProfile.
+  var h2hSync = null;
   function mountPitch(box, ds, id, gw, metric, swapped) {
     // Between a gameweek settling and the next deadline a manager can already
     // own a different fifteen. The switch says which squad you are looking at,
     // and the official one is what it opens on.
     var pd = K.pendingSquad(ds, id);
     if (pd && state.pitchPending) {
+      if (h2hSync) h2hSync(pd.gw);
       box.removeAttribute("data-bgw");
       box.innerHTML = whenSwitch(pd, true) + pendingHtml(pd);
       wireWhen(box, ds, id, gw, metric, swapped, pd);
@@ -4416,6 +4420,7 @@
     // so changing gameweek turns them back.
     swapped = !!swapped && !!pit.swaps;
     state.pitchGw = +gw; state.pitchMetric = metric;
+    if (h2hSync) h2hSync(+gw);
 
     var h = '<div class="pgwline">';
     h += '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
@@ -4483,6 +4488,17 @@
       state.pitchPending = b.getAttribute("data-when") === "next";
       mountPitch(box, ds, id, gw, metric, swapped);
     });
+  }
+
+  // The gameweek the profile's squad opens on: the next squad when that view
+  // is chosen and exists, otherwise the remembered week if it has a squad,
+  // otherwise the newest. The same choice mountPitch makes.
+  function profileSquadGw(ds, id) {
+    var pd = K.pendingSquad(ds, id);
+    if (pd && state.pitchPending) return pd.gw;
+    var gws = K.squadGws(ds);
+    if (!gws.length) return null;
+    return (state.pitchGw && gws.indexOf(+state.pitchGw) !== -1) ? +state.pitchGw : gws[gws.length - 1];
   }
 
   function h2hStat(label, value) {
@@ -4598,18 +4614,38 @@
               (r.live ? " \u00b7 live" : (r.result === "D" ? " \u00b7 draw" : "")) + '</div></div>';
       };
       // A whole season of fixtures is a long scroll past everything beneath
-      // it. Open on this gameweek's match alone; the rest unfold on demand.
-      var h2hCur = R.rows.filter(function (r) { return !h2hDone[r.gw]; })[0] || R.rows[R.rows.length - 1];
+      // it. Open on one match alone; the rest unfold on demand. That match is
+      // the one for the week the squad above is showing, so last week's
+      // points sit beside last week's result, and picking another gameweek
+      // moves both. A week with no fixture (before the draw, or once the
+      // group stage is over) falls back to the next match still to settle.
+      var h2hPick = function (gw) {
+        var at = gw ? R.rows.filter(function (r) { return +r.gw === +gw; })[0] : null;
+        return at || R.rows.filter(function (r) { return !h2hDone[r.gw]; })[0] || R.rows[R.rows.length - 1];
+      };
+      var h2hCur = h2hPick(profileSquadGw(ds, id));
       var h2hRest = R.rows.filter(function (r) { return r !== h2hCur; });
       h += pfold("h2h", "Head-to-head", "W" + R.w + " D" + R.d + " L" + R.l,
         '<div class="card"><div class="h2hsum">' +
         h2hStat("Played", R.played) + h2hStat("W", R.w) + h2hStat("D", R.d) +
         h2hStat("L", R.l) + h2hStat("Points", R.pts) + h2hStat("For", R.pointsFor) +
-        '</div><div class="fxwrap"><div class="fxgrp">' + h2hRow(h2hCur) + '</div>' +
+        '</div><div class="fxwrap"><div class="fxgrp" data-h2hcur>' + h2hRow(h2hCur) + '</div>' +
         (h2hRest.length ? '<div class="fxgrp" id="h2hRest" hidden>' + h2hRest.map(h2hRow).join("") + '</div>' +
           '<button type="button" class="fxtoggle" id="h2hAll">Show all ' + R.rows.length + ' fixtures</button>' : '') +
         '</div></div>',
-        '<div class="card"><div class="fxwrap"><div class="fxgrp">' + h2hRow(h2hCur) + '</div></div></div>');
+        '<div class="card"><div class="fxwrap"><div class="fxgrp" data-h2hcur>' + h2hRow(h2hCur) + '</div></div></div>');
+      h2hSync = function (gw) {
+        var cur = h2hPick(gw);
+        if (cur === h2hCur) return;
+        var slots = $all("[data-h2hcur]", host);
+        if (!slots.length) return;                 // the page has moved on
+        h2hCur = cur;
+        slots.forEach(function (el) { el.innerHTML = h2hRow(cur); });
+        var rest = $("#h2hRest", host);
+        if (rest) rest.innerHTML = R.rows.filter(function (r) { return r !== cur; }).map(h2hRow).join("");
+      };
+    } else {
+      h2hSync = null;
     }
 
     var past, pastPeek = "";
