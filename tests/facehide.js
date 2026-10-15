@@ -28,6 +28,10 @@ const owner = Object.entries(base.dataset.picks[base.dataset.pitchGw] || {})
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", e => errs.push(e.message));
     await p.goto("http://localhost:" + PORT + "/index.html#profile/" + owner[0], { waitUntil: "domcontentloaded" });
     await p.waitForTimeout(2000);
+    // Photographs load lazily, as they come into view: bring his card on
+    // screen, as someone looking at it would, before asking about the photo.
+    await p.evaluate((id) => { const c = document.querySelector('.pcard[data-el="' + id + '"]'); if (c) c.scrollIntoView({ block: "center" }); }, konsaId);
+    await p.waitForFunction((id) => { const i = document.querySelector('.pcard[data-el="' + id + '"] img.facepic'); return !i || (i.complete && i.naturalWidth > 0); }, konsaId, { timeout: 8000 }).catch(() => {});
     const r = await p.evaluate((id) => {
       const card = document.querySelector('.pcard[data-el="' + id + '"]');
       if (!card) return null;
