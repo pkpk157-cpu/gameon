@@ -6364,8 +6364,27 @@
     h += '<div class="hgrid">';
     h += hcard("Transfers", num(se.transfersTotal), "made in total", null, "−" + num(se.hitsTotal) + " pts in hits", "swap");
     h += hcard("Points benched", num(se.benchTotal), "left on benches", null, "", "bench");
-    h += hcard("Chips played", num(se.chipsPlayed), "so far this season", null, "", "sparkle");
     h += '</div>';
+
+    // The chips, one row each: how many managers have played it in the set
+    // that is open, and how many still hold it. Each is played at most once
+    // a set, so the two add up to the league.
+    var cs = K.chipSplit(ds);
+    if (cs) {
+      h += '<div class="section-title"><h2>Chips</h2><div class="rule"></div></div>';
+      h += '<div class="note" style="margin:-4px 2px 10px">' +
+        (cs.set === 1 ? 'First set, to be played by the Gameweek ' + cs.to + ' deadline'
+                      : 'Second set, from Gameweek ' + cs.from) +
+        ' \u00b7 ' + num(cs.managers) + ' managers</div>';
+      h += '<div class="card"><div class="tablewrap"><table class="t chipsplit"><thead><tr>' +
+        '<th>Chip</th><th class="num">Played</th><th class="num">Still to play</th></tr></thead><tbody>' +
+        cs.rows.map(function (r) {
+          return '<tr><td>' + esc(r.label) + '</td><td class="num">' + num(r.played) + '</td>' +
+            '<td class="num">' + num(r.left) + '</td></tr>';
+        }).join("") +
+        '</tbody><tfoot><tr><td>All chips</td><td class="num">' + num(cs.played) + '</td>' +
+        '<td class="num">' + num(cs.left) + '</td></tr></tfoot></table></div></div>';
+    }
     return h;
   }
 

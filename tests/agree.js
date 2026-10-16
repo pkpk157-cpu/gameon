@@ -108,6 +108,25 @@ function audit(L, ds, now) {
     }
   });
 
+  // the Season page's chip table, against each manager's own chips
+  const cs = C.chipSplit(ds);
+  if (cs) {
+    const n = ds.managers.length;
+    const ev19 = ds.bootstrap.events.find((e) => +e.id === 19);
+    const t = now || Date.now();
+    const wantSet = ev19 && t >= Date.parse(ev19.deadline_time) ? 2 : 1;
+    chk(cs.set === wantSet, L + ": the chip table shows the set that is open", cs.set + " vs " + wantSet);
+    let sum = 0;
+    cs.rows.forEach((r) => {
+      const exp = ds.managers.filter((m) => C.managerChips(ds, m.id)
+        .some((c) => c.key === r.key && c.gws.some((g) => g >= cs.from && g <= cs.to))).length;
+      chk(r.played === exp, L + ": the chip table's " + r.label + " is the managers who played it", r.played + " vs " + exp);
+      chk(r.played + r.left === n, L + ": " + r.label + " played and still to play add up to the league", r.played + "+" + r.left);
+      sum += r.played;
+    });
+    chk(cs.played === sum && cs.left === n * cs.rows.length - sum, L + ": the chip table's totals add up");
+  }
+
   // a player's own page and the players tab, against the same rule
   const els = Object.keys(ds.elements || {}).filter((_, i) => i % 9 === 0);
   const ps = C.playerStats(ds), byEl = {};
@@ -133,7 +152,7 @@ audit("real", real);
 console.log("  ok   real data" + (fails ? " (with failures above)" : ""));
 const BASE = sim.loadBase(), S = sim.season(BASE), F = sim.firstGw(BASE);
 // the first simulated week at each phase, then the moments still to come
-const moments = [[F, "live"], [F, "ft"], [F, "bonus"], [F, "final"], [13, "live"], [24, "live"], [24, "bonus"], [29, "live"], [38, "live"], [38, "bonus"], [38, "final"]]
+const moments = [[F, "live"], [F, "ft"], [F, "bonus"], [F, "final"], [13, "live"], [19, "final"], [20, "pre"], [20, "live"], [24, "live"], [24, "bonus"], [29, "live"], [38, "live"], [38, "bonus"], [38, "final"]]
   .filter(([g]) => g >= F && g <= sim.LAST);
 for (const [gw, phase] of moments) {
   const before = fails;

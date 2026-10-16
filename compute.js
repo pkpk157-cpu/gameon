@@ -1184,6 +1184,37 @@
     });
   };
 
+  /* The league's chips by set. FPL gives two sets this season: the first for
+     Gameweeks 1 to 19 (played by the GW19 deadline), the second from
+     Gameweek 20. Each chip is played at most once a set, so per chip the
+     managers who have played it and those who still hold it add up to the
+     league. Counted from managerChips, the rule the profile's chips use, so
+     the two can never disagree. The set shown is the one open now: the first
+     until the GW19 deadline passes, the second after. */
+  var CHIP_SET_END = 19;
+  C.chipSplit = function (ds, now) {
+    if (!ds || !ds.managers || !ds.managers.length) return null;
+    now = now || Date.now();
+    var ev19 = ((ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === CHIP_SET_END; })[0];
+    var closed = ev19 && ev19.deadline_time ? now >= Date.parse(ev19.deadline_time) : false;
+    var set = closed ? 2 : 1;
+    var from = set === 1 ? 1 : CHIP_SET_END + 1, to = set === 1 ? CHIP_SET_END : 38;
+    var n = ds.managers.length;
+    var played = {};
+    CHIP_TYPES.forEach(function (t) { played[t.key] = 0; });
+    ds.managers.forEach(function (m) {
+      C.managerChips(ds, m.id).forEach(function (c) {
+        if (c.gws.some(function (g) { return g >= from && g <= to; })) played[c.key]++;
+      });
+    });
+    var rows = CHIP_TYPES.map(function (t) {
+      return { key: t.key, label: t.label, played: played[t.key], left: n - played[t.key] };
+    });
+    var total = rows.reduce(function (a, r) { return a + r.played; }, 0);
+    return { set: set, from: from, to: to, managers: n, rows: rows,
+             played: total, left: n * rows.length - total };
+  };
+
   // Gameweeks we hold squads for, oldest first.
   C.squadGws = function (ds) {
     if (!ds || !ds.picks) return [];
