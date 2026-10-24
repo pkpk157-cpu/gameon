@@ -146,7 +146,9 @@ const money = (s) => parseInt(String(s).replace(/[^0-9]/g, ""), 10) || 0;
         const due = covers.reduce((a, b) => a + b, 0);
         const got = g.reduce((sum, r) => sum + money(r.won), 0);
         if (got !== due) { tieOk = false; tieNote += " rank " + rank + ": " + got + " vs " + due; }
-        if (!g.every((r) => r.joint)) { tieOk = false; tieNote += " rank " + rank + " unmarked"; }
+        // grouped by the place printed, so a shared place is the same number
+        // on every row; no "=" beside it, as across the app
+        if (g.some((r) => r.joint)) { tieOk = false; tieNote += " rank " + rank + " still carries an = mark"; }
       });
       chk(t.name + ": shared places split exactly what they cover", tieOk, tieNote);
       const names = t.rows.map((r) => r.team).join(" | ");

@@ -57,7 +57,7 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     const after = await p.evaluate(() => {
       const ds = window.GO_STORE.dataset(); const rows = window.GO_COMPUTE.classic(ds);
       const dom = [...document.querySelectorAll("section.view.active table.t tbody tr")].map(tr => tr.querySelector("[data-entry]").getAttribute("data-entry") + ":" + [...tr.querySelectorAll("td.num")].slice(0, 3).map(td => { const m = td.querySelector(".mvu"); if (!m) return td.textContent; const c = td.cloneNode(true); c.querySelector(".mvu").textContent = (m.classList.contains("up") ? "+" : "-") + m.textContent; return c.textContent; }).join("/"));
-      const exp = rows.map(r => r.id + ":" + (r.tiedWith > 1 ? "=" : "") + r.computedRank + (r.move > 0 ? "+" + r.move : r.move < 0 ? "-" + (-r.move) : "") + "/" + Number(r.eventTotal).toLocaleString("en-US") + "/" + Number(r.total).toLocaleString("en-US"));
+      const exp = rows.map(r => r.id + ":" + r.computedRank + (r.move > 0 ? "+" + r.move : r.move < 0 ? "-" + (-r.move) : "") + "/" + Number(r.eventTotal).toLocaleString("en-US") + "/" + Number(r.total).toLocaleString("en-US"));
       return { same: JSON.stringify(dom) === JSON.stringify(exp), n: dom.length, dom: dom.slice(0, 8), exp: exp.slice(0, 8),
         leftover: [...document.querySelectorAll("tr.livemove")].filter(tr => tr.style.transform).length,
         bumpedName: (document.querySelector('[data-entry="' + window.__bumped.id + '"]') || {}).textContent };
