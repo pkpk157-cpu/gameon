@@ -254,18 +254,27 @@ async function open(b, hash, w, waitFor) {
     chk(where.openRows === 0 && where.expanded === 0,
       "condensed: no gameweek opened on arrival", where.openRows + " rows / " + where.expanded + " open");
     chk(where.y < 40, "and the page starts at the top, not scrolled to a row", "scrollY " + where.y);
-    // a row still opens on a tap, with its own gameweek's breakdown
-    await p.evaluate((gw) => { const r = document.querySelector('tr[data-ppgw="' + gw + '"]'); if (r) r.click(); }, tapped.gw);
+    // a row still opens on a tap, with its own gameweek's breakdown. The page
+    // lists the weeks he has played, newest first: a live week he has not
+    // played yet has no row, so the newest week he has played stands in.
+    const target = await p.evaluate((gw) => {
+      const own = document.querySelector('tr[data-ppgw="' + gw + '"]');
+      const r = own || document.querySelector("tr[data-ppgw]");
+      if (r) r.click();
+      return r ? r.getAttribute("data-ppgw") : null;
+    }, tapped.gw);
     await p.waitForTimeout(300);
     const shown = await p.evaluate(() => {
       const row = document.querySelector("tr[data-ppgw].open");
       const exp = document.querySelector(".ppexp");
       return { forGw: exp && exp.getAttribute("data-for"), rowGw: row && row.getAttribute("data-ppgw"),
-               total: exp ? (exp.querySelector(".bdtotal") || {}).textContent : null };
+               total: exp ? (exp.querySelector(".bdtotal") || {}).textContent : null,
+               says: exp ? (exp.querySelector(".callout") || {}).textContent || null : null };
     });
-    chk(shown.forGw === tapped.gw && shown.rowGw === tapped.gw,
-      "a tap on that gameweek's row opens its breakdown", JSON.stringify(shown));
-    chk(!!shown.total && /pts/.test(shown.total), "and it totals", shown.total);
+    chk(!!target && shown.forGw === target && shown.rowGw === target,
+      "a tap on a gameweek's row opens that gameweek's breakdown (GW" + target + (target === tapped.gw ? ", the week tapped" : ", his newest played") + ")", JSON.stringify(shown));
+    chk((!!shown.total && /pts/.test(shown.total)) || /did not feature|no fixture|not kicked off/.test(shown.says || ""),
+      "and it totals, or says why there is nothing to total", shown.total || shown.says);
     // back lands where he was tapped, not at the top of the profile
     await p.evaluate(() => document.querySelector("#barBack").click());
     await p.waitForTimeout(700);

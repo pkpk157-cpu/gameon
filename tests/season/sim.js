@@ -61,6 +61,12 @@ function loadBase() {
     .forEach((k) => cut(ds[k]));
   Object.keys(ds.history || {}).forEach((id) => cut(ds.history[id]));
   Object.keys(ds.chips || {}).forEach((id) => { ds.chips[id] = (ds.chips[id] || []).filter((c) => c.gw < first); });
+  // the fixtures of those weeks stay (who plays whom, and when), but nothing
+  // has kicked off in them yet: the simulation plays them
+  Object.keys(ds.gwFixtures || {}).forEach((g) => {
+    if (+g < first) return;
+    (ds.gwFixtures[g] || []).forEach((f) => { f[2] = 0; f[3] = 0; f[4] = null; f[5] = null; f[6] = 0; f[8] = 0; });
+  });
   ds._simFrom = first;
   return ds;
 }

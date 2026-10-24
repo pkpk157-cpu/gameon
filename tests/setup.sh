@@ -20,6 +20,9 @@ console.log("  datasets " + E.STATES);
 console.log("  output   " + E.OUT);
 '
 
+echo "· pinning the font a phone draws the app in"
+bash lib/phonefont.sh
+
 echo "· building the hostile datasets"
 node mkstates.js >/dev/null
 node -e '

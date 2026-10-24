@@ -177,8 +177,23 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     chk(!has.st && !has.lms && errs.length === 0, "no export buttons for a manager who is not an organiser", JSON.stringify(has));
   });
   await run({}, async (p, errs) => {
+    // The eliminations, and so their export, appear only once FPL has
+    // finalised the week: while the newest week is live there is none, by
+    // design. Look at the newest finalised week, the way an organiser would.
+    const fin = (() => { const C = require(GOENV.APP + "/tests/audit/harness.js").loadCompute();
+      const f = C.C.finishedGws(C.ds); return f[f.length - 1]; })();
+    await p.evaluate((g) => { const s = document.querySelector("#stGwSel"); if (s) { s.value = String(g); s.dispatchEvent(new Event("change", { bubbles: true })); } }, fin);
+    await p.waitForTimeout(400);
     const has = await p.evaluate(() => ({ st: !!document.querySelector("#stShare"), lms: !!document.querySelector("#stLmsShare") }));
-    chk(has.st && has.lms && errs.length === 0, "both exports for an organiser", JSON.stringify(has));
+    chk(has.st && has.lms && errs.length === 0, "both exports for an organiser, on GW" + fin + ", the newest finalised week", JSON.stringify(has));
+    // and on a week still being played, the eliminations export waits
+    const live = await p.evaluate(() => { const s = document.querySelector("#stGwSel"); if (!s) return null; const v = s.options[s.options.length - 1].value; s.value = v; s.dispatchEvent(new Event("change", { bubbles: true })); return v; });
+    await p.waitForTimeout(400);
+    const C2 = require(GOENV.APP + "/tests/audit/harness.js").loadCompute();
+    if (live && C2.C.finishedGws(C2.ds).indexOf(+live) === -1) {
+      const lmsLive = await p.evaluate(() => !!document.querySelector("#stLmsShare"));
+      chk(!lmsLive, "GW" + live + " is not finalised: no eliminations export yet");
+    }
   });
 
   // 5. hostile states: nothing to draw says so; bad names and nulls still draw
@@ -198,7 +213,7 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
       const expectPic = states[st];
       if (expectPic === false) chk(!out.sheet && /make the picture/.test(out.toast), "nothing to draw is said in a toast", JSON.stringify(out));
       else if (expectPic === true) chk(out.sheet, "the picture is made", JSON.stringify(out));
-      else chk(out.sheet || /make the picture/.test(out.toast), "either a picture or a toast, never silence", JSON.stringify(out));
+      else chk(out.sheet || /make the picture|No scores yet for Gameweek \d+ — try the Picks picture/.test(out.toast), "either a picture or a toast, never silence", JSON.stringify(out));
       chk(out.enabled, "the button is live again afterwards");
       // every other tab too: a picture or a reason, never silence, never an error
       const said = [];

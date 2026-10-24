@@ -26,7 +26,7 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     }));
     chk(!menu.items.some(t => /player stats|price/i.test(t)), w + ": the sections menu no longer lists the player pages", menu.items.join(" | "));
     chk(menu.gos.indexOf("prices") === -1, w + ": nothing in it still routes to prices", menu.gos.join(","));
-    chk(menu.items.length === 3, w + ": three sections left", String(menu.items.length));
+    chk(menu.items.length === 4, w + ": four sections: Premier League, FPL and the two Game On sections", String(menu.items.length));
     await p.mouse.click(w - 8, 500); await p.waitForTimeout(400);
     chk(!(await p.evaluate(() => document.querySelector("#menuBack").classList.contains("show"))),
       w + ": the sections drawer closes again");

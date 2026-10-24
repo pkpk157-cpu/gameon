@@ -22,7 +22,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
 const STATES = [["FIRST", "pre"], [12, "final"], [13, "live"], [19, "final"], [20, "locked"], [24, "live"], [24, "final"],
                 [26, "final"], [29, "live"], [29, "final"], [30, "live"], [31, "final"], [33, "bonus"], [37, "final"],
                 [38, "live"], [38, "bonus"], [38, "final"]];
-const VIEWS = ["classic", "monthly", "lms", "pyramid", "h2h", "vol", "stats", "compare", "prices", "prices/stats",
+const VIEWS = ["classic", "monthly", "lms", "pyramid", "h2h", "vol", "fpl", "stats", "compare", "prices", "prices/stats",
                "stats/gw", "stats/picks", "stats/value", "stats/season", "stats/fame",
                "pl", "pl/table", "winnings", "gwstatus", "rules", "chips/1/3xc"];
 let fails = 0;
@@ -35,7 +35,13 @@ const chk = (ok, m, x) => { if (!ok) { fails++; console.log("  FAIL " + m + (x ?
   const FIRST = sim.firstGw(base);
   const S = sim.season(base);
   // moments the real season has already passed are real data now, not simulated
-  const moments = STATES.map(([g, ph]) => [g === "FIRST" ? FIRST : g, ph]).filter(([g]) => g >= FIRST);
+  // "all": every week still to come, before its deadline, live and checked,
+  // and every phase of the weeks where something changes hands
+  const ALL = process.argv[2] === "all";
+  const PIV = { 12: 1, 13: 1, 19: 1, 20: 1, 24: 1, 29: 1, 30: 1, 38: 1 }; PIV[FIRST] = 1;
+  const every = [];
+  if (ALL) for (let g = FIRST; g <= sim.LAST; g++) (PIV[g] ? sim.PHASES : ["pre", "live", "final"]).forEach((ph) => every.push([g, ph]));
+  const moments = ALL ? every : STATES.map(([g, ph]) => [g === "FIRST" ? FIRST : g, ph]).filter(([g]) => g >= FIRST);
   for (const [gw, phase] of moments) {
     const st = sim.stateAt(S, gw, phase);
     DATA = JSON.stringify({ generatedAt: st.dataset.updatedAt, dataset: st.dataset });

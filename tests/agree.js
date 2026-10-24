@@ -154,6 +154,8 @@ const BASE = sim.loadBase(), S = sim.season(BASE), F = sim.firstGw(BASE);
 // the first simulated week at each phase, then the moments still to come
 const moments = [[F, "live"], [F, "ft"], [F, "bonus"], [F, "final"], [13, "live"], [19, "final"], [20, "pre"], [20, "live"], [24, "live"], [24, "bonus"], [29, "live"], [38, "live"], [38, "bonus"], [38, "final"]]
   .filter(([g]) => g >= F && g <= sim.LAST);
+// "all": every week still to come, live, with the bonus in, and checked
+if (process.argv[2] === "all") { moments.length = 0; for (let g = F; g <= sim.LAST; g++) ["live", "bonus", "final"].forEach((ph) => moments.push([g, ph])); }
 for (const [gw, phase] of moments) {
   const before = fails;
   const st = sim.stateAt(S, gw, phase);
