@@ -1,5 +1,5 @@
 const GOENV = require("./lib/env.js");
-/* The three section marks in the burger drawer used to be seen changing their
+/* The four section marks in the burger drawer used to be seen changing their
    minds: a drawn glyph for a frame or two, then the real badge dropping over
    it. A lazy <img> inside a drawer that is off screen is never fetched, so the
    first open always paid for the swap. The art is warmed at boot now and the
@@ -8,7 +8,7 @@ const GOENV = require("./lib/env.js");
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8792, ME = 1255976;
-const ART = ["pl-lion.webp", "logo-tile.webp", "logo-tile-inv.webp"];
+const ART = ["pl-lion.webp", "fpl-tile.webp", "logo-tile.webp", "logo-tile-inv.webp"];
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
 let delayArt = 0, killArt = false;
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
@@ -63,11 +63,11 @@ async function open(p) {
     const late = [];
     for (const h of await p.$$("#menuBody .mi-mark")) late.push(await h.screenshot());
 
-    chk(m1.length === 3, "three section marks", String(m1.length));
+    chk(m1.length === 4, "four section marks", String(m1.length));
     chk(m1.every(m => m.lazy === null), "the badges are not lazy — a drawer off screen never fetches those", m1.map(m => m.lazy).join(","));
     chk(m1.every(m => m.ready), "every badge is already decoded when the drawer opens", JSON.stringify(m1.map(m => m.ready)));
     chk(m1.every(m => m.tileKids === 4), "and the tile under it carries no glyph to flash", m1.map(m => m.tileKids).join(","));
-    chk(early.length === 3 && early.every((buf, i) => buf.equals(late[i])),
+    chk(early.length === 4 && early.every((buf, i) => buf.equals(late[i])),
       "the marks look identical a moment after opening and a second and a half later");
     chk(errs.length === 0, "no page errors", errs.join(" | "));
     await ctx.close();
@@ -83,7 +83,7 @@ async function open(p) {
     await open(p);
     await p.waitForTimeout(300);
     const m = await marks(p);
-    chk(m.length === 3 && m.every(x => x.tileKids > 4), "slow art: the drawn glyph is there to stand in", m.map(x => x.tileKids).join(","));
+    chk(m.length === 4 && m.every(x => x.tileKids > 4), "slow art: the drawn glyph is there to stand in", m.map(x => x.tileKids).join(","));
     chk(m.every(x => x.boxed), "slow art: no mark is an empty box", JSON.stringify(m.map(x => x.boxed)));
     chk(errs.length === 0, "slow art: no page errors", errs.join(" | "));
     delayArt = 0;
@@ -101,7 +101,7 @@ async function open(p) {
     await open(p);
     await p.waitForTimeout(400);
     const m = await marks(p);
-    chk(m.length === 3 && m.every(x => x.tileKids > 4), "missing art: every mark keeps its drawn glyph", m.map(x => x.tileKids).join(","));
+    chk(m.length === 4 && m.every(x => x.tileKids > 4), "missing art: every mark keeps its drawn glyph", m.map(x => x.tileKids).join(","));
     // the app's own error handler takes a broken <img> out entirely, so what is
     // left has to be a drawn mark rather than a hole
     chk(m.every(x => !x.ready && x.boxed && x.src === null), "missing art: the broken image is taken out and the drawn mark is what remains", JSON.stringify(m));

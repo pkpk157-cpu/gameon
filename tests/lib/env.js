@@ -36,7 +36,9 @@ function findChrome() {
     try { names = fs.readdirSync(root); } catch (e) { continue; }
     for (const n of names) {
       if (!/^chromium/.test(n)) continue;
-      for (const rel of ["chrome-linux/chrome", "chrome-linux/headless_shell", "chrome-mac/Chromium"]) {
+      // newer Playwright builds unpack to chrome-linux64/, older ones to chrome-linux/
+      for (const rel of ["chrome-linux/chrome", "chrome-linux64/chrome", "chrome-linux/headless_shell",
+                         "chrome-headless-shell-linux64/chrome-headless-shell", "chrome-mac/Chromium"]) {
         const p = path.join(root, n, rel);
         if (fs.existsSync(p)) {
           // chromium-1194 -> 1194, so the newest build wins over an older one

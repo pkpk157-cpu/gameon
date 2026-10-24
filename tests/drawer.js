@@ -78,7 +78,7 @@ const chk = (n, ok, d) => { if (!ok) { fails++; console.log("   FAIL " + n + (d 
   chk("it slides in from the left edge", open.left === 0, String(open.left));
   chk("it is full height", open.full);
   chk("the sections are offered, Premier League first",
-    open.sections.join("|") === "Premier League|Game On tournament|Game On Voluntary",
+    open.sections.join("|") === "Premier League|FPL|Game On tournament|Game On Voluntary",
     open.sections.join(","));
   // Prices and player stats are reference about footballers, not a section of
   // the league; they moved to the profile sheet with the other lookups.

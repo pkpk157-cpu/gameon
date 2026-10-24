@@ -1215,6 +1215,35 @@
              played: total, left: n * rows.length - total };
   };
 
+  /* A manager's FPL leagues, grouped the way FPL's own app groups them:
+     invitational classic, invitational head-to-head, then general (the
+     leagues FPL puts everyone in: overall, country, club, gameweek 1,
+     sponsors). Each group alphabetical, as FPL lists them. A row carries the
+     rank and which way it moved since the last gameweek; a league joined
+     since then has no earlier rank and reads as unchanged. Takes the slim
+     record the app keeps from FPL's /entry/{id}/ answer. */
+  C.fplLeagues = function (rec) {
+    if (!rec) return [];
+    var row = function (l, h2h) {
+      var rank = +l.rank || 0, last = +l.last || 0;
+      var move = (rank && last) ? (rank < last ? "up" : rank > last ? "down" : "same") : "same";
+      return { id: +l.id, name: String(l.name || ""), rank: rank || null, last: last || null,
+               size: +l.size || null, move: move, h2h: !!h2h };
+    };
+    var byName = function (a, b) {
+      var x = a.name.toLowerCase(), y = b.name.toLowerCase();
+      return x < y ? -1 : x > y ? 1 : a.id - b.id;
+    };
+    var invC = [], invH = [], gen = [];
+    (rec.classic || []).forEach(function (l) { (l.type === "x" ? invC : gen).push(row(l, false)); });
+    (rec.h2h || []).forEach(function (l) { (l.type === "x" ? invH : gen).push(row(l, true)); });
+    return [
+      { key: "invc", title: "Invitational Classic Leagues", rows: invC.sort(byName) },
+      { key: "invh", title: "Invitational H2H Leagues", rows: invH.sort(byName) },
+      { key: "gen", title: "General Leagues", rows: gen.sort(byName) }
+    ].filter(function (g) { return g.rows.length; });
+  };
+
   // Gameweeks we hold squads for, oldest first.
   C.squadGws = function (ds) {
     if (!ds || !ds.picks) return [];

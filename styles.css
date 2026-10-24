@@ -2517,3 +2517,14 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 @media (prefers-reduced-motion: reduce) {
   .theo, .theo *, .theobub { animation:none !important; transition:none !important; }
 }
+
+/* ---- FPL: every league a manager is in, as FPL's own app lists them ---- */
+.fllist { display:flex; flex-direction:column; gap:8px; margin-bottom:6px; }
+.flrow { display:grid; grid-template-columns:1fr auto 20px; align-items:center; column-gap:12px;
+  padding:14px 16px; border-radius:var(--radius-s); background:var(--glass); border:1px solid var(--glass-border);
+  color:var(--ink); text-decoration:none; -webkit-tap-highlight-color:transparent; }
+.flrow:hover, .flrow:focus-visible { border-color:var(--accent); }
+.flrow .fln { font-size:15px; font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.flrow .flr { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+.flrow .flm { display:flex; width:20px; height:20px; }
+.flrow .flm.same { opacity:.4; }

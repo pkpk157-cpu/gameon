@@ -124,7 +124,7 @@
   // so there is nothing left to swap out. Nothing is lost if a fetch fails or
   // the drawer is opened inside the first moment — the glyph is still there,
   // exactly as before.
-  var MARK_ART = ["pl-lion.webp", "logo-tile.webp", "logo-tile-inv.webp"];
+  var MARK_ART = ["pl-lion.webp", "fpl-tile.webp", "logo-tile.webp", "logo-tile-inv.webp"];
   var markReady = {};
   function warmMarks() {
     MARK_ART.forEach(function (src) {
@@ -2034,6 +2034,10 @@
     var items = [
       { k: "pl", go: "pl", t: "Premier League", s: "Live scores and results, match by match",
         i: markTile("mpl", "#9d5bd2", "#43146e", G_FOOT, "pl-lion.webp") },
+      // FPL lives in the Premier League app now, so its mark is that app's
+      // icon: the purple lion on white, coloured at the corners
+      { k: "fpl", go: "fpl", t: "FPL", s: "Every league you're in, and where you stand",
+        i: markTile("mfp", "#7d2f9e", "#37003c", G_FOOT, "fpl-tile.webp") },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: markTile("mgo", "#ffd76a", "#e6a417", G_TROPHY, "logo-tile.webp") },
       { k: "vol", go: "vol", t: "Game On Voluntary", s: "Five side leagues and prizes",
@@ -2042,7 +2046,7 @@
     // Prices and player stats are not a section of the league — they are
     // reference, about footballers rather than managers — so they live in the
     // profile sheet with the other lookups instead of here.
-    var inLeague = here !== "prices" && here !== "pl" && here !== "vol";
+    var inLeague = here !== "prices" && here !== "pl" && here !== "vol" && here !== "fpl";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
         var on = (it.k === "league") ? inLeague : (here === it.k);
@@ -2358,6 +2362,9 @@
 
   function boot() {
     warmMarks();
+    // the signed-in manager's FPL leagues, fetched in the background a moment
+    // after launch, so opening FPL from the menu rarely waits
+    setTimeout(function () { if (state.me) fplFetch(state.me); }, 3000);
     setupPull();
     window.addEventListener("scroll", profileSpy, { passive: true });
     buildNav();
@@ -2533,7 +2540,7 @@
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
       .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
-               "winnings", "gwstatus", "vol", "player"]);
+               "winnings", "gwstatus", "vol", "player", "fpl"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -2630,6 +2637,7 @@
     // the thing that was tapped.
     prices:  { t: "Price changes" },
     pl:      { t: "Premier League" },
+    fpl:     { t: "FPL" },
     winnings:{ t: "Winnings" },
     gwstatus:{ t: "Gameweek status" },
     vol:     { t: "Game On Voluntary", topic: "voluntary" },
@@ -2639,7 +2647,7 @@
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
   var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
-                   "winnings", "gwstatus", "vol", "player"];
+                   "winnings", "gwstatus", "vol", "player", "fpl"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -2650,6 +2658,11 @@
       if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
     if (state.view === "prices" && state.prTab === "stats") title = "Player stats";
+    // FPL carries the team whose leagues are shown, as a profile does
+    if (state.view === "fpl" && state.me) {
+      var fds = S.dataset(), fme = fds && K.managerMap(fds)[+state.me];
+      if (fme) sub = esc(fme.entryName);
+    }
     // Each stats page carries its own name in the bar, as the tab row is gone
     if (state.view === "stats") {
       var stTab = STAT_TABS.filter(function (t) { return t.k === state.statsTab; })[0];
@@ -2777,6 +2790,7 @@
                                      : renderPrices(host, S.dataset());
     }
     if (state.view === "pl") return renderPl(host, S.dataset());
+    if (state.view === "fpl") return renderFpl(host, S.dataset());
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
     if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
     if (state.view === "vol") return renderVoluntary(host, S.dataset());
@@ -3976,6 +3990,101 @@
         '<td class="num">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
         '</tr>';
     }).join("");
+  }
+
+  /* ---- FPL: every league the signed-in manager is in --------------------
+     Read live from FPL through the app's relay, one small request for the
+     chosen manager and nobody else, so the published data does not grow.
+     The last answer is kept on the phone and drawn at once; a fresh one is
+     asked for in the background when it is more than a few minutes old, and
+     replaces it in place. If FPL cannot be reached the kept list stays, with
+     its age, and a first visit says so plainly. */
+  var FPL_LEAGUES_KEY = "go12.fplLeagues", FPL_FRESH_MS = 5 * 60 * 1000;
+  var fplBusy = null, fplBusyId = null, fplErr = null;
+  function fplCached(id) {
+    var c = lsGet(FPL_LEAGUES_KEY);
+    return c && +c.id === +id && c.leagues ? c : null;
+  }
+  function fplSlim(list) {
+    return (list || []).map(function (l) {
+      return { id: l.id, name: l.name, type: l.league_type, rank: l.entry_rank,
+               last: l.entry_last_rank, size: l.rank_count };
+    });
+  }
+  function fplFetch(id, force) {
+    if (!id || !window.GO_API) return Promise.resolve(null);
+    var c = fplCached(id);
+    if (!force && c && Date.now() - c.at < FPL_FRESH_MS) return Promise.resolve(c);
+    if (fplBusy && fplBusyId === +id) return fplBusy;
+    fplBusyId = +id;
+    fplBusy = window.GO_API.getJSON("/entry/" + id + "/", { attempts: 1, timeout: 12000 })
+      .then(function (e) {
+        var lg = e && e.leagues;
+        if (!lg || !(lg.classic || lg.h2h) || (e.id != null && +e.id !== +id)) throw new Error("no leagues in FPL's answer");
+        var keep = { id: +id, at: Date.now(), leagues: { classic: fplSlim(lg.classic), h2h: fplSlim(lg.h2h) } };
+        lsSet(FPL_LEAGUES_KEY, keep);
+        fplErr = null;
+        return keep;
+      })
+      .catch(function (err) { fplErr = err || new Error("FPL could not be reached"); return null; })
+      .then(function (r) { fplBusy = null; return r; });
+    return fplBusy;
+  }
+  var FPL_MOVE = {
+    up: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--good)"/><path d="M6 11.6 10 7.6l4 4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    down: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--bad)"/><path d="M6 8.4l4 4 4-4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    same: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--ink-faint)"/><path d="M6.5 10h7" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>'
+  };
+  var FPL_MOVE_SAYS = { up: "up since last gameweek", down: "down since last gameweek", same: "no change" };
+  function fplRows(rec) {
+    var gameOn = +(S.config().classicLeagueId || 0);
+    return K.fplLeagues(rec.leagues).map(function (g) {
+      return '<div class="section-title"><h2>' + esc(g.title) + '</h2><div class="rule"></div></div>' +
+        '<div class="fllist">' + g.rows.map(function (r) {
+          // Game On itself opens here; any other league opens on FPL
+          var href = (!r.h2h && r.id === gameOn) ? "#classic"
+            : "https://fantasy.premierleague.com/leagues/" + r.id + "/standings/" + (r.h2h ? "h" : "c");
+          var ext = href.charAt(0) !== "#";
+          return '<a class="flrow" href="' + href + '"' + (ext ? ' target="_blank" rel="noopener"' : '') +
+            ' aria-label="' + esc(r.name + ", rank " + (r.rank == null ? "not yet ranked" : r.rank) + ", " + FPL_MOVE_SAYS[r.move]) + '">' +
+            '<span class="fln">' + esc(r.name) + '</span>' +
+            '<span class="flr">' + (r.rank == null ? "\u2013" : num(r.rank)) + '</span>' +
+            '<span class="flm ' + r.move + '">' + FPL_MOVE[r.move] + '</span></a>';
+        }).join("") + '</div>';
+    }).join("");
+  }
+  function renderFpl(host, ds) {
+    var me = state.me ? +state.me : null;
+    if (!me) {
+      host.innerHTML = '<div class="callout">Choose your team in your profile, and every FPL league you are in shows here.</div>' +
+        '<button type="button" class="btn" id="flPick" style="margin-top:12px">Choose your team</button>';
+      $("#flPick", host).addEventListener("click", function () { openProfile({ edit: true }); });
+      return;
+    }
+    var paint = function (rec, state2) {
+      if (!host.isConnected || window.location.hash.replace("#", "").split("/")[0] !== "fpl") return;
+      var h = "";
+      if (rec) {
+        h += fplRows(rec);
+        h += '<div class="note" style="margin:14px 2px 0">From FPL \u00b7 updated ' +
+          esc(agoText(Date.now() - rec.at)) + (state2 === "stale" ? " \u00b7 FPL could not be reached just now" : "") + '</div>';
+      } else if (state2 === "error") {
+        h += '<div class="callout">FPL could not be reached just now. It goes offline for a while after each deadline; try again in a few minutes.</div>' +
+          '<button type="button" class="btn" id="flRetry" style="margin-top:12px">Try again</button>';
+      } else {
+        h += '<div class="callout">Fetching your leagues from FPL\u2026</div>';
+      }
+      host.innerHTML = h;
+      var rb = $("#flRetry", host);
+      if (rb) rb.addEventListener("click", function () { paint(null, "loading"); fplFetch(me, true).then(after); });
+    };
+    var after = function (r) {
+      if (r) paint(r, "fresh");
+      else { var c2 = fplCached(me); paint(c2, c2 ? "stale" : "error"); }
+    };
+    var cached = fplCached(me);
+    paint(cached, cached ? "fresh" : "loading");
+    if (!cached || Date.now() - cached.at >= FPL_FRESH_MS) fplFetch(me).then(after);
   }
 
   function renderVoluntary(host, ds) {
