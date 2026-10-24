@@ -1363,12 +1363,16 @@
     return out;
   };
 
-  C.managerPitch = function (ds, id, gw) {
+  // ext, for a team from outside Game On read live from FPL: { squad: {c, p}
+  // in the stored shape, hist: the week's history row }. The squad is drawn by
+  // exactly the rules a Game On squad is; nothing of it is kept in ds, so the
+  // league's own figures (ownership, averages, values) are untouched by it.
+  C.managerPitch = function (ds, id, gw, ext) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;
     gw = gw ? +gw : +ds.pitchGw;
     var pk = picksAt(ds, gw);
-    var sq = pk && pk[id];
+    var sq = ext ? ext.squad : (pk && pk[id]);
     if (!sq || !sq.p || !sq.p.length) return null;
     var els = ds.elements, lp = liveAt(ds, gw), pb = bonusAt(ds, gw);
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
@@ -1426,7 +1430,7 @@
     // swap, so a card can be turned over to show the player sold for him and
     // what he went on to score — which is the half of a transfer nobody can
     // see once the deadline passes.
-    var swaps = ((ds.moves || {})[gw] || {})[id] || [];
+    var swaps = ext ? [] : (((ds.moves || {})[gw] || {})[id] || []);
     if (swaps.length) {
       var outFor = {};
       swaps.forEach(function (sw) { outFor[sw[0]] = sw[1]; });
@@ -1456,9 +1460,14 @@
     var live = gwEv ? (gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false;
 
     // League context for this gameweek: average and the best score.
-    var hrow = (ds.history[id] || {})[gw] || null;
+    var hrow = ext ? (ext.hist || null) : ((ds.history[id] || {})[gw] || null);
     var hits = hrow ? (hrow.h || 0) : 0;
-    var scored = gwScore(ds, id, gw);
+    // an outside team's score by the rule gwScore applies: counted from the
+    // cards while the week is live, FPL's own figure once it is not, net of hits
+    var scored = !ext ? gwScore(ds, id, gw)
+      : !hrow ? null
+      : (C.liveGwId(ds) === gw ? total - hits
+         : (typeof hrow.p === "number" ? (hitsAlreadyOff(ds) ? hrow.p : hrow.p - hits) : null));
     var net = scored === null ? (total - hits) : scored;
     var sum = 0, n = 0, top = null;
     (ds.managers || []).forEach(function (m) {
@@ -1518,7 +1527,7 @@
     // borrowed for the week, so nothing in it was bought at all.
     var bank = hrow && hrow.bk != null ? hrow.bk : null;
     var sellValue = null;
-    var buyMap = (ds.buys && +ds.buysGw === +gw && (sq.c || "") !== "freehit")
+    var buyMap = (!ext && ds.buys && +ds.buysGw === +gw && (sq.c || "") !== "freehit")
       ? ds.buys[id] : null;
     if (buyMap) {
       var sellSum = 0, complete = everyone.length > 0;
@@ -1532,7 +1541,12 @@
       else everyone.forEach(function (p) { delete p.sell; });
     }
 
-    var worth = C.squadWorth(ds, id, gw), lw = C.leagueWorth(ds, gw);
+    // an outside team is valued by the same rule as squadWorth: today's
+    // prices for the newest squad, FPL's record less the bank for an older one
+    var worth = !ext ? C.squadWorth(ds, id, gw)
+      : (+gw === +ds.pitchGw || !hrow || !(hrow.v > 0)) ? null
+      : { value: hrow.v - (hrow.bk || 0), bank: hrow.bk };
+    var lw = C.leagueWorth(ds, gw);
     var provTotal = 0;
     scoring.forEach(function (p) { provTotal += (p.prov || 0) * p.mult; });
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live, provisional: provTotal,

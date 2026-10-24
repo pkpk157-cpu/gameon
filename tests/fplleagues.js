@@ -219,7 +219,9 @@ const ENTRY = { id: ME, name: meName, leagues: {
     chk(!r.bold && (r.tables[0][2] || {}).cells[1].indexOf("<b onclick") !== -1, "a team name is text, never markup", (r.tables[0][2] || {}).cells[1]);
     chk(!r.wide, "fits the phone");
     const mate = (r.tables[0] || []).find((x) => x.entry);
-    chk(!!mate && +mate.entry === gameOnMate && (r.tables[0] || []).filter((x) => x.entry).length <= 2, "a Game On manager's row opens their profile, others do not pretend to", mate && mate.entry);
+    chk(!!mate && +mate.entry === gameOnMate && (r.tables[0] || []).filter((x) => x.entry).length <= 2, "a Game On manager's row opens their profile", mate && mate.entry);
+    const teamRows = await p.evaluate(() => [...document.querySelectorAll("table.flstand tr[data-team]")].length);
+    chk(teamRows === 33 - (r.tables[0] || []).filter((x) => x.entry).length, "every other row opens that team", teamRows);
     await p.evaluate((e) => document.querySelector('table.flstand tr[data-entry="' + e + '"] td.num').click(), gameOnMate);
     await p.waitForTimeout(500);
     chk(await p.evaluate(() => location.hash) === "#profile/" + gameOnMate, "and tapping it does", await p.evaluate(() => location.hash));
@@ -248,6 +250,56 @@ const ENTRY = { id: ME, name: meName, leagues: {
     r = await readStand();
     chk(r.heads.join("|") === "#|Team|W-D-L|Score|Pts" && r.tables[0].length === 8, "a head-to-head league: the record, points scored and league points", r.heads.join("|"));
     chk((r.tables[0].find((x) => x.me) || { cells: [] }).cells[2] === "5-1-2", "with your record on your row", JSON.stringify(r.tables[0].find((x) => x.me)));
+    // a team from outside Game On, opened from a league
+    await p.evaluate(() => { location.hash = "#fpl/c/5"; }); await p.waitForTimeout(400);
+    const teamReq = [];
+    const H = require(GOENV.APP + "/tests/audit/harness.js").loadCompute();
+    const gwNow = H.ds.pitchGw, donor = H.ds.managers.find((m) => H.ds.picks[gwNow] && H.ds.picks[gwNow][m.id]).id;
+    const dsq = H.ds.picks[gwNow][donor], dh = H.ds.history[donor][gwNow];
+    const PICKS = { active_chip: dsq.c || null, automatic_subs: [],
+      entry_history: { event: gwNow, points: dh.p, total_points: dh.t, rank: 1, overall_rank: 123456, bank: dh.bk, value: dh.v, event_transfers: 2, event_transfers_cost: 4, points_on_bench: dh.b },
+      picks: dsq.p.map((t, i) => ({ element: t[0], position: i + 1, multiplier: t[1], is_captain: !!t[2], is_vice_captain: !!t[3] })) };
+    let teamDown = false;
+    await p.route((u) => /entry(%2F|\/)900000[0-9](%2F|\/)/.test(u.toString()) || /entry\/900000[0-9]\//.test(decodeURIComponent(u.toString())), (route) => {
+      const d = decodeURIComponent(route.request().url()); teamReq.push(d.replace(/^.*\/api/, ""));
+      if (teamDown) return route.fulfill({ status: 503, body: "down" });
+      if (/\/picks\//.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(PICKS) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: 9000004, name: "Team 4", player_first_name: "Manager", player_last_name: "Four" }) });
+    });
+    await p.evaluate(() => document.querySelector('table.flstand tr[data-team="9000004"]').click());
+    await p.waitForSelector('section.view[data-view="fpl"] .pitchcard .pcard', { timeout: 20000 }).catch(() => {});
+    const tm = await p.evaluate(() => {
+      const host = document.querySelector('section.view[data-view="fpl"]');
+      const tiles = {}; host.querySelectorAll(".snapgrid .pc").forEach((pc) => { tiles[pc.querySelector(".pcl").textContent] = { v: pc.querySelector(".pcv").textContent, s: (pc.querySelector(".pcs") || {}).textContent || "" }; });
+      return { hash: location.hash, title: document.querySelector("#barTitle").textContent, sub: document.querySelector("#barSub").textContent,
+        cards: host.querySelectorAll(".pitchcard .pcard[data-el]").length, tiles, wide: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    chk(tm.hash === "#fpl/team/9000004", "tapping someone in a league opens their team in the app", tm.hash);
+    chk(tm.title === "Team 4" && tm.sub === "Manager Four", "the bar names the team and its manager", tm.title + " / " + tm.sub);
+    chk(tm.cards === 15, "all fifteen on the pitch", tm.cards);
+    const extPit = H.C.managerPitch(H.ds, 9000004, gwNow, { squad: { c: dsq.c || "", p: dsq.p.map((t) => [t[0], t[1], t[2] ? 1 : 0, t[3] ? 1 : 0]) },
+      hist: { p: dh.p, h: 4, b: dh.b, t: dh.t, v: dh.v, bk: dh.bk, r: 123456 } });
+    const gwTile = tm.tiles["GW" + gwNow + " points"] || {};
+    chk(gwTile.v === (extPit.net == null ? "\u2013" : extPit.net.toLocaleString("en-GB")), "the week's points are net of the hit, by the app's own rule", JSON.stringify(gwTile) + " vs " + extPit.net);
+    chk(extPit.net == null || /before 4 for transfers/.test(gwTile.s), "and FPL's before-hits figure is given, so it reconciles with the table", gwTile.s);
+    chk((tm.tiles["Overall rank"] || {}).v === "123,456" && !tm.wide, "overall rank, and it fits the phone", JSON.stringify(tm.tiles["Overall rank"]));
+    chk(teamReq.length === 2, "two small requests: the team and its picks", JSON.stringify(teamReq));
+    await p.evaluate(() => document.querySelector('section.view[data-view="fpl"] .pitchcard .pcard[data-el]').click()); await p.waitForTimeout(500);
+    chk(/^#player\/\d+\/\d+$/.test(await p.evaluate(() => location.hash)), "a player on the pitch opens his page", await p.evaluate(() => location.hash));
+    await p.goBack(); await p.waitForTimeout(500);
+    await p.evaluate(() => document.querySelector("#barBack").click()); await p.waitForTimeout(500);
+    chk(await p.evaluate(() => location.hash) === "#fpl/c/5", "back from a team is the league it was opened from", await p.evaluate(() => location.hash));
+    const tr0 = teamReq.length;
+    await p.evaluate(() => document.querySelector('table.flstand tr[data-team="9000004"]').click());
+    await p.waitForSelector('section.view[data-view="fpl"] .pitchcard .pcard', { timeout: 5000 }).catch(() => {});
+    chk(teamReq.length === tr0, "opening it again inside a few minutes asks FPL nothing", (teamReq.length - tr0) + " requests");
+    teamDown = true;
+    await p.evaluate(() => { location.hash = "#fpl/c/5"; }); await p.waitForTimeout(300);
+    await p.evaluate(() => document.querySelector('table.flstand tr[data-team="9000007"]').click());
+    await p.waitForFunction(() => /could not be read/.test((document.querySelector('section.view[data-view="fpl"] .callout') || {}).textContent || ""), null, { timeout: 90000 }).catch(() => {});
+    chk(await p.evaluate(() => /could not be read/.test((document.querySelector('section.view[data-view="fpl"] .callout') || {}).textContent || "") && !!document.querySelector("#fltRetry")),
+      "a team FPL cannot give: said plainly, with Try again");
+    await p.evaluate(() => { location.hash = "#fpl/h/22"; }); await p.waitForTimeout(400);
     // the second visit is drawn at once, without asking FPL again
     const n1 = sreq.length;
     await p.evaluate(() => { location.hash = "#fpl"; }); await p.waitForTimeout(300);
