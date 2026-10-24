@@ -160,7 +160,7 @@
     return c;
   }
 
-  /* ---- the hundred lines ------------------------------------------------- */
+  /* ---- the four hundred lines -------------------------------------------- */
   // Each: when it may be said, what it says. "k" groups them: a state-specific
   // line is preferred to a general one when both fit; "poke" lines only follow
   // a tap. Nothing here quotes a number it has not been given.
@@ -183,7 +183,7 @@
     { k: "pre", w: function (c) { return pre(c) && c.hours >= 24; }, t: function (c) { return pl(Math.round(c.hours / 24), "day") + " to the deadline. Plenty of time to overthink it."; } },
     { k: "pre", w: pre, t: function () { return "New week, new armband, same me."; } },
     { k: "pre", w: pre, t: function () { return "Free transfers don’t roll into next week’s regrets. Use them or don’t; I’m just the lion."; } },
-    { k: "pre", w: function (c) { return pre(c) && c.chipsPlayed >= 3; }, t: function (c) { return pl(c.chipsPlayed, "chip") + " gone already. Pace yourself; May is a long way off."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.chipsPlayed >= 3 && c.nextGw && c.nextGw <= 28; }, t: function (c) { return pl(c.chipsPlayed, "chip") + " gone already. Pace yourself; May is a long way off."; } },
     { k: "pre", w: function (c) { return pre(c) && c.chipsPlayed === 0; }, t: function () { return "Not a chip played yet. Patient, or asleep? I’ll assume patient."; } },
     { k: "pre", w: function (c) { return pre(c) && c.rank <= 10; }, t: function (c) { return ord(c.rank) + " in the league going into GW" + c.nextGw + ". Don’t get clever."; } },
     { k: "pre", w: function (c) { return pre(c) && c.rank > c.n - 20; }, t: function (c) { return ord(c.rank) + " of " + num(c.n) + ". Nowhere to go but up, and I mean that kindly."; } },
@@ -212,7 +212,7 @@
     { k: "live", w: function (c) { return liv(c) && c.move <= -10; }, t: function (c) { return "Down " + num(-c.move) + " places. The table is a mean thing. Tomorrow’s another day."; } },
     { k: "live", w: function (c) { return liv(c) && c.inPlay > 0; }, t: function (c) { return pl(c.inPlay, "match") + " in play. Nobody move."; } },
     { k: "live", w: function (c) { return liv(c) && c.toCome > 0 && c.inPlay === 0; }, t: function (c) { return pl(c.toCome, "match") + " still to come this week. Your points aren’t finished; neither is the league."; } },
-    { k: "live", w: function (c) { return liv(c) && c.done && !c.checked; }, t: function () { return "Every match done. Bonus and the auto subs land in the morning; sleep on it."; } },
+    { k: "live", w: function (c) { return liv(c) && c.done && !c.checked; }, t: function () { return "Every match done. Bonus and the auto subs land once FPL has checked the week; sleep on it."; } },
     { k: "live", w: function (c) { return liv(c) && c.hits > 0 && c.pts > c.avg; }, t: function (c) { return "A " + num(c.hits) + "-point hit and still above the average. Justified. This time."; } },
     { k: "live", w: function (c) { return liv(c) && c.hits > 0 && c.pts <= c.avg; }, t: function (c) { return "The hit was " + num(c.hits) + ". The reward, so far, is " + num(c.pts) + ". I say nothing."; } },
     { k: "live", w: function (c) { return liv(c) && c.leader; }, t: function () { return "Top of the league while it’s live. Every phone in the league is watching you."; } },
@@ -223,7 +223,7 @@
     { k: "live", w: function (c) { return liv(c) && c.pts >= 100; }, t: function (c) { return num(c.pts) + " points! Hundred up! I’m doing the run."; } },
     { k: "live", w: function (c) { return liv(c) && c.pts >= 80 && c.pts < 100; }, t: function (c) { return num(c.pts) + " and counting. That’s a proper week."; } },
     { k: "live", w: function (c) { return liv(c) && c.pts < 40 && c.done; }, t: function (c) { return num(c.pts) + ". A week for character building. You have loads now."; } },
-    { k: "live", w: liv, t: function () { return "Live points move every ten minutes. Blinking is optional."; } },
+    { k: "live", w: liv, t: function () { return "Live points move every few minutes. Blinking is optional."; } },
     { k: "live", w: function (c) { return liv(c) && c.tied; }, t: function (c) { return "Level with someone on " + num(c.total) + ". A single point splits you. Shout at the telly accordingly."; } },
     // just finished, or between gameweeks
     { k: "after", w: function (c) { return after(c) && c.pts > c.avg + 20; }, t: function (c) { return num(c.pts) + " last week against " + num(c.avg) + ". Enjoy it. Enjoy it quietly."; } },
@@ -258,8 +258,8 @@
     { k: "gen", w: function () { return true; }, t: function () { return "How many hits are we taking this week? Rhetorical. I know."; } },
     { k: "gen", w: function (c) { return c.hour < 6; }, t: function () { return "It’s the middle of the night. The points won’t change. Go to bed."; } },
     { k: "gen", w: function (c) { return c.hour >= 6 && c.hour < 11; }, t: function () { return "Morning. Coffee first, then the table."; } },
-    { k: "gen", w: function (c) { return c.hour >= 22; }, t: function () { return "Late one. The bonus is in the morning; so am I."; } },
-    { k: "gen", w: function (c) { return c.day === 5; }, t: function () { return "Friday. Deadline-day energy."; } },
+    { k: "gen", w: function (c) { return c.hour >= 22; }, t: function () { return "Late one. The table will keep; so will I."; } },
+    { k: "gen", w: function (c) { return c.day === 5 && c.hours != null && c.hours > 0 && c.hours < 30; }, t: function () { return "Friday, and the deadline\u2019s close. Deadline-day energy."; } },
     { k: "gen", w: function (c) { return c.day === 1; }, t: function () { return "Monday. Time to admit what the bench did."; } },
     { k: "gen", w: function () { return true; }, t: function () { return "I’m Theo. I live here now."; } },
     { k: "gen", w: function (c) { return c.n > 1; }, t: function (c) { return num(c.n) + " managers, one lion. Fair fight."; } },
@@ -343,7 +343,7 @@
     { k: "chant", w: function (c) { return me(c) && c.lmsOutGw; }, t: function (c) { return "Cheerio, cheerio, cheerio. Last Manager waved you off in GW" + c.lmsOutGw + "."; } },
     { k: "chant", w: function (c) { return me(c) && c.rank > 10; }, t: function (c) { return "Que sera, sera. Whatever will be, will be. You\u2019re going to be " + ord(c.rank) + ", probably."; } },
     { k: "chant", w: function (c) { return me(c) && c.comp && c.comp.ucl && c.comp.ucl.state === "in" && /UCL$/.test(c.comp.ucl.where); }, t: function () { return "Que sera, sera. Whatever will be, will be. You\u2019re going to the knockouts. Que sera, sera."; } },
-    { k: "chant", w: function (c) { return me(c) && c.leading; }, t: function () { return "Champione, champione, ol\u00e9 ol\u00e9 ol\u00e9. Early, but sing it while you can."; } },
+    { k: "chant", w: function (c) { return me(c) && c.leading && c.gw && c.gw < 30; }, t: function () { return "Champione, champione, ol\u00e9 ol\u00e9 ol\u00e9. Early, but sing it while you can."; } },
     { k: "chant", w: function (c) { return me(c) && c.tr === 0 && typeof c.pts === "number" && Math.abs(c.pts - c.avg) <= 5; }, t: function (c) { return "Boring, boring " + c.name + ". Same eleven, same result."; } },
     { k: "chant", w: function (c) { return liv(c) && c.pts < c.avg; }, t: function () { return "It\u2019s all gone quiet over there."; } },
     { k: "chant", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg - 20; }, t: function () { return "Shall we sing a song for you? The bench already is."; } },
@@ -357,13 +357,13 @@
     { k: "chant", w: function (c) { return me(c) && c.comp && c.comp.ucl && /UEL$/.test(c.comp.ucl.where); }, t: function () { return "Thursday nights, Channel 5. The Europa slot has its own song, and it\u2019s that one."; } },
     { k: "chant", w: function (c) { return me(c) && c.bench >= 15; }, t: function (c) { return "Same old " + c.name + ", always benching."; } },
     { k: "chant", w: function (c) { return liv(c) && c.pts < c.avg; }, t: function () { return "You\u2019re supposed to be at home. Your points certainly are."; } },
-    { k: "chant", w: function (c) { return me(c) && c.done && !c.checked; }, t: function () { return "Oh when the subs go marching in. Tomorrow morning, if your bench is lucky."; } },
+    { k: "chant", w: function (c) { return me(c) && c.done && !c.checked; }, t: function () { return "Oh when the subs go marching in. Once FPL has checked the week, if your bench is lucky."; } },
     { k: "chant", w: function (c) { return me(c) && c.cap && c.capPts != null && c.capPts >= 12; }, t: function (c) { return "Feed the " + c.cap + " and he will score. Fed. Scored. " + num(c.capPts) + "."; } },
     { k: "chant", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg; }, t: function () { return "One-nil to the average. Boring, boring average."; } },
     { k: "chant", w: function (c) { return me(c) && c.myRise; }, t: function (c) { return "Sign him up, sign him up! Oh, you did. " + c.myRise.name + ", up to \u00a3" + c.myRise.price.toFixed(1) + "m."; } },
     { k: "chant", w: function (c) { return me(c) && c.bench >= 15; }, t: function () { return "Your bench is, your bench is, your bench is terrible. Terribly good, and terribly benched."; } },
     { k: "chant", w: function (c) { return me(c) && c.seasonHits === 0 && c.gwsPlayed >= 3; }, t: function (c) { return "Oh " + c.name + " is wonderful. No hits, no fuss, no fear."; } },
-    { k: "chant", w: function (c) { return me(c) && c.leading; }, t: function () { return "Stand up for the champion. Sit down, it\u2019s September."; } },
+    { k: "chant", w: function (c) { return me(c) && c.leading && c.gw && c.gw < 30; }, t: function (c) { return "Stand up for the champion. Sit down, it\u2019s only GW" + c.gw + "."; } },
     { k: "chant", w: function (c) { return me(c) && c.asleep; }, t: function () { return "Attack, attack, attack, attack, attack. Or just the one transfer. Anything."; } },
     { k: "chant", w: function (c) { return me(c) && c.name; }, t: function (c) { return "Come on you " + c.name + "! That\u2019s the whole chant. Work with me."; } },
     { k: "chant", w: function (c) { return liv(c) && c.inPlay > 0 && c.pts < c.avg; }, t: function () { return "Score in a minute, we\u2019re gonna score in a minute. Any minute. This minute would be good."; } },
@@ -378,6 +378,137 @@
     { k: "chant", w: function (c) { return me(c) && c.overall && c.overall <= 50000; }, t: function () { return "We\u2019re the famous " + "top fifty thousand and we\u2019re going to\u2026 keep going, apparently."; } },
     { k: "chant", w: function (c) { return me(c) && c.comp && c.comp.monthly && c.comp.monthly.pos === 1; }, t: function () { return "Manager of the Month, he\u2019s here, he\u2019s there, he\u2019s every-blooming-where. For a month."; } },
     { k: "chant", w: function (c) { return me(c) && c.spoon; }, t: function () { return "Wooden spoon, wooden spoon, wooden spoon. To the tune of nothing; it doesn\u2019t deserve one."; } },
+    // ---- more of him: every one only when it is true ----
+    { k: "none", w: function (c) { return !me(c); }, t: function () { return "I’m better with a name. Pick your team and I’ll stop guessing."; } },
+    { k: "none", w: function (c) { return !me(c); }, t: function () { return "Pick a team and I’ll tell you how it’s going. Honestly. Too honestly."; } },
+    { k: "none", w: function (c) { return !me(c); }, t: function () { return "Anonymous? Mysterious. But I can’t cheer for a mystery."; } },
+    { k: "none", w: function (c) { return !me(c); }, t: function () { return "Your team is a couple of taps away: your profile, then pick. I’ll wait."; } },
+    { k: "none", w: function (c) { return !me(c) && c.n > 1; }, t: function (c) { return num(c.n) + " teams in here and none of them is marked as yours yet."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.hours < 1; }, t: function () { return "Under an hour. Check the captain, then put the phone down. Then check the captain."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.hours >= 1 && c.hours < 3; }, t: function () { return "The final hours. This is when people do things they regret. Don’t be people."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.hours >= 6 && c.hours < 24; }, t: function () { return "Under a day to the deadline. Sleep on the transfer. Then make it anyway."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.hours >= 24; }, t: function () { return "Days to go. Watch the press conferences, then ignore them."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.hours >= 48; }, t: function () { return "Nowhere near the deadline. Any transfer now is a guess about injuries that haven’t happened yet."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.rank && c.rank <= 3 && !c.leading; }, t: function (c) { return ord(c.rank) + " going into GW" + c.nextGw + ". The view’s nice from the podium. Don’t look down."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.leading; }, t: function (c) { return "Top of the league going into GW" + c.nextGw + ". Everyone below you is planning something."; } },
+    { k: "pre", w: function (c) { return pre(c) && !c.leading && c.behind > 0 && c.behind <= 20; }, t: function (c) { return pl(c.behind, "point") + " off the top before GW" + c.nextGw + ". One good captain closes that."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.lmsAlive; }, t: function () { return "Last Manager Standing only asks one thing: don’t be the lowest. Low bar. Literally."; } },
+    { k: "pre", w: pre, t: function () { return "A chip is a plan, not a panic button. Usually."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.nextGw >= 35; }, t: function (c) { return "GW" + c.nextGw + ". The last few weeks: every transfer now is for this season only."; } },
+    { k: "pre", w: pre, t: function () { return "Check the captain’s fixture. Check he’s fit. Check again; that’s the job."; } },
+    { k: "pre", w: pre, t: function () { return "Don’t believe everything you read before the deadline. Except me."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.chipsPlayed === 1; }, t: function () { return "One chip played so far. Measured. I approve, quietly."; } },
+    { k: "pre", w: function (c) { return pre(c) && c.rank && c.rank > 10 && c.rank <= 50; }, t: function (c) { return ord(c.rank) + " before GW" + c.nextGw + ". Close enough to the top ten to smell it."; } },
+    { k: "lock", w: lock, t: function () { return "No more changes. You’re a spectator now, with feelings."; } },
+    { k: "lock", w: lock, t: function () { return "The squad’s set. Whatever happens now was always going to happen."; } },
+    { k: "lock", w: function (c) { return lock(c) && c.cap; }, t: function (c) { return c.cap + " has the armband. My paws are crossed."; } },
+    { k: "lock", w: function (c) { return lock(c) && c.chipNow === "bboost"; }, t: function () { return "Bench Boost locked in. Fifteen players, one prayer."; } },
+    { k: "lock", w: function (c) { return lock(c) && c.chipNow === "freehit"; }, t: function () { return "Free Hit squad, this week only. Next week your real team comes back."; } },
+    { k: "lock", w: function (c) { return lock(c) && c.chipNow === "wildcard"; }, t: function () { return "Wildcard in. A whole new squad and the same old nerves."; } },
+    { k: "lock", w: function (c) { return lock(c) && c.tc && c.cap; }, t: function (c) { return "Triple Captain on " + c.cap + ". Three times the points, three times the worry."; } },
+    { k: "lock", w: function (c) { return lock(c) && c.hits === 0; }, t: function () { return "No hit taken this week. A clean start; the best kind."; } },
+    { k: "lock", w: lock, t: function () { return "First whistle soon. Phones out, hopes up."; } },
+    { k: "live", w: function (c) { return liv(c) && c.pts > c.avg && !c.done; }, t: function () { return "Above the average for now. “For now” is doing a lot of work."; } },
+    { k: "live", w: function (c) { return liv(c) && c.cap && c.capPts != null && !c.done; }, t: function (c) { return c.cap + " on " + num(c.capPts) + " with the armband so far."; } },
+    { k: "live", w: function (c) { return liv(c) && c.rank && c.rank <= 3; }, t: function (c) { return ord(c.rank) + " while it’s live. Podium. Hold your breath."; } },
+    { k: "live", w: function (c) { return liv(c) && c.move > 0 && c.move < 10; }, t: function (c) { return "Up " + num(c.move) + " so far. Small steps are still steps."; } },
+    { k: "live", w: function (c) { return liv(c) && c.move < 0 && c.move > -10; }, t: function (c) { return "Down " + num(-c.move) + " so far. A goal or two fixes that."; } },
+    { k: "live", w: function (c) { return liv(c) && c.toCome > 0; }, t: function (c) { return pl(c.toCome, "match") + " still to kick off. Time enough for heroes. Or villains."; } },
+    { k: "live", w: function (c) { return liv(c) && c.inPlay > 1; }, t: function (c) { return num(c.inPlay) + " matches on at once. Pick a stream and hope."; } },
+    { k: "live", w: function (c) { return liv(c) && c.pts === c.avg; }, t: function (c) { return "Bang on the average at " + num(c.pts) + ". Perfectly, painfully average."; } },
+    { k: "live", w: function (c) { return liv(c) && c.done && c.bench === 0 && c.chipNow !== "bboost"; }, t: function () { return "Your bench scored nothing. For once, that’s the good news."; } },
+    { k: "live", w: function (c) { return liv(c) && c.hits === 0 && c.pts > c.avg; }, t: function () { return "No hit and above the average. Textbook."; } },
+    { k: "live", w: function (c) { return liv(c) && c.chipNow === "wildcard"; }, t: function (c) { return "Wildcard week, and the new squad has " + num(c.pts) + " so far."; } },
+    { k: "live", w: liv, t: function () { return "Every refresh is a small gamble. Refresh responsibly."; } },
+    { k: "live", w: function (c) { return liv(c) && !c.done; }, t: function () { return "Goals change everything. So do red cards. Let’s have the first kind."; } },
+    { k: "live", w: function (c) { return liv(c) && c.done && c.pts > c.avg; }, t: function (c) { return "Every match done, and " + num(c.pts) + " beats the league’s " + num(c.avg) + ". Lovely."; } },
+    { k: "live", w: function (c) { return liv(c) && c.done && c.pts < c.avg; }, t: function (c) { return "Every match done: " + num(c.pts) + " to the league’s " + num(c.avg) + ". Next week is a new week."; } },
+    { k: "after", w: function (c) { return after(c) && c.pts > c.avg; }, t: function (c) { return "Last week: " + num(c.pts) + ". Average: " + num(c.avg) + ". Bank it."; } },
+    { k: "after", w: function (c) { return after(c) && c.pts < c.avg; }, t: function () { return "Last week’s gone and this one hasn’t happened yet. Lovely, isn’t it?"; } },
+    { k: "after", w: function (c) { return after(c) && c.move === 0 && c.gwsPlayed >= 2; }, t: function () { return "Didn’t move an inch last week. Solid ground, or stuck in mud."; } },
+    { k: "after", w: function (c) { return after(c) && c.bench <= 2 && c.chipNow !== "bboost"; }, t: function () { return "Barely a point left on the bench last week. Good calls."; } },
+    { k: "after", w: function (c) { return after(c) && c.cap && c.capPts != null && c.capPts >= 16; }, t: function (c) { return c.cap + " brought in " + num(c.capPts) + " with the armband last week. Good call."; } },
+    { k: "after", w: function (c) { return after(c) && c.cap && c.capPts != null && c.capPts <= 4; }, t: function (c) { return c.cap + " managed " + num(c.capPts) + " as captain last week. We go again."; } },
+    { k: "after", w: function (c) { return after(c) && c.hits > 0; }, t: function (c) { return "The " + num(c.hits) + "-point hit last week: water under the bridge. Expensive water."; } },
+    { k: "after", w: after, t: function () { return "Between gameweeks: the quiet bit. Plan, or sulk. Both are valid."; } },
+    { k: "after", w: function (c) { return after(c) && c.pts >= 90; }, t: function (c) { return num(c.pts) + " last week. Weeks like that are why we put up with the rest."; } },
+    { k: "stand", w: function (c) { return me(c) && c.rank && c.rank <= c.n / 2 && !c.topTen; }, t: function (c) { return "Top half: " + ord(c.rank) + " of " + num(c.n) + ". Respectable. Push on."; } },
+    { k: "stand", w: function (c) { return me(c) && c.rank && c.rank > c.n / 2 && !c.bottomTen && c.gw && c.gw < 30; }, t: function (c) { return ord(c.rank) + ", bottom half. Plenty of season left for a climb."; } },
+    { k: "stand", w: function (c) { return me(c) && typeof c.total === "number" && c.total > 0; }, t: function (c) { return num(c.total) + " points this season. Every one of them earned. Some of them lucky."; } },
+    { k: "stand", w: function (c) { return me(c) && !c.leading && c.behind > 0 && c.behind <= 10; }, t: function (c) { return "Only " + pl(c.behind, "point") + " off the top. That’s one captain’s goal."; } },
+    { k: "stand", w: function (c) { return me(c) && c.overall > 100000 && c.overall <= 1000000; }, t: function (c) { return num(c.overall) + " in the world: inside the top million. Most people aren’t."; } },
+    { k: "stand", w: function (c) { return me(c) && c.overallMove < -200000; }, t: function (c) { return "Down " + num(-c.overallMove) + " places in the world last week. The world is big; it’ll forget."; } },
+    { k: "stand", w: function (c) { return me(c) && c.seasonTr === 0 && c.gwsPlayed >= 3; }, t: function () { return "Not one transfer all season. A genius, or a ghost."; } },
+    { k: "stand", w: function (c) { return me(c) && c.chipsPlayed === 0 && c.gwsPlayed >= 6; }, t: function (c) { return num(c.gwsPlayed) + " gameweeks in and no chip played. Saving them for a rainy day?"; } },
+    { k: "stand", w: function (c) { return me(c) && c.rank && c.rank > 1 && c.rank <= 10; }, t: function (c) { return ord(c.rank) + " in the league. People scroll past their own name to look at yours."; } },
+    { k: "comp", w: function (c) { return me(c) && c.lmsAlive && c.lmsLeft > 1 && c.lmsLeft <= 10; }, t: function (c) { return "Only " + num(c.lmsLeft) + " left in Last Manager Standing, and you’re one of them. Breathe."; } },
+    { k: "comp", w: function (c) { return me(c) && c.lmsAlive && c.lmsLeft > 10 && c.lmsOut > 0; }, t: function (c) { return num(c.lmsLeft) + " still standing in Last Manager, you among them. Keep your head down."; } },
+    { k: "comp", w: function (c) { return me(c) && c.comp && c.comp.monthly && c.comp.monthly.pos > 1 && c.comp.monthly.pos <= 5; }, t: function (c) { return ord(c.comp.monthly.pos) + " in the " + c.comp.monthly.where + " table. A big week and it’s yours."; } },
+    { k: "comp", w: function (c) { return me(c) && c.xpCourse > 0 && c.inCount >= 2; }, t: function (c) { return "In the money in " + num(c.inCount) + " places. Don’t spend it yet."; } },
+    { k: "price", w: function (c) { return c.falls >= 10; }, t: function (c) { return num(c.falls) + " price falls last night. The sell button has been busy."; } },
+    { k: "price", w: function (c) { return me(c) && c.myFall; }, t: function (c) { return c.myFall.name + " down to £" + c.myFall.price.toFixed(1) + "m. It’s only money. Pretend money."; } },
+    { k: "price", w: function (c) { return !!c.bigRiser; }, t: function (c) { return "If " + c.bigRiser.name + " keeps rising he’ll need a ladder. £" + c.bigRiser.price.toFixed(1) + "m now."; } },
+    { k: "price", w: function (c) { return c.rises > 0 && c.falls === 0; }, t: function (c) { return pl(c.rises, "rise") + " and not a single fall last night. Everyone’s buying."; } },
+    { k: "price", w: function (c) { return c.falls > 0 && c.rises === 0; }, t: function (c) { return pl(c.falls, "fall") + " and not one rise last night. Everyone’s selling."; } },
+    { k: "player", w: function (c) { return c.mostCap && c.n > 1 && c.mostCap.caps >= c.n / 2; }, t: function (c) { return num(c.mostCap.caps) + " of " + num(c.n) + " captained " + c.mostCap.name + ". Groupthink with an armband on."; } },
+    { k: "player", w: function (c) { return c.potw && c.potw.pts >= 15; }, t: function (c) { return c.potw.name + " with " + num(c.potw.pts) + " this week. Somebody’s week was made."; } },
+    { k: "player", w: function (c) { return !!c.topForm; }, t: function (c) { return c.topForm.name + ": " + c.topForm.form + " a game lately. The bandwagon is boarding."; } },
+    { k: "player", w: function (c) { return c.diff && c.diff.pts >= 6; }, t: function (c) { return "Differential of the week: " + c.diff.name + ", " + num(c.diff.pts) + " points, owned by " + pl(c.diff.owners, "manager") + " here."; } },
+    { k: "player", w: function (c) { return !!c.priciest; }, t: function (c) { return "The priciest player in the league’s squads: " + c.priciest.name + ", £" + c.priciest.price.toFixed(1) + "m."; } },
+    { k: "player", w: function (c) { return me(c) && c.cap && c.potw && c.cap === c.potw.name; }, t: function (c) { return "You captained " + c.cap + ", the league’s player of the week. Some people just know."; } },
+    { k: "mood", w: function (c) { return me(c) && c.topTen && c.sliding; }, t: function () { return "Top ten but sliding. Gravity is undefeated."; } },
+    { k: "mood", w: function (c) { return me(c) && c.bottomTen && c.climbing; }, t: function () { return "Bottom ten, but climbing. Comebacks start small."; } },
+    { k: "mood", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts > c.avg && c.move > 0; }, t: function () { return "A good week and a rank going up. That’s the whole game, really."; } },
+    { k: "mood", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts < c.avg && c.move < 0 && c.gw && c.gw < 30; }, t: function () { return "Under the average and slipping. Deep breath. It’s a long season."; } },
+    { k: "mood", w: function (c) { return me(c) && c.climbing && !c.topTen; }, t: function () { return "Three weeks climbing. Whatever you’re doing, keep doing it."; } },
+    { k: "chant", w: function (c) { return me(c) && typeof c.pts === "number" && c.pts > c.avg + 10; }, t: function (c) { return "Olé, olé, olé, olé. That’s " + num(c.pts) + ", and the average is " + num(c.avg) + "."; } },
+    { k: "chant", w: function (c) { return me(c) && c.leading; }, t: function () { return "We are top of the league, say we are top of the league. You are. Say it."; } },
+    { k: "chant", w: function (c) { return liv(c) && c.pts > c.avg && !c.done; }, t: function () { return "And now you’re gonna believe us, you’re gonna win this week. Probably. Matches pending."; } },
+    { k: "chant", w: function (c) { return me(c) && c.cap && c.capPts != null && c.capPts >= 15; }, t: function (c) { return "Super, super " + c.cap + ". Super " + c.cap + ". " + num(c.capPts) + " as captain."; } },
+    { k: "chant", w: function (c) { return me(c) && c.hits === 0 && c.gwsPlayed >= 1; }, t: function () { return "No hits, no worries. Hakuna matata, as the lion said."; } },
+    { k: "chant", w: function (c) { return me(c) && c.best && c.best.points >= 80; }, t: function (c) { return "Glory, glory GW" + c.best.gw + ". " + num(c.best.points) + " points, and I’m still singing it."; } },
+    { k: "chant", w: function (c) { return liv(c) && c.inPlay > 0; }, t: function () { return "Come on, come on, come on. That’s the whole song while the matches are on."; } },
+    { k: "chant", w: function (c) { return me(c) && c.bottomTen; }, t: function () { return "We’re not going down. Sing it like you mean it. Then make a transfer."; } },
+    { k: "chant", w: function (c) { return me(c) && c.move >= 5; }, t: function (c) { return "Hey Jude, but it’s your rank, and it’s up " + num(c.move) + ". Na na na na."; } },
+    { k: "chant", w: function (c) { return me(c) && c.topTen; }, t: function () { return "Top ten, top ten, top ten. That’s the song. Short, like the list."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Points are temporary. Screenshots are forever."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "I’ve watched every gameweek this season. I have notes."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Somewhere, someone has just benched a hat-trick. Let’s hope it wasn’t you."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "The table doesn’t care about xG. Neither do I."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "I sleep twenty hours a day. The other four are spent on this league."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Rotation is a rumour until the team sheet says otherwise."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Your league is watching. Act natural."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "I can’t read team news. I just look confident."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Patience wins leagues. So does luck. Mostly luck."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "There’s no such thing as a safe captain. There’s only hindsight."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Every manager has a plan until the injury news drops."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "The best transfer is sometimes the one you didn’t make."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "The bench is where points go to think about what they’ve done."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "It’s only a game. A game you must win, but a game."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "One gameweek at a time, they all say. Then they plan a wildcard."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "I like a good differential. I like a good nap more."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "The table updates itself. I update my opinions."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Spreadsheets are lovely. Goals are lovelier."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "I don’t do predictions. I do told-you-sos."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Hydrate. Then check the table."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "A lion’s advice: never captain a defender. A lion’s second piece of advice: ignore the first."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Form is temporary. Fixtures are a spreadsheet."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Nobody remembers the second-best bench."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "My mane takes longer to sort than your squad. Probably."; } },
+    { k: "gen", w: function () { return true; }, t: function () { return "Good managers check the table. Great managers pretend not to."; } },
+    { k: "gen", w: function (c) { return c.hour < 6; }, t: function () { return "Still up? The deadline isn’t going anywhere. Well, it is, but slowly."; } },
+    { k: "gen", w: function (c) { return c.hour < 6; }, t: function () { return "Small-hours thoughts: should I wildcard? No. Go to sleep."; } },
+    { k: "gen", w: function (c) { return c.hour >= 6 && c.hour < 11; }, t: function () { return "Good morning. The table survived the night. Did you?"; } },
+    { k: "gen", w: function (c) { return c.hour >= 6 && c.hour < 11; }, t: function () { return "Breakfast of champions: toast, tea and a look at the bench."; } },
+    { k: "gen", w: function (c) { return c.hour >= 11 && c.hour < 14; }, t: function () { return "Lunchtime. Perfect for pretending to work and checking the table."; } },
+    { k: "gen", w: function (c) { return c.hour >= 14 && c.hour < 18; }, t: function () { return "Afternoon. Prime time for second-guessing the captain."; } },
+    { k: "gen", w: function (c) { return c.hour >= 18 && c.hour < 22; }, t: function () { return "Evening. The best time to plan a transfer you’ll undo tomorrow."; } },
+    { k: "gen", w: function (c) { return c.hour >= 22; }, t: function () { return "Nearly bedtime. The table will still be here. So will I."; } },
+    { k: "gen", w: function (c) { return c.day === 6; }, t: function () { return "Saturday. The day the excuses get written."; } },
+    { k: "gen", w: function (c) { return c.day === 0; }, t: function () { return "Sunday. Roast, football, regret. In that order."; } },
+    { k: "gen", w: function (c) { return c.day === 2; }, t: function () { return "Tuesday. The quietest day in FPL. Enjoy it."; } },
+    { k: "gen", w: function (c) { return c.day === 3; }, t: function () { return "Midweek. Halfway between the last mistake and the next one."; } },
+    { k: "gen", w: function (c) { return c.day === 4; }, t: function () { return "Thursday. Nearly the weekend; nearly football."; } },
     // turned: ten taps, and the gloves are off. Keyed to the week where it can be.
     { k: "savage", turn: true, w: function () { return true; }, t: function () { return "That\u2019s ten. You\u2019ve woken something."; } },
     { k: "savage", w: function () { return true; }, t: function () { return "Why are you even playing?"; } },
@@ -431,6 +562,25 @@
     { k: "savage", w: function () { return true; }, t: function () { return "We can see you sneaking out. Take the wildcard with you."; } },
     { k: "savage", w: function () { return true; }, t: function () { return "Stand up if you hate your own squad. Thought so."; } },
     { k: "savage", w: function () { return true; }, t: function () { return "Que sera, sera. Whatever will be, will be. You\u2019re going nowhere. Que sera, sera."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Your squad looks like it was picked by autocomplete."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "I’ve seen better teams on the back of a cereal box."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Even your vice-captain is embarrassed."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "If this league had relegation, you’d have packed already."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Your transfers have the timing of a bus that never comes."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Keep going. Rock bottom has a basement."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Your rank needs a search party."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Somewhere a spreadsheet is crying, and it’s your fault."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Your bench has more sense than your starting eleven."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Are you playing FPL, or is FPL playing you?"; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "I’d roar, but you’d only take it as encouragement."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Have you tried turning your team off and on again?"; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "You don’t need a wildcard. You need a miracle."; } },
+    { k: "savage", w: function () { return true; }, t: function () { return "Tap all you like. Your points won’t go up."; } },
+    { k: "savage", w: function (c) { return me(c) && c.hits >= 8; }, t: function (c) { return "Minus " + num(c.hits) + ". You paid for the privilege."; } },
+    { k: "savage", w: function (c) { return me(c) && c.overall > 1000000; }, t: function (c) { return num(c.overall) + " in the world. The world noticed. It’s concerned."; } },
+    { k: "savage", w: function (c) { return me(c) && c.bench >= 10; }, t: function (c) { return num(c.bench) + " on the bench. Your best players are watching you, and they’re not impressed."; } },
+    { k: "savage", w: function (c) { return me(c) && c.cap && c.capPts != null && c.capPts <= 2; }, t: function (c) { return c.cap + " as captain: " + num(c.capPts) + ". I have nothing to add. Neither did he."; } },
+    { k: "savage", w: function (c) { return me(c) && c.rank && c.rank > c.n / 2; }, t: function (c) { return ord(c.rank) + " of " + num(c.n) + ". Half the league would swap places with you. The other half already did."; } },
     // only after a tap
     { k: "poke", w: function () { return true; }, t: function () { return "That tickles."; } },
     { k: "poke", w: function () { return true; }, t: function () { return "Again? Fine. Once more."; } },
@@ -441,11 +591,59 @@
     { k: "poke", w: function () { return true; }, t: function () { return "If you poke me a hundred times, nothing happens. I’ve checked."; } },
     { k: "poke", w: function () { return true; }, t: function () { return "Head shake. It’s not you. It’s your defence."; } },
     { k: "poke", w: function (c) { return !!c.name; }, t: function (c) { return "Jumping for you, " + c.name + ". Not for everyone."; } },
-    { k: "poke", w: function () { return true; }, t: function () { return "Okay, okay. Go look at the table."; } }
+    { k: "poke", w: function () { return true; }, t: function () { return "Okay, okay. Go look at the table."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Personal space. Lions have it too."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Careful. I bite. Metaphorically."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "You’re tapping a lion. Think about your choices."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "I’ve been tapped more often than a transfer target."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Strong tap. Have you been training?"; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "I purr on the inside."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Stop it. Don’t stop it. Okay, stop it."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Is this how you treat your captain too?"; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Mane check: still magnificent."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Yes, hello. I see you."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Tapping me won’t change your points. I’ve asked."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "My agent says no more taps without a contract."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Gentle. I’m vintage."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "You found the lion. Your prize is this sentence."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "There’s a limit. I won’t tell you what it is."; } },
+    { k: "poke", w: function (c) { return !!c.name; }, t: function (c) { return "Hello again, " + c.name + "."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Ears up. You have my attention. Use it wisely."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "That one I felt."; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Was that a tap or a transfer request?"; } },
+    { k: "poke", w: function () { return true; }, t: function () { return "Paws off the merchandise."; } }
   ];
 
+  /* What he has already said, kept on the phone so it holds across visits:
+     a line is not said again until every line that fits the moment has had
+     its turn. Lines are known by their wording, not their place in the list,
+     so adding new ones never makes him forget what he said. */
+  var SAID_KEY = "go12.theoSaid", said = null, lastText = "";
+  function lineId(i) {
+    var l = L[i];
+    if (l._id) return l._id;
+    var src = l.k + "|" + String(l.t), h = 5381;
+    for (var j = 0; j < src.length; j++) h = ((h * 33) ^ src.charCodeAt(j)) >>> 0;
+    l._id = h.toString(36);
+    return l._id;
+  }
+  function saidMap() {
+    if (said) return said;
+    said = {};
+    try {
+      var raw = JSON.parse(localStorage.getItem(SAID_KEY) || "{}");
+      // only lines that still exist are remembered
+      var known = {};
+      L.forEach(function (l, i) { known[lineId(i)] = 1; });
+      if (raw && typeof raw === "object") Object.keys(raw).forEach(function (k) { if (known[k]) said[k] = raw[k]; });
+    } catch (e) { said = {}; }
+    return said;
+  }
+  function keepSaid() { try { localStorage.setItem(SAID_KEY, JSON.stringify(said || {})); } catch (e) {} }
+
   // A line for now: something about the week when there is something to say,
-  // otherwise something general; never the one just said.
+  // otherwise something general; never one already said while another that
+  // fits is still unsaid, and never the words just shown.
   function pick(poked) {
     var can = [];
     L.forEach(function (l, i) {
@@ -454,14 +652,25 @@
       // turned, he says only savage things; calm, he never does
       if ((l.k === "savage") !== (savage && poked)) return;
       var ok = false; try { ok = !!l.w(ctx); } catch (e) { ok = false; }
+      if (ok && lastText && lineText(i) === lastText) ok = false;
       if (ok) can.push(i);
     });
     if (!can.length) return -1;
+    // the turn itself is said every time he turns; everything else waits its turn
+    var turn = can.filter(function (i) { return L[i].turn; });
+    if (savage && poked && taps === SAVAGE_AT && turn.length) return turn[0];
+    var mem = saidMap();
+    var fresh = can.filter(function (i) { return !L[i].turn && !mem[lineId(i)]; });
+    if (!fresh.length) {
+      // everything that fits has been said: a new round of these, and only these
+      can.forEach(function (i) { delete mem[lineId(i)]; });
+      keepSaid();
+      fresh = can.filter(function (i) { return !L[i].turn; });
+      if (!fresh.length) return -1;
+    }
+    can = fresh;
     if (savage && poked) {
-      // the first savage line is the turn itself
-      var turn = can.filter(function (i) { return L[i].turn; });
-      if (taps === SAVAGE_AT && turn.length) return turn[0];
-      var rest = can.filter(function (i) { return !L[i].turn; });
+      var rest = can;
       return rest[Math.floor(Math.random() * rest.length)];
     }
     var specific = can.filter(function (i) { return ["pre", "lock", "live", "after", "stand", "comp", "price", "player", "mood", "chant"].indexOf(L[i].k) !== -1; });
@@ -546,7 +755,9 @@
     if (!bub || i < 0) return "";
     var text = lineText(i);
     if (!text) return "";
-    last = i;
+    last = i; lastText = text;
+    saidMap()[lineId(i)] = Date.now();
+    keepSaid();
     bub.textContent = text;
     bub.classList.toggle("savage", savage);
     bub.classList.add("show");

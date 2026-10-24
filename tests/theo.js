@@ -4,7 +4,7 @@ const GOENV = require("./lib/env.js");
  * else on every tap while a part of him moves, slides away while the page
  * scrolls down and comes back, hides under anything that opens over the
  * page, can be switched off under Settings and stays off, and every one of
- * his hundred lines renders without a hole in it — with a team picked and
+ * his four hundred lines renders without a hole in it — with a team picked and
  * without. He must never throw, whatever the data. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
@@ -41,13 +41,13 @@ const holes = /undefined|NaN|null|\{|\}|—/;
     chk(at.has && at.left >= 0 && at.left < 30 && at.bottom <= at.navTop, "he sits bottom-left, above the tab bar", JSON.stringify({ left: at.left, bottom: at.bottom, navTop: at.navTop }));
     chk(at.greet.length > 8 && !holes.test(at.greet), "he greets, and the line is whole", at.greet);
     const lines = await p.evaluate(() => { const T = window.GO_THEO, ks = T.lines(); return ks.map((k, i) => ({ k, fits: T.fits(i), text: T.text(i) })); });
-    chk(lines.length >= 240, "two hundred and forty lines or more", lines.length);
+    chk(lines.length >= 400, "four hundred lines or more", lines.length);
     const bad = lines.filter((l) => l.fits && (!l.text || holes.test(l.text)));
     chk(bad.length === 0, "every line that fits the week renders whole", bad.slice(0, 3).map((l) => l.text).join(" | "));
     const fitting = lines.filter((l) => l.fits).length;
-    chk(fitting >= 15, "plenty fit this week", fitting + " of 100 fit");
+    chk(fitting >= 15, "plenty fit this week", fitting + " of " + lines.length + " fit");
     const kinds = {}; lines.forEach((l) => { kinds[l.k] = (kinds[l.k] || 0) + 1; });
-    chk(kinds.pre >= 10 && kinds.live >= 20 && kinds.after >= 10 && kinds.poke === 10 && kinds.gen >= 10 && kinds.comp >= 15 && kinds.price >= 8 && kinds.player >= 10 && kinds.mood >= 10 && kinds.chant >= 40 && kinds.savage >= 50,
+    chk(kinds.pre >= 10 && kinds.live >= 20 && kinds.after >= 10 && kinds.poke >= 30 && kinds.gen >= 10 && kinds.comp >= 15 && kinds.price >= 8 && kinds.player >= 10 && kinds.mood >= 10 && kinds.chant >= 40 && kinds.savage >= 50,
         "lines cover the deadline, the live week, the week after, standing, the five competitions, prices, players, praise and digs, general and taps", JSON.stringify(kinds));
     // the five competitions each get a word, and it is the profile's own figure
     const comp = await p.evaluate(() => { const T = window.GO_THEO, c = T.context(); const ks = T.lines();
@@ -57,6 +57,30 @@ const holes = /undefined|NaN|null|\{|\}|—/;
     // greeting never a poke line
     const greetKinds = await p.evaluate(() => { const T = window.GO_THEO; const s = new Set(); for (let i = 0; i < 200; i++) { const j = T.pick(false); if (j >= 0) s.add(T.lines()[j]); } return [...s]; });
     chk(greetKinds.indexOf("poke") === -1 && greetKinds.indexOf("none") === -1, "a greeting is never a tap line, nor the no-team line when a team is picked", greetKinds.join(","));
+    // no two templates ever say the same words
+    const fitText = lines.filter((l) => l.fits && l.text).map((l) => l.text);
+    const twice = fitText.filter((t, i) => fitText.indexOf(t) !== i);
+    chk(twice.length === 0, "no two lines say the same words", twice.slice(0, 2).join(" | "));
+    // he never repeats himself: some lines, the app closed and opened again,
+    // and then every line that fits is said once before any is said twice
+    const sayN = (n) => p.evaluate((n) => { const T = window.GO_THEO, out = [];
+      for (let k = 0; k < n; k++) { const j = T.pick(false); if (j < 0) break; out.push(T.say(j)); } return out; }, n);
+    const greet1 = at.greet;
+    const partA = await sayN(8);
+    await p.reload({ waitUntil: "domcontentloaded" }); await p.waitForTimeout(3200);
+    const greet2 = await p.evaluate(() => { const bb = document.querySelector("#theobub"); return bb && bb.classList.contains("show") ? bb.textContent : ""; });
+    const left = await p.evaluate(() => { const T = window.GO_THEO, ks = T.lines();
+      const fit = ks.filter((k, i) => T.fits(i) && k !== "poke" && k !== "savage").length;
+      const kept = Object.keys(JSON.parse(localStorage.getItem("go12.theoSaid") || "{}")).length;
+      return { fit, kept }; });
+    const partB = await sayN(left.fit - left.kept);
+    const all = [greet1].concat(partA, [greet2], partB).filter(Boolean);
+    const again = all.filter((t, i) => all.indexOf(t) !== i);
+    chk(again.length === 0 && all.length === left.fit, "every line that fits is said once before any is said again, across a reopen",
+      all.length + " said of " + left.fit + (again.length ? " · repeated: " + again[0] : ""));
+    chk(greet2 && partA.indexOf(greet2) === -1 && greet2 !== greet1, "the greeting after a reopen is one he has not said", greet2);
+    const next = await sayN(1);
+    chk(next.length === 1 && next[0] && next[0] !== all[all.length - 1], "once all are said, a new round starts, never with the line just said", next[0]);
     // taps: a part moves, a line comes, lines vary
     const seen = new Set(), acts = new Set();
     for (let i = 0; i < 8; i++) {
