@@ -1322,6 +1322,7 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .snapgrid .pc .pcv { font-size:16px; white-space:nowrap; }
 .snapgrid .pc .pcs { white-space:normal; } /* "Wildcard, Bench Boost" may take two lines */
 @media (max-width:350px) { .snapgrid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+.snapgrid.two { grid-template-columns:repeat(2, minmax(0,1fr)); }
 /* badges: what a manager has done this season, as chips under the name line */
 .badges { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
 .badges { position:relative; }

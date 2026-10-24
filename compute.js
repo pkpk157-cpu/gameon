@@ -57,9 +57,18 @@
   //
   // A settled gameweek keeps FPL's own figure. It is authoritative, and it
   // carries the real bonus and the automatic substitutions we cannot infer.
+  /* A team from outside Game On, opened from an FPL league, is laid over a
+     copy of the data by C.fplOverlay: its squads sit apart from Game On's,
+     here, and only the readings of one manager's own squad look at them.
+     Everything that sums the league reads ds.picks, so an outsider can never
+     move a Game On figure. */
+  function extSquad(ds, gw, id) {
+    var x = ds && ds._extSquads;
+    return (x && x[gw] && x[gw][id]) || null;
+  }
   function liveSquadTotal(ds, entryId, gw, benchInstead) {
     if (!ds || C.liveGwId(ds) !== +gw) return null;
-    var squad = ds.picks && ds.picks[gw] && ds.picks[gw][entryId];
+    var squad = (ds.picks && ds.picks[gw] && ds.picks[gw][entryId]) || extSquad(ds, gw, entryId);
     var picks = squad && squad.p;
     if (!picks || !picks.length) return null;
     var lp = liveAt(ds, gw), pb = bonusAt(ds, gw);
@@ -1019,7 +1028,7 @@
     var h = ((ds.history || {})[id] || {})[gw] || null;
     var bank = h && typeof h.bk === "number" ? h.bk : null;
     if (+gw === +ds.pitchGw) {
-      var pk = picksAt(ds, gw), sq = pk && pk[id], els = ds.elements || {};
+      var pk = picksAt(ds, gw), sq = (pk && pk[id]) || extSquad(ds, gw, id), els = ds.elements || {};
       if (sq && sq.p && sq.p.length) {
         var sum = 0, ok = true;
         sq.p.forEach(function (t) {
@@ -1367,12 +1376,12 @@
   // in the stored shape, hist: the week's history row }. The squad is drawn by
   // exactly the rules a Game On squad is; nothing of it is kept in ds, so the
   // league's own figures (ownership, averages, values) are untouched by it.
-  C.managerPitch = function (ds, id, gw, ext) {
+  C.managerPitch = function (ds, id, gw) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;
     gw = gw ? +gw : +ds.pitchGw;
     var pk = picksAt(ds, gw);
-    var sq = ext ? ext.squad : (pk && pk[id]);
+    var sq = (pk && pk[id]) || extSquad(ds, gw, id);
     if (!sq || !sq.p || !sq.p.length) return null;
     var els = ds.elements, lp = liveAt(ds, gw), pb = bonusAt(ds, gw);
     var POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
@@ -1430,7 +1439,7 @@
     // swap, so a card can be turned over to show the player sold for him and
     // what he went on to score — which is the half of a transfer nobody can
     // see once the deadline passes.
-    var swaps = ext ? [] : (((ds.moves || {})[gw] || {})[id] || []);
+    var swaps = ((ds.moves || {})[gw] || {})[id] || [];
     if (swaps.length) {
       var outFor = {};
       swaps.forEach(function (sw) { outFor[sw[0]] = sw[1]; });
@@ -1460,14 +1469,9 @@
     var live = gwEv ? (gwEv.is_current && !(gwEv.finished && gwEv.data_checked)) : false;
 
     // League context for this gameweek: average and the best score.
-    var hrow = ext ? (ext.hist || null) : ((ds.history[id] || {})[gw] || null);
+    var hrow = (ds.history[id] || {})[gw] || null;
     var hits = hrow ? (hrow.h || 0) : 0;
-    // an outside team's score by the rule gwScore applies: counted from the
-    // cards while the week is live, FPL's own figure once it is not, net of hits
-    var scored = !ext ? gwScore(ds, id, gw)
-      : !hrow ? null
-      : (C.liveGwId(ds) === gw ? total - hits
-         : (typeof hrow.p === "number" ? (hitsAlreadyOff(ds) ? hrow.p : hrow.p - hits) : null));
+    var scored = gwScore(ds, id, gw);
     var net = scored === null ? (total - hits) : scored;
     var sum = 0, n = 0, top = null;
     (ds.managers || []).forEach(function (m) {
@@ -1527,7 +1531,7 @@
     // borrowed for the week, so nothing in it was bought at all.
     var bank = hrow && hrow.bk != null ? hrow.bk : null;
     var sellValue = null;
-    var buyMap = (!ext && ds.buys && +ds.buysGw === +gw && (sq.c || "") !== "freehit")
+    var buyMap = (ds.buys && +ds.buysGw === +gw && (sq.c || "") !== "freehit")
       ? ds.buys[id] : null;
     if (buyMap) {
       var sellSum = 0, complete = everyone.length > 0;
@@ -1541,11 +1545,7 @@
       else everyone.forEach(function (p) { delete p.sell; });
     }
 
-    // an outside team is valued by the same rule as squadWorth: today's
-    // prices for the newest squad, FPL's record less the bank for an older one
-    var worth = !ext ? C.squadWorth(ds, id, gw)
-      : (+gw === +ds.pitchGw || !hrow || !(hrow.v > 0)) ? null
-      : { value: hrow.v - (hrow.bk || 0), bank: hrow.bk };
+    var worth = C.squadWorth(ds, id, gw);
     var lw = C.leagueWorth(ds, gw);
     var provTotal = 0;
     scoring.forEach(function (p) { provTotal += (p.prov || 0) * p.mult; });
@@ -1560,6 +1560,78 @@
              leagueAvgValue: lw ? lw.average : 0 };
   };
 
+  /* A team from outside Game On, read from FPL on demand, laid over a copy of
+     the data so its own figures come from the same functions as everyone
+     else's: its gameweek rows, past seasons and chips beside Game On's, and
+     its squads apart (see extSquad). The league itself is untouched: the
+     managers, ds.picks and every table built from them are the original
+     ones, so nothing summed over Game On can change. Read by the FPL team
+     page and by Compare; never stored.
+       o = { id, name, player, at, hist: {gw: row}, past: [...], chips: [...],
+             squads: {gw: squad} } */
+  C.fplOverlay = function (ds, o) {
+    if (!ds || !o || !o.id) return ds;
+    var id = +o.id;
+    // a Game On manager is never overlaid: his figures are the league's own
+    if ((ds.managers || []).some(function (m) { return +m.id === id; })) return ds;
+    // the live totals are adjusted once, in place, on the shared manager
+    // rows; the copy is marked as done so it cannot adjust them twice
+    liveAdjust(ds);
+    var ov = {};
+    Object.keys(ds).forEach(function (k) { ov[k] = ds[k]; });
+    try { Object.defineProperty(ov, "_liveAdj", { value: true, enumerable: false }); } catch (e) {}
+    function add(base, val) {
+      var out = {};
+      Object.keys(base || {}).forEach(function (k) { out[k] = base[k]; });
+      out[id] = val;
+      return out;
+    }
+    ov.history = add(ds.history, o.hist || {});
+    if (o.past) ov.pastSeasons = add(ds.pastSeasons, o.past);
+    if (o.chips) ov.chips = add(ds.chips, o.chips);
+    var sq = {};
+    Object.keys(o.squads || {}).forEach(function (g) { sq[g] = {}; sq[g][id] = o.squads[g]; });
+    ov._extSquads = sq;
+    ov._ext = { id: id, name: o.name || null, player: o.player || null };
+    ov.updatedAt = (ds.updatedAt || "") + "|ext:" + id + ":" + (o.at || 0) + ":" + Object.keys(sq).join(",");
+    return ov;
+  };
+  /* FPL's own figures for a gameweek, as it publishes them: the average
+     over every team in the game, and the highest score with whose it was.
+     They are only read once FPL has finished the week: while it is being
+     played FPL refreshes them now and then, and in between they can sit at
+     a figure from hours earlier (an average of 1 on a Saturday evening).
+     0 means "not yet". Read by the FPL team page and the league insights. */
+  C.fplGwFigures = function (ds, gw) {
+    var ev = ((ds && ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === +gw; })[0] || {};
+    if (!ev.finished) return { average: null, highest: null, highestEntry: null };
+    return { average: ev.average > 0 ? ev.average : null,
+             highest: ev.highest > 0 ? ev.highest : null,
+             highestEntry: ev.highest > 0 && ev.highestEntry > 0 ? +ev.highestEntry : null };
+  };
+  /* An outside team's season so far: FPL's total, led through a live week
+     the way the classic table leads Game On's (last week's total plus this
+     week as the cards count it), and its latest overall rank. One rule for
+     the FPL team page and Compare, so the two cannot disagree. */
+  C.extSummary = function (ds, id) {
+    var hist = (ds && ds.history && ds.history[id]) || {};
+    var played = C.finishedGws(ds);
+    var cur = C.currentGw(ds);
+    if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
+    var total = null, rank = null, rankGw = null;
+    played.forEach(function (g) {
+      if (hist[g] && typeof hist[g].t === "number") total = hist[g].t;
+      if (hist[g] && hist[g].r) { rank = hist[g].r; rankGw = g; }
+    });
+    var lg = C.liveGwId(ds);
+    if (lg && hist[lg - 1] && typeof hist[lg - 1].t === "number") {
+      var sc = gwScore(ds, id, lg);
+      if (sc !== null) total = hist[lg - 1].t + sc;
+    }
+    return { total: total, rank: rank, rankGw: rankGw };
+  };
+  C.isExt = function (ds, id) { return !!(ds && ds._ext && +ds._ext.id === +id); };
+
   // Side-by-side comparison of two managers for a gameweek, plus season totals
   // and their notional head-to-head record across every gameweek played.
   C.compare = function (ds, aId, bId, gw) {
@@ -1567,6 +1639,7 @@
     aId = +aId; bId = +bId;
     gw = gw ? +gw : +ds.pitchGw;
     var mm = managerMap(ds);
+    if (ds._ext) mm[ds._ext.id] = { entryName: ds._ext.name, playerName: ds._ext.player };
     var played = C.finishedGws(ds);
     var cur = C.currentGw(ds);
     if (cur && played.indexOf(cur) === -1) played = played.concat([cur]);
@@ -1587,13 +1660,23 @@
           if (!worst || sc < worst.p) worst = { gw: g, p: sc };
         }
       });
-      C.squadGws(ds).forEach(function (g) {
+      var ext = C.isExt(ds, id);
+      if (ext) {
+        // only the weeks opened are held of an outside squad; FPL's own chip
+        // record names every one
+        ((ds.chips || {})[id] || []).forEach(function (c) { chips.push({ gw: c.gw, chip: c.n }); });
+        chips.sort(function (x, y) { return x.gw - y.gw; });
+      } else C.squadGws(ds).forEach(function (g) {
         var pk = picksAt(ds, g), sq = pk && pk[id];
         if (sq && sq.c) chips.push({ gw: g, chip: sq.c });
       });
       var row = (hist[gw] || null);
       var last = null;
       played.forEach(function (g) { if (hist[g] && typeof hist[g].t === "number") last = hist[g].t; });
+      // an outside team has no row in the classic table to lead its total
+      // through a live week; extSummary leads it by the same rule
+      var xs = C.extSummary(ds, id);
+      if (ext) last = xs.total;
 
       // Past FPL seasons, for the all-time comparison.
       var seasons = ((ds.pastSeasons && ds.pastSeasons[id]) || []).slice();
@@ -1616,6 +1699,7 @@
         gwHits: row ? (row.h || 0) : 0,
         gwBench: row ? gwBench(ds, id, gw) : 0,
         total: last, hits: hits, bench: bench, best: best, worst: worst, chips: chips,
+        ext: ext, overallRank: xs.rank,
         seasons: seasons, seasonCount: seasons.length,
         bestRank: pBestRank, bestPts: pBestPts, career: career,
         avgSeason: seasons.length ? Math.round(career / seasons.length) : null
@@ -1753,11 +1837,8 @@
       gwStats.topQuarter = at(0.25);
       gwStats.bottomQuarter = at(0.75);
       gwStats.benchAvg = Math.round(benchTotal / rows.length);
-      var gwEvent = ((ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) {
-        return +e.id === +gw;
-      })[0];
-      // FPL publishes no average until a gameweek finishes; 0 means "not yet".
-      gwStats.fplAverage = (gwEvent && gwEvent.average > 0) ? gwEvent.average : null;
+      // FPL's average is only read once it has finished the week
+      gwStats.fplAverage = C.fplGwFigures(ds, gw).average;
       if (gwStats.fplAverage !== null) {
         gwStats.beatFpl = rows.filter(function (r) { return r.p > gwStats.fplAverage; }).length;
       }

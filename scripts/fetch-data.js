@@ -173,7 +173,10 @@ if (require.main === module) (async () => {
     id: e.id, name: e.name, finished: e.finished, data_checked: e.data_checked,
     is_current: e.is_current, is_next: e.is_next, deadline_time: e.deadline_time,
     // what the phantom "AVERAGE" opponent scores in an odd-sized h2h league
-    average: e.average_entry_score
+    average: e.average_entry_score,
+    // FPL's best score of the week and whose it was, beside its average on
+    // the FPL team page; like the average, 0 or null until the week is done
+    highest: e.highest_score, highestEntry: e.highest_scoring_entry
   }));
 
   // What we published last time: the h2h schedule and the price record are both

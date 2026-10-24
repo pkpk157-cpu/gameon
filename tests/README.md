@@ -67,6 +67,10 @@ an environment where a broken suite means a change goes out unchecked.
   bench points, hits, a player's points, a squad's value and bank) is computed
   once in `compute.js` and read everywhere. They check each page's figure
   against that one source on the real data and through the simulated season
+- `fplteam.js` — a team from FPL, opened from one of your leagues, is laid
+  over the data by `fplOverlay` and counted by the same functions: a Game On
+  manager laid over as if he were an outsider must come out with every figure
+  his profile and Compare give him, and nothing of Game On's may move
 - everything else — one suite per file
 
 ## One figure, one source

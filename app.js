@@ -2399,7 +2399,9 @@
       // Nobody can be compared against until the reader has said who they
       // are, so send them to do that rather than opening a half-empty page.
       if (!state.me) { toast("Pick your team first"); openProfile({ edit: true }); return; }
-      state.cmpA = state.me; state.cmpB = +state.profileId;
+      state.cmpA = state.me;
+      if (state.view === "fpl" && state.fplTeam) { state.cmpB = +state.fplTeam; state.cmpExt = +state.fplTeam; }
+      else state.cmpB = +state.profileId;
       location.hash = "compare";
     });
     $("#rvToggle").addEventListener("click", function () {
@@ -2437,6 +2439,14 @@
       if (cg) { location.hash = "chips/" + cg.getAttribute("data-chipgw") + "/" + cg.getAttribute("data-chipgo"); return; }
       var tr = e.target.closest("[data-trend]");
       if (tr) { openTrend(tr.getAttribute("data-trend")); return; }
+      // a team from outside Game On opens inside the app, read from FPL, and
+      // back is wherever it was tapped
+      var tm = e.target.closest("[data-team]");
+      if (tm && +tm.getAttribute("data-team")) {
+        state.fplTeamFrom = location.hash.replace("#", "") || "fpl";
+        location.hash = "fpl/team/" + (+tm.getAttribute("data-team"));
+        return;
+      }
       var n = e.target.closest("[data-entry]");
       if (!n) {
         // Only the name cell carries the link, but a row is what people aim
@@ -2557,6 +2567,10 @@
     // only the five tabs, so it would have dropped a reader arriving from a
     // match onto Classic — which the sheet never did, being an overlay over
     // the page rather than a page of its own.
+    // Compare opened from a team in FPL goes back to that team
+    if (view === "compare" && state.view !== "compare") {
+      state.cmpFrom = /^fpl\/team\/\d+$/.test(lastHash || "") ? lastHash : null;
+    }
     if (view === "player" && state.view !== "player") {
       state.playerFrom = (state.view === "pl" && state.plMatch)
         ? "pl/" + state.plMatch.gw + "/" + state.plMatch.home + "-" + state.plMatch.away
@@ -2746,8 +2760,10 @@
     var pills = $("#barPills");
     var onProfile = state.view === "profile" && state.profileId && !!(S.dataset() || {}).managers;
     var onOther = onProfile && !isMe(state.profileId);
-    pills.style.display = onProfile ? "" : "none";
-    $("#cmpMe").style.display = onOther ? "" : "none";
+    // a team from FPL can be set against yours as a Game On profile can
+    var onTeam = state.view === "fpl" && !!state.fplTeam && !!(state.fplTeamBar && state.fplTeamBar.id === state.fplTeam);
+    pills.style.display = onProfile || onTeam ? "" : "none";
+    $("#cmpMe").style.display = onOther || onTeam ? "" : "none";
     $("#rvToggle").style.display = onOther ? "" : "none";
     $("#youPill").style.display = onProfile && !onOther ? "" : "none";
     if (onOther) paintRivalPill();
@@ -2771,6 +2787,7 @@
     if (state.view === "fpl" && state.fplTeam) { location.hash = state.fplTeamFrom || "fpl"; return; }
     // A league was opened from the list of them; back is that list.
     if (state.view === "fpl" && state.fplLeague) { location.hash = "fpl"; return; }
+    if (state.view === "compare" && state.cmpFrom) { location.hash = state.cmpFrom; return; }
     // And a player was opened from wherever he was tapped.
     if (state.view === "player" && state.playerFrom) {
       // the origin stays set until the hash sync has used it for the scroll
@@ -4201,13 +4218,6 @@
         (mode === "stale" ? " \u00b7 FPL could not be reached just now" : "") +
         (h2h ? "" : " \u00b7 GW is the week's points as FPL lists them, before transfer costs") + '</div>';
       host.innerHTML = h;
-      // a team from outside Game On opens here, read from FPL
-      $all("tr[data-team]", host).forEach(function (tr) {
-        tr.addEventListener("click", function () {
-          state.fplTeamFrom = "fpl/" + kind + "/" + id;
-          location.hash = "fpl/team/" + tr.getAttribute("data-team");
-        });
-      });
       var more = $("#flsMore", host);
       if (more) more.addEventListener("click", function () {
         more.disabled = true; more.textContent = "Fetching\u2026";
@@ -4252,50 +4262,117 @@
   }
 
   /* ---- one FPL team, inside the app --------------------------------------
-     Anyone in one of your leagues: their squad for the gameweek on the pitch,
-     drawn by exactly the rules a Game On squad is (the app's own live points,
-     captaincy, substitutions, the bench), with the gameweek's points net of
-     transfer costs, the season total and the overall rank. Two small requests
-     to FPL, the team and its picks; nothing of it is kept in the league's
-     data. Kept on the phone for the last few teams opened. */
-  var FPL_TEAM_KEY = "go12.fplTeams", FPL_TEAM_KEEP = 8;
-  var fplTeamBusy = {};
-  function fplTeamGet(key) { var all = lsGet(FPL_TEAM_KEY); return all && all[key] ? all[key] : null; }
-  function fplTeamPut(key, rec) {
+     Anyone in one of your leagues, drawn as a Game On profile's squad is:
+     the gameweek picker, the points with FPL's own average and highest beside
+     them, Points / Ownership / Value, and the squad by exactly the rules a
+     Game On squad is (the app's own live points, captaincy, substitutions,
+     the bench). Read from FPL on demand: the team and its season once, and
+     the squad of each gameweek looked at. Laid over the league's data by
+     K.fplOverlay, so its figures come from the same functions as everyone
+     else's, and it never touches a Game On figure. Kept on the phone for the
+     last few teams opened. */
+  var FPL_TEAM_KEY = "go12.fplTeam", FPL_TEAM_KEEP = 8;
+  var fplTeamBusy = {}, fplSqFail = {};
+  // the team's own record, before squads were kept a week at a time
+  try { localStorage.removeItem("go12.fplTeams"); } catch (e) {}
+  function fplTeamGet(id) { var all = lsGet(FPL_TEAM_KEY); return all && all[id] && all[id].hist ? all[id] : null; }
+  function fplTeamPut(rec) {
     var all = lsGet(FPL_TEAM_KEY); if (!all || typeof all !== "object") all = {};
-    all[key] = rec;
+    all[rec.id] = rec;
     Object.keys(all).sort(function (a, b) { return (all[b].at || 0) - (all[a].at || 0); })
       .slice(FPL_TEAM_KEEP).forEach(function (k) { delete all[k]; });
     lsSet(FPL_TEAM_KEY, all);
   }
-  function fplTeamFetch(id, gw) {
-    var key = id + "/" + gw;
+  // the record as the overlay takes it
+  function fplTeamOverlay(ds, rec) {
+    return K.fplOverlay(ds, { id: rec.id, name: rec.name, player: rec.player, at: rec.at,
+      hist: rec.hist, past: rec.past, chips: rec.chips, squads: rec.squads });
+  }
+  // A gameweek is settled once FPL has finished and checked it; a squad read
+  // after that cannot change, and is never asked for again.
+  function gwSettled(ds, gw) {
+    var ev = ((ds && ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === +gw; })[0];
+    return !!(ev && ev.finished && ev.data_checked);
+  }
+  // The team and its season: who it is, every gameweek's row, past seasons
+  // and chips. Squads already held are kept.
+  function fplTeamLoad(id) {
+    var key = id + "/season";
     if (fplTeamBusy[key]) return fplTeamBusy[key];
     var opt = { attempts: 1, timeout: 12000 };
     fplTeamBusy[key] = Promise.all([
       window.GO_API.getJSON("/entry/" + id + "/", opt),
-      window.GO_API.getJSON("/entry/" + id + "/event/" + gw + "/picks/", opt)
+      window.GO_API.getJSON("/entry/" + id + "/history/", opt)
     ]).then(function (res) {
-      var e = res[0] || {}, pk = res[1] || {};
-      if (!pk.picks || !pk.picks.length) throw new Error("no picks");
-      var eh = pk.entry_history || {};
-      var picks = pk.picks.slice().sort(function (a, b) { return (a.position || 0) - (b.position || 0); });
-      var rec = { at: Date.now(), id: +id, gw: +gw,
-        name: e.name || null, player: [e.player_first_name, e.player_last_name].filter(Boolean).join(" ") || null,
-        squad: { c: pk.active_chip || "", p: picks.map(function (x) { return [x.element, x.multiplier, x.is_captain ? 1 : 0, x.is_vice_captain ? 1 : 0]; }) },
-        hist: { p: eh.points, h: eh.event_transfers_cost || 0, b: eh.points_on_bench, t: eh.total_points, v: eh.value, bk: eh.bank,
-                r: eh.overall_rank, tr: eh.event_transfers } };
-      fplTeamPut(key, rec);
+      var e = res[0] || {}, hs = res[1] || {};
+      if (!e.id && !(hs.current && hs.current.length)) throw new Error("no team");
+      var old = fplTeamGet(id) || {};
+      var hist = {};
+      // the same row the updater keeps for a Game On manager
+      (hs.current || []).forEach(function (c) {
+        hist[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points,
+                          v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
+      });
+      var rec = { at: Date.now(), id: +id,
+        name: e.name || old.name || null,
+        player: [e.player_first_name, e.player_last_name].filter(Boolean).join(" ") || old.player || null,
+        hist: hist,
+        past: (hs.past || []).map(function (p) { return { season: p.season_name, rank: p.rank, total: p.total_points }; }),
+        chips: (hs.chips || []).map(function (c) { return { n: c.name, gw: c.event }; }),
+        squads: old.squads || {}, sqAt: old.sqAt || {}, sqFin: old.sqFin || {} };
+      fplTeamPut(rec);
       return rec;
     }).catch(function () { return null; })
       .then(function (r) { delete fplTeamBusy[key]; return r; });
     return fplTeamBusy[key];
   }
-  function renderFplTeam(host, ds, id) {
-    var gw = ds && ds.pitchGw ? +ds.pitchGw : null;
+  // One gameweek's squad, added to the kept record.
+  function fplTeamSquad(id, gw, settled) {
     var key = id + "/" + gw;
+    if (fplTeamBusy[key]) return fplTeamBusy[key];
+    fplTeamBusy[key] = window.GO_API.getJSON("/entry/" + id + "/event/" + gw + "/picks/", { attempts: 1, timeout: 12000 })
+      .then(function (pk) {
+        if (!pk || !pk.picks || !pk.picks.length) throw new Error("no picks");
+        var picks = pk.picks.slice().sort(function (a, b) { return (a.position || 0) - (b.position || 0); });
+        var rec = fplTeamGet(id);
+        if (!rec) return null;
+        rec.squads[gw] = { c: pk.active_chip || "", p: picks.map(function (x) {
+          return [x.element, x.multiplier, x.is_captain ? 1 : 0, x.is_vice_captain ? 1 : 0]; }) };
+        rec.sqAt[gw] = Date.now();
+        rec.sqFin[gw] = !!settled;
+        fplTeamPut(rec);
+        return rec;
+      }).catch(function () { return null; })
+      .then(function (r) { delete fplTeamBusy[key]; return r; });
+    return fplTeamBusy[key];
+  }
+  function fplSquadFresh(rec, gw) {
+    return !!(rec && rec.squads[gw] && (rec.sqFin[gw] || Date.now() - (rec.sqAt[gw] || 0) < FPL_FRESH_MS));
+  }
+  // The gameweeks a team has a squad in: every one it has a row for, up to
+  // the newest the league has squads for.
+  function fplTeamGws(ds, rec) {
+    var top = +ds.pitchGw;
+    var gws = Object.keys(rec.hist || {}).map(Number).filter(function (g) { return g >= 1 && g <= top; })
+      .sort(function (a, b) { return a - b; });
+    return gws.length ? gws : [top];
+  }
+  // Teams FPL names that are Game On's own open as profiles, as in a league table.
+  function teamLink(id) {
+    var ds = S.dataset(), mine = ds && K.managerMap(ds)[+id];
+    return mine ? ' data-entry="' + (+id) + '"' : ' data-team="' + (+id) + '"';
+  }
+
+  function renderFplTeam(host, ds, id) {
+    if (!ds || !ds.pitchGw) { host.innerHTML = '<div class="callout">No gameweek has squads yet.</div>'; return; }
+    var here = function () { return host.isConnected && location.hash.replace("#", "") === "fpl/team/" + id; };
+    if (state.fplTeamGwFor !== id) { state.fplTeamGwFor = id; state.fplTeamGw = null; state.fplTeamMetric = "pts"; }
+    // FPL is asked again each time the page is drawn afresh, never in a loop
+    Object.keys(fplSqFail).forEach(function (k) { if (k.indexOf(id + "/") === 0) delete fplSqFail[k]; });
+    var settledNow = function (g) { return gwSettled(ds, g); };
+
     var paint = function (rec, mode) {
-      if (!host.isConnected || location.hash.replace("#", "") !== "fpl/team/" + id) return;
+      if (!here()) return;
       if (!rec) {
         state.fplTeamBar = { name: "Team", sub: "" }; updateBanner();
         host.innerHTML = mode === "error"
@@ -4303,43 +4380,107 @@
             '<button type="button" class="btn" id="fltRetry" style="margin-top:12px">Try again</button>'
           : '<div class="callout">Fetching the team from FPL\u2026</div>';
         var rb = $("#fltRetry", host);
-        if (rb) rb.addEventListener("click", function () { paint(null, "loading"); fplTeamFetch(id, gw).then(after); });
+        if (rb) rb.addEventListener("click", function () { paint(null, "loading"); load(true); });
         return;
       }
-      state.fplTeamBar = { name: rec.name || "Team", sub: rec.player || "" }; updateBanner();
-      var pit = K.managerPitch(ds, id, gw, { squad: rec.squad, hist: rec.hist });
-      if (!pit) { host.innerHTML = '<div class="callout">FPL has no squad for this team in Gameweek ' + gw + '.</div>'; return; }
-      // the season total, live-aware as every total in the app is: FPL's
-      // figure before this week, plus this week as the cards count it
-      var h0 = rec.hist, total = h0.t;
-      if (K.liveGwId(ds) === gw && typeof h0.t === "number" && typeof h0.p === "number" && pit.net != null) {
-        total = h0.t - (h0.p - (h0.h || 0)) + pit.net;
-      }
-      var tiles = [
-        // net of the hit, as everywhere in the app; FPL's league tables list
-        // the week before it, so both figures are given and they reconcile
-        pcard("GW" + gw + " points", pit.net == null ? "\u2013" : num(pit.net),
-          pit.hits && pit.net != null ? num(pit.net + pit.hits) + " before " + num(pit.hits) + " for transfers" : (pit.live ? "live" : "")),
-        pcard("Total", total == null ? "\u2013" : num(total), "this season"),
-        pcard("Overall rank", h0.r ? num(h0.r) : "\u2013", pit.chip ? (CHIP_NAME[pit.chip] || pit.chip) + " played" : "")
-      ];
-      var h = '<div class="snapgrid" style="margin-bottom:12px">' + tiles.join("") + '</div>';
-      if (pit.provisional) {
-        h += '<div class="provnote">Includes <b>' + num(pit.provisional) + '</b> provisional bonus \u00b7 bonus and clean sheets can still change while matches are on</div>';
-      }
-      h += '<div class="card pitchcard"><div class="bd" data-bgw="' + gw + '">' + pitchHtml(pit, "pts") + '</div></div>';
-      h += '<div class="note" style="margin:14px 2px 0">Squad from FPL \u00b7 updated ' + esc(agoText(Date.now() - rec.at)) +
+      state.fplTeamBar = { name: rec.name || "Team", sub: rec.player || "", id: +id }; updateBanner();
+      var gws = fplTeamGws(ds, rec);
+      var gw = state.fplTeamGw && gws.indexOf(+state.fplTeamGw) !== -1 ? +state.fplTeamGw : gws[gws.length - 1];
+      state.fplTeamGw = gw;
+      var h = '<div class="snapgrid two" id="fltTiles" style="margin-bottom:12px">' + teamTiles(rec) + '</div>';
+      h += '<div class="card pitchcard"><div class="bd" id="fltSquad"></div></div>';
+      h += '<div class="note" style="margin:14px 2px 0">From FPL \u00b7 updated ' + esc(agoText(Date.now() - rec.at)) +
         (mode === "stale" ? " \u00b7 FPL could not be reached just now" : "") + ' \u00b7 points as the app counts them</div>';
       host.innerHTML = h;
+      mountFplPitch($("#fltSquad", host), ds, rec, gws, gw, state.fplTeamMetric);
+      // The season total counts a live week from its squad, as the table
+      // does for Game On, so that squad is read whichever week is on show.
+      var lg = K.liveGwId(ds);
+      if (lg && gws.indexOf(lg) !== -1 && +lg !== +gw && !fplSquadFresh(rec, lg) && !fplSqFail[id + "/" + lg]) {
+        fplTeamSquad(id, lg, false).then(function (r2) {
+          if (!r2) { fplSqFail[id + "/" + lg] = true; return; }
+          var t = $("#fltTiles", host);
+          if (here() && t) t.innerHTML = teamTiles(r2);
+        });
+      }
     };
-    var after = function (r) {
-      if (r) paint(r, "fresh");
-      else { var c2 = fplTeamGet(key); paint(c2, c2 ? "stale" : "error"); }
+    // Total and overall rank: the season, by the rule Compare uses
+    function teamTiles(rec) {
+      var sum = K.extSummary(fplTeamOverlay(ds, rec), id);
+      return pcard("Total", sum.total == null ? "\u2013" : num(sum.total), "this season") +
+        pcard("Overall rank", sum.rank ? num(sum.rank) : "\u2013", sum.rankGw ? "after GW" + sum.rankGw : "");
+    }
+
+    // the squad block, as mountPitch draws a profile's
+    function mountFplPitch(box, ds, rec, gws, gw, metric) {
+      if (!METRICS[metric]) metric = "pts";
+      state.fplTeamGw = gw; state.fplTeamMetric = metric;
+      var t = $("#fltTiles", host);
+      if (t) t.innerHTML = teamTiles(rec);
+      var h = '<div class="pgwline"><select class="in gwsel" id="fltGwSel" aria-label="Gameweek">' + gws.map(function (g) {
+        return '<option value="' + g + '"' + (+g === +gw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
+      }).join("") + '</select>';
+      var ov = fplTeamOverlay(ds, rec);
+      var pit = rec.squads[gw] ? K.managerPitch(ov, id, gw) : null;
+      if (pit) {
+        h += (pit.live ? ' <span class="pill live">Live</span>' : '') +
+          (pit.chip ? ' <span class="pill gold">' + esc(CHIP_NAME[pit.chip] || pit.chip) + '</span>' : '');
+      }
+      h += '</div>';
+      if (!pit) {
+        h += rec.squads[gw]
+          ? '<div class="callout">FPL has no squad for this team in Gameweek ' + gw + '.</div>'
+          : !fplSqFail[id + "/" + gw]
+            ? '<div class="callout">Fetching the Gameweek ' + gw + ' squad from FPL\u2026</div>'
+            : '<div class="callout">This squad could not be read from FPL just now.</div>' +
+              '<button type="button" class="btn" id="fltSqRetry" style="margin-top:12px">Try again</button>';
+        box.removeAttribute("data-bgw");
+        box.innerHTML = h;
+      } else {
+        h += pitchStats(pit, metric, { fpl: K.fplGwFigures(ds, gw) });
+        if (pit.provisional) {
+          h += '<div class="provnote">Includes <b>' + num(pit.provisional) +
+            '</b> provisional bonus \u00b7 bonus and clean sheets can still change while matches are on</div>';
+        }
+        h += '<div class="psegrow"><div class="pseg sm">' + Object.keys(METRICS).map(function (k) {
+          return '<button type="button"' + (metric === k ? ' class="on"' : '') + ' data-metric="' + k + '">' + esc(METRICS[k]) + '</button>';
+        }).join("") + '</div></div>';
+        box.setAttribute("data-bgw", gw);
+        box.innerHTML = h + pitchHtml(pit, metric);
+        $(".psegrow", box).addEventListener("click", function (e) {
+          var b = e.target.closest("button[data-metric]");
+          if (b) mountFplPitch(box, ds, rec, gws, gw, b.getAttribute("data-metric"));
+        });
+      }
+      $("#fltGwSel", box).addEventListener("change", function () {
+        mountFplPitch(box, ds, fplTeamGet(id) || rec, gws, +this.value, metric);
+      });
+      var sr = $("#fltSqRetry", box);
+      if (sr) sr.addEventListener("click", function () { delete fplSqFail[id + "/" + gw]; mountFplPitch(box, ds, rec, gws, gw, metric); });
+      if (!fplSquadFresh(rec, gw) && !fplSqFail[id + "/" + gw]) {
+        // asked once however often this is drawn while the answer is awaited
+        fplTeamSquad(id, gw, settledNow(gw)).then(function (r2) {
+          var nb = $("#fltSquad", host);
+          if (!here() || !nb || +state.fplTeamGw !== +gw) return;
+          var cur = r2 || fplTeamGet(id) || rec;
+          // a failure with nothing held says so; one with an older squad keeps it
+          if (!r2) { fplSqFail[id + "/" + gw] = true; if (cur.squads[gw]) return; }
+          mountFplPitch(nb, ds, cur, fplTeamGws(ds, cur), gw, state.fplTeamMetric);
+        });
+      }
+    }
+
+    var load = function (force) {
+      var cached = fplTeamGet(id);
+      if (!force && cached && Date.now() - cached.at < FPL_FRESH_MS) return;
+      fplTeamLoad(id).then(function (r) {
+        if (r) paint(r, "fresh");
+        else { var c2 = fplTeamGet(id); paint(c2, c2 ? "stale" : "error"); }
+      });
     };
-    if (!gw) { host.innerHTML = '<div class="callout">No gameweek has squads yet.</div>'; return; }
-    var cached = fplTeamGet(key);
+    var cached = fplTeamGet(id);
     paint(cached, cached ? "fresh" : "loading");
-    if (!cached || Date.now() - cached.at >= FPL_FRESH_MS) fplTeamFetch(id, gw).then(after);
+    load(false);
   }
 
   function renderFpl(host, ds) {
@@ -4703,14 +4844,18 @@
   // The whole squad block: gameweek picker, the three stats, Pitch/List and the
   // squad itself. Re-rendered in place whenever the gameweek or mode changes.
   // The three stats above a squad change with the metric being shown.
-  function pitchStats(pit, metric) {
-    var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null, midSub = "";
+  // A team from FPL (opts.fpl) sets its week beside FPL's own average and
+  // highest, as FPL's points page does; the league figures under the other
+  // two metrics are Game On's, and say so.
+  function pitchStats(pit, metric, opts) {
+    var fpl = opts && opts.fpl;
+    var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null, midSub = "", hiAttr = "";
     if (metric === "eo") {
-      leftLabel = "League avg"; left = pit.leagueAvgEo + "%";
+      leftLabel = fpl ? "Game On avg" : "League avg"; left = pit.leagueAvgEo + "%";
       midLabel = "Average EO"; mid = pit.avgEo + "%";
       rightLabel = "Most owned"; right = pit.topEo + "%";
     } else if (metric === "val") {
-      leftLabel = "League avg"; left = mval(pit.leagueAvgValue);
+      leftLabel = fpl ? "Game On avg" : "League avg"; left = mval(pit.leagueAvgValue);
       midLabel = "Squad value"; mid = mval(pit.squadValue);
       // what the squad would fetch today — FPL keeps half of every rise
       if (pit.sellValue != null && pit.sellValue !== pit.squadValue) {
@@ -4724,9 +4869,17 @@
       rightLabel = 'Highest <span class="arw">›</span>';
       right = pit.highest ? num(pit.highest.pts) : "—";
       hiId = pit.highest ? pit.highest.id : null;
+      if (hiId) hiAttr = ' data-entry="' + hiId + '"';
+      if (fpl) {
+        leftLabel = "FPL average"; left = fpl.average === null ? "—" : num(fpl.average);
+        rightLabel = "FPL highest" + (fpl.highestEntry ? ' <span class="arw">›</span>' : '');
+        right = fpl.highest === null ? "—" : num(fpl.highest);
+        hiId = fpl.highestEntry;
+        hiAttr = hiId ? teamLink(hiId) : "";
+      }
     }
     var rightOpen = hiId
-      ? '<div class="pstat hi" data-entry="' + hiId + '" role="button" tabindex="0">'
+      ? '<div class="pstat hi"' + hiAttr + ' role="button" tabindex="0">'
       : '<div class="pstat">';
     return '<div class="pstats' + (metric === "val" ? ' money' : '') + '">' +
       '<div class="pstat"><div class="v">' + esc(left) + '</div><div class="l">' + leftLabel + '</div></div>' +
@@ -6958,6 +7111,10 @@
     // Nobody is compared with himself: whoever the first side ends up being,
     // the second has to be somebody else.
     if (state.cmpB && +state.cmpB === +state.cmpA) state.cmpB = null;
+    // The second side can be a team from FPL, opened from one of your
+    // leagues; it stays until a Game On manager is chosen in its place.
+    var ext = cmpExtRec(ds);
+    if (state.cmpB && !ext && !K.managerMap(ds)[+state.cmpB]) state.cmpB = null;
     if (!state.cmpB) {
       var other = byRank.filter(function (m) { return +m.id !== +state.cmpA; })[0];
       state.cmpB = other && other.id;
@@ -6968,6 +7125,7 @@
     // by a shared datalist rather than dropdowns.
     function field(idAttr, chosen) {
       var cur = mgrs.filter(function (m) { return +m.id === +chosen; })[0];
+      if (!cur && ext && idAttr === "cmpB") cur = { entryName: ext.name || "Team", playerName: ext.player || "" };
       return '<input class="in mgrin" id="' + idAttr + '" list="mgrOpts" autocomplete="off" ' +
         'spellcheck="false" placeholder="Type a team or manager" value="' +
         esc(cur ? mgrLabel(cur) : "") + '">';
@@ -7001,13 +7159,40 @@
     drawCompare(ds);
   }
 
+  // The FPL team on Compare's second side, while it is the one chosen.
+  function cmpExtRec(ds) {
+    if (!state.cmpExt || +state.cmpB !== +state.cmpExt) return null;
+    if (ds && K.managerMap(ds)[+state.cmpExt]) return null;
+    return fplTeamGet(state.cmpExt);
+  }
   function drawCompare(ds) {
     var box = $("#cmpBox");
     if (!box) return;
     var gws = K.squadGws(ds);
-    var R = K.compare(ds, state.cmpA, state.cmpB, state.cmpGw);
+    // A team from FPL is laid over the data for this page alone: its figures
+    // by the same functions as a Game On manager's, Game On's own untouched.
+    var ext = cmpExtRec(ds);
+    var dsC = ext ? fplTeamOverlay(ds, ext) : ds;
+    var R = K.compare(dsC, state.cmpA, state.cmpB, state.cmpGw);
     if (!R) { box.innerHTML = '<div class="callout">Pick two managers.</div>'; return; }
     var a = R.a, b = R.b;
+    var extWait = false;
+    if (ext) {
+      var redraw = function (gwWas) {
+        return function (r) {
+          if (r && state.view === "compare" && cmpExtRec(S.dataset()) && +state.cmpGw === +gwWas) drawCompare(S.dataset());
+        };
+      };
+      var fk = ext.id + "/" + R.gw;
+      if (!fplSquadFresh(ext, R.gw) && !fplSqFail[fk]) {
+        extWait = !ext.squads[R.gw];
+        fplTeamSquad(ext.id, R.gw, gwSettled(ds, R.gw)).then(function (r) {
+          if (!r) { fplSqFail[fk] = true; if (state.view === "compare" && +state.cmpGw === +R.gw && !ext.squads[R.gw]) drawCompare(S.dataset()); return; }
+          redraw(R.gw)(r);
+        });
+      }
+      if (Date.now() - ext.at >= FPL_FRESH_MS && !fplTeamBusy[ext.id + "/season"]) fplTeamLoad(ext.id).then(redraw(R.gw));
+    }
 
     var h = '<div class="card"><div class="bd">';
     h += '<div class="pgwline"><select class="in gwsel" id="cmpGwSel" aria-label="Gameweek">' +
@@ -7019,7 +7204,7 @@
       '<div class="side"><div class="nm" data-entry="' + a.id + '">' + esc(a.name) + '</div>' +
         '<div class="sc' + (a.gwPts > b.gwPts ? ' win' : '') + '">' + (a.gwPts === null ? "—" : num(a.gwPts)) + '</div></div>' +
       '<div class="mid">GW' + R.gw + '</div>' +
-      '<div class="side"><div class="nm" data-entry="' + b.id + '">' + esc(b.name) + '</div>' +
+      '<div class="side"><div class="nm"' + (b.ext ? ' data-team="' : ' data-entry="') + b.id + '">' + esc(b.name) + '</div>' +
         '<div class="sc' + (b.gwPts > a.gwPts ? ' win' : '') + '">' + (b.gwPts === null ? "—" : num(b.gwPts)) + '</div></div>' +
       '</div>';
 
@@ -7034,7 +7219,8 @@
     }
     h += '<div class="cmppitch">' +
       '<div class="col">' + chipTag(a) + (a.pitch ? pitchHtml(a.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
-      '<div class="col">' + chipTag(b) + (b.pitch ? pitchHtml(b.pitch, cm) : '<div class="callout">No squad</div>') + '</div>' +
+      '<div class="col">' + chipTag(b) + (b.pitch ? pitchHtml(b.pitch, cm)
+        : '<div class="callout">' + (extWait ? 'Fetching the squad from FPL\u2026' : 'No squad') + '</div>') + '</div>' +
       '</div></div></div>';
 
     /* ---- this season ---- */
@@ -7043,7 +7229,10 @@
       '<th class="num">' + esc(a.name) + '</th><th class="cmid"></th><th class="num">' + esc(b.name) + '</th>' +
       '</tr></thead><tbody>';
     h += cmpRow("Season total", a.total, b.total);
-    h += cmpRow("League position", a.rank || null, b.rank || null, "", true);
+    // a team from FPL has no place in Game On's table; FPL's overall rank
+    // is the standing both have
+    if (b.ext) h += cmpRow("Overall rank", a.overallRank || null, b.overallRank || null, "FPL \u00b7 lower is better", true);
+    else h += cmpRow("League position", a.rank || null, b.rank || null, "", true);
     h += cmpRow("Gameweeks won", R.record.w, R.record.l, R.record.d ? (R.record.d + " drawn") : "");
     h += cmpRow("Best gameweek", a.best ? a.best.p : null, b.best ? b.best.p : null,
       (a.best && b.best) ? ("GW" + a.best.gw + " vs GW" + b.best.gw) : "");
@@ -7054,11 +7243,16 @@
     var ac = a.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
     var bc = b.chips.map(function (c) { return (CHIP_NAME[c.chip] || c.chip) + " (GW" + c.gw + ")"; }).join(", ");
     h += cmpRow("Chips played", ac || "none", bc || "none");
-    h += cmpRow("Badges", badgeText(ds, a.id), badgeText(ds, b.id));
+    if (!b.ext) h += cmpRow("Badges", badgeText(ds, a.id), badgeText(ds, b.id));
     h += '</tbody></table></div></div>';
 
     /* ---- the season side by side: points a week, and where each stood ---- */
-    var fa = K.form(ds, a.id), fb = K.form(ds, b.id);
+    var fa = K.form(dsC, a.id), fb = K.form(dsC, b.id);
+    // league position means Game On's table, which only one of them is in
+    if (b.ext) {
+      var noRank = function (p) { return { gw: p.gw, p: p.p, r: null, of: 0 }; };
+      fa = fa.map(noRank); fb = fb.map(noRank);
+    }
     if (fa.length && fb.length) {
       h += '<div class="section-title"><h2>Form</h2><div class="rule"></div></div>';
       h += '<div class="card"><div class="bd" id="cmpForm">' +

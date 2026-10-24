@@ -256,34 +256,102 @@ const ENTRY = { id: ME, name: meName, leagues: {
     const H = require(GOENV.APP + "/tests/audit/harness.js").loadCompute();
     const gwNow = H.ds.pitchGw, donor = H.ds.managers.find((m) => H.ds.picks[gwNow] && H.ds.picks[gwNow][m.id]).id;
     const dsq = H.ds.picks[gwNow][donor], dh = H.ds.history[donor][gwNow];
-    const PICKS = { active_chip: dsq.c || null, automatic_subs: [],
-      entry_history: { event: gwNow, points: dh.p, total_points: dh.t, rank: 1, overall_rank: 123456, bank: dh.bk, value: dh.v, event_transfers: 2, event_transfers_cost: 4, points_on_bench: dh.b },
-      picks: dsq.p.map((t, i) => ({ element: t[0], position: i + 1, multiplier: t[1], is_captain: !!t[2], is_vice_captain: !!t[3] })) };
+    const ENTRY4 = { id: 9000004, name: "Team 4", player_first_name: "Manager", player_last_name: "Four" };
+    // the donor's own season, as FPL's history would give it, with a hit and
+    // an overall rank of its own in the newest week
+    const hrows = Object.keys(H.ds.history[donor]).map(Number).filter((g) => g <= gwNow).sort((x, y) => x - y);
+    const HIST = { current: hrows.map((g) => { const r = H.ds.history[donor][g];
+        return { event: g, points: r.p, total_points: r.t, rank: 1, overall_rank: g === gwNow ? 123456 : (r.r || 1), bank: r.bk, value: r.v,
+          event_transfers: r.tr || 0, event_transfers_cost: g === gwNow ? 4 : (r.h || 0), points_on_bench: r.b }; }),
+      past: [{ season_name: "2019/20", total_points: 2100, rank: 54321 }], chips: (H.ds.chips[donor] || []).map((c) => ({ name: c.n, event: c.gw })) };
+    const picksFor = (g) => { const q = (H.ds.picks[g] || {})[donor] || dsq;
+      return { active_chip: q.c || null, automatic_subs: [], entry_history: { event: g },
+        picks: q.p.map((t, i) => ({ element: t[0], position: i + 1, multiplier: t[1], is_captain: !!t[2], is_vice_captain: !!t[3] })) }; };
     let teamDown = false;
     await p.route((u) => /entry(%2F|\/)900000[0-9](%2F|\/)/.test(u.toString()) || /entry\/900000[0-9]\//.test(decodeURIComponent(u.toString())), (route) => {
       const d = decodeURIComponent(route.request().url()); teamReq.push(d.replace(/^.*\/api/, ""));
       if (teamDown) return route.fulfill({ status: 503, body: "down" });
-      if (/\/picks\//.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(PICKS) });
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ id: 9000004, name: "Team 4", player_first_name: "Manager", player_last_name: "Four" }) });
+      const pm = /\/event\/(\d+)\/picks\//.exec(d);
+      if (pm) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(picksFor(+pm[1])) });
+      if (/\/history\//.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(HIST) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ENTRY4) });
     });
     await p.evaluate(() => document.querySelector('table.flstand tr[data-team="9000004"]').click());
     await p.waitForSelector('section.view[data-view="fpl"] .pitchcard .pcard', { timeout: 20000 }).catch(() => {});
-    const tm = await p.evaluate(() => {
+    const readTeam = () => p.evaluate(() => {
       const host = document.querySelector('section.view[data-view="fpl"]');
       const tiles = {}; host.querySelectorAll(".snapgrid .pc").forEach((pc) => { tiles[pc.querySelector(".pcl").textContent] = { v: pc.querySelector(".pcv").textContent, s: (pc.querySelector(".pcs") || {}).textContent || "" }; });
+      const st = [...host.querySelectorAll(".pstats .pstat")].map((x) => ({ v: x.querySelector(".v").textContent, l: x.querySelector(".l").textContent.replace(/\s+/g, " ").trim(),
+        team: x.getAttribute("data-team"), entry: x.getAttribute("data-entry") }));
+      const sel = host.querySelector("#fltGwSel");
       return { hash: location.hash, title: document.querySelector("#barTitle").textContent, sub: document.querySelector("#barSub").textContent,
-        cards: host.querySelectorAll(".pitchcard .pcard[data-el]").length, tiles, wide: document.documentElement.scrollWidth > innerWidth + 1 };
+        cards: host.querySelectorAll(".pitchcard .pcard[data-el]").length, tiles, st, bgw: (host.querySelector("[data-bgw]") || { getAttribute: () => null }).getAttribute("data-bgw"),
+        gws: sel ? [...sel.options].map((o) => +o.value) : [], gw: sel ? +sel.value : null,
+        metric: (host.querySelector(".pseg button.on") || {}).textContent || "",
+        cmp: getComputedStyle(document.querySelector("#cmpMe")).display !== "none" && getComputedStyle(document.querySelector("#barPills")).display !== "none",
+        rival: getComputedStyle(document.querySelector("#rvToggle")).display !== "none",
+        wide: document.documentElement.scrollWidth > innerWidth + 1 };
     });
+    let tm = await readTeam();
     chk(tm.hash === "#fpl/team/9000004", "tapping someone in a league opens their team in the app", tm.hash);
     chk(tm.title === "Team 4" && tm.sub === "Manager Four", "the bar names the team and its manager", tm.title + " / " + tm.sub);
-    chk(tm.cards === 15, "all fifteen on the pitch", tm.cards);
-    const extPit = H.C.managerPitch(H.ds, 9000004, gwNow, { squad: { c: dsq.c || "", p: dsq.p.map((t) => [t[0], t[1], t[2] ? 1 : 0, t[3] ? 1 : 0]) },
-      hist: { p: dh.p, h: 4, b: dh.b, t: dh.t, v: dh.v, bk: dh.bk, r: 123456 } });
-    const gwTile = tm.tiles["GW" + gwNow + " points"] || {};
-    chk(gwTile.v === (extPit.net == null ? "\u2013" : extPit.net.toLocaleString("en-GB")), "the week's points are net of the hit, by the app's own rule", JSON.stringify(gwTile) + " vs " + extPit.net);
-    chk(extPit.net == null || /before 4 for transfers/.test(gwTile.s), "and FPL's before-hits figure is given, so it reconciles with the table", gwTile.s);
-    chk((tm.tiles["Overall rank"] || {}).v === "123,456" && !tm.wide, "overall rank, and it fits the phone", JSON.stringify(tm.tiles["Overall rank"]));
-    chk(teamReq.length === 2, "two small requests: the team and its picks", JSON.stringify(teamReq));
+    chk(tm.cards === 15 && +tm.bgw === gwNow && tm.gw === gwNow, "all fifteen on the pitch, newest gameweek first", tm.cards + " / GW" + tm.gw);
+    chk(JSON.stringify(tm.gws) === JSON.stringify(hrows), "the gameweek picker offers every week the team has played", tm.gws.join(","));
+    // the figures, by the app's own functions over the same overlay
+    const toHist = {}; HIST.current.forEach((c) => { toHist[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points, v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 }; });
+    const sqOf = (g) => { const q = picksFor(g); return { c: q.active_chip || "", p: q.picks.map((x) => [x.element, x.multiplier, x.is_captain ? 1 : 0, x.is_vice_captain ? 1 : 0]) }; };
+    const ovOf = (gs) => { const sq = {}; gs.forEach((g) => { sq[g] = sqOf(g); }); return H.C.fplOverlay(H.ds, { id: 9000004, name: "Team 4", player: "Manager Four", at: 1, hist: toHist, past: [], chips: [], squads: sq }); };
+    let ov = ovOf([gwNow]);
+    const pit = H.C.managerPitch(ov, 9000004, gwNow), sum = H.C.extSummary(ov, 9000004), fg = H.C.fplGwFigures(H.ds, gwNow);
+    const nf = (v) => v == null ? "—" : v.toLocaleString("en-GB");
+    chk(tm.st.length === 3 && tm.st[0].l === "FPL average" && tm.st[0].v === nf(fg.average), "beside the points: FPL's average for the week", JSON.stringify(tm.st[0]) + " vs " + fg.average);
+    chk(tm.st[1].v === nf(pit.net) && /^Total Pts\s*−4$/.test(tm.st[1].l), "the week's points net of the hit, the hit shown", JSON.stringify(tm.st[1]) + " vs " + pit.net);
+    chk(/^FPL highest/.test(tm.st[2].l) && tm.st[2].v === nf(fg.highest), "and FPL's highest", JSON.stringify(tm.st[2]));
+    chk((tm.tiles.Total || {}).v === nf(sum.total), "the season total, by the rule Compare uses", JSON.stringify(tm.tiles.Total) + " vs " + sum.total);
+    chk((tm.tiles["Overall rank"] || {}).v === "123,456" && (tm.tiles["Overall rank"] || {}).s === "after GW" + gwNow && !tm.wide, "overall rank, and it fits the phone", JSON.stringify(tm.tiles["Overall rank"]));
+    chk(tm.cmp && !tm.rival, "the bar offers Compare, as a profile does", tm.cmp + "/" + tm.rival);
+    chk(teamReq.length === 3, "three small requests: the team, its season and the week's squad", JSON.stringify(teamReq));
+    // Ownership and Value, as on a profile
+    await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="fpl"] .pseg button')].find((x) => x.getAttribute("data-metric") === "eo").click());
+    tm = await readTeam();
+    chk(tm.metric === "Ownership" && tm.st[0].l === "Game On avg" && tm.st[0].v === pit.leagueAvgEo + "%" && tm.st[1].v === pit.avgEo + "%", "Ownership: Game On's, and labelled so", JSON.stringify(tm.st));
+    await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="fpl"] .pseg button')].find((x) => x.getAttribute("data-metric") === "pts").click());
+    // an earlier week: one more request, and its own squad
+    const gPrev = hrows.length > 1 ? hrows[hrows.length - 2] : null;
+    if (gPrev) {
+      const n0 = teamReq.length;
+      await p.selectOption("#fltGwSel", String(gPrev));
+      await p.waitForFunction((g) => { const b2 = document.querySelector('section.view[data-view="fpl"] [data-bgw]'); return b2 && +b2.getAttribute("data-bgw") === g; }, gPrev, { timeout: 15000 }).catch(() => {});
+      tm = await readTeam();
+      ov = ovOf([gwNow, gPrev]);
+      const pp = H.C.managerPitch(ov, 9000004, gPrev), fp = H.C.fplGwFigures(H.ds, gPrev);
+      chk(tm.cards === 15 && tm.gw === gPrev && teamReq.length === n0 + 1 && /\/event\/\d+\/picks\//.test(teamReq[teamReq.length - 1]), "an earlier week: one request, and that week's squad", tm.gw + " / " + (teamReq.length - n0));
+      chk(tm.st[1].v === nf(pp.net) && tm.st[0].v === nf(fp.average), "with that week's points and FPL's average for it", JSON.stringify(tm.st) + " vs " + pp.net + "/" + fp.average);
+      await p.selectOption("#fltGwSel", String(gwNow)); await p.waitForTimeout(300);
+      chk(teamReq.length === n0 + 1, "going back to a week already read asks nothing", teamReq.length - n0);
+    }
+    // Compare with you
+    await p.evaluate(() => document.querySelector("#cmpMe").click());
+    await p.waitForSelector("#cmpBox .cmphead", { timeout: 15000 }).catch(() => {});
+    await p.waitForFunction(() => document.querySelectorAll("#cmpBox .cmppitch .col")[1] && document.querySelectorAll("#cmpBox .cmppitch .col")[1].querySelectorAll(".pcard[data-el]").length === 15, null, { timeout: 15000 }).catch(() => {});
+    const cmp = await p.evaluate(() => ({ hash: location.hash, a: document.querySelector("#cmpA").value, b: document.querySelector("#cmpB").value,
+      names: [...document.querySelectorAll("#cmpBox .cmphead .nm")].map((n) => ({ t: n.textContent, team: n.getAttribute("data-team"), entry: n.getAttribute("data-entry") })),
+      scores: [...document.querySelectorAll("#cmpBox .cmphead .sc")].map((n) => n.textContent),
+      rows: [...document.querySelectorAll("#cmpBox table.cmptable:not(.seasons) tbody tr")].map((r) => [...r.children].map((c) => c.firstChild ? c.firstChild.textContent : "")),
+      bcards: document.querySelectorAll("#cmpBox .cmppitch .col")[1] ? document.querySelectorAll("#cmpBox .cmppitch .col")[1].querySelectorAll(".pcard[data-el]").length : 0,
+      wide: document.documentElement.scrollWidth > innerWidth + 1 }));
+    const R = H.C.compare(ovOf(gPrev ? [gwNow, gPrev] : [gwNow]), ME, 9000004, gwNow);
+    const label = (n) => (cmp.rows.find((r) => r[1] === n) || []);
+    chk(cmp.hash === "#compare" && cmp.b === "Team 4 — Manager Four" && cmp.a.indexOf(meName) === 0, "Compare opens with you against the team", cmp.a + " vs " + cmp.b);
+    chk(cmp.names[1] && cmp.names[1].team === "9000004" && !cmp.names[1].entry, "its name opens it from FPL, not as a Game On profile", JSON.stringify(cmp.names[1]));
+    chk(cmp.scores[1] === nf(R.b.gwPts) && cmp.scores[0] === nf(R.a.gwPts), "the week's points on both sides, by the same rule", cmp.scores.join(" v ") + " vs " + R.a.gwPts + " v " + R.b.gwPts);
+    chk(cmp.bcards === 15, "its squad on the pitch beside yours", cmp.bcards);
+    chk(label("Season total")[2] === nf(R.b.total) && R.b.total === sum.total, "its season total is the team page's", JSON.stringify(label("Season total")) + " vs " + R.b.total);
+    chk(label("Overall rank")[2] === "123,456" && !label("League position").length, "FPL's overall rank in place of a Game On position it does not have", JSON.stringify(label("Overall rank")));
+    chk(!label("Badges").length && !cmp.wide, "no Game On badges claimed for it, and it fits the phone");
+    await p.evaluate(() => document.querySelector("#barBack").click()); await p.waitForTimeout(500);
+    chk(await p.evaluate(() => location.hash) === "#fpl/team/9000004", "back from Compare is the team it was opened from", await p.evaluate(() => location.hash));
+    await p.waitForSelector('section.view[data-view="fpl"] .pitchcard .pcard', { timeout: 5000 }).catch(() => {});
     await p.evaluate(() => document.querySelector('section.view[data-view="fpl"] .pitchcard .pcard[data-el]').click()); await p.waitForTimeout(500);
     chk(/^#player\/\d+\/\d+$/.test(await p.evaluate(() => location.hash)), "a player on the pitch opens his page", await p.evaluate(() => location.hash));
     await p.goBack(); await p.waitForTimeout(500);
@@ -333,6 +401,59 @@ const ENTRY = { id: ME, name: meName, leagues: {
     chk(d2.labels.indexOf("Your place") !== -1 && /34,402nd/.test(d2.sub), "a league opened straight from a link still finds your place", JSON.stringify(d2));
     chk(!errs2.length, "no JS errors", errs2.join(" | "));
     await ctx2.close();
+  }
+
+  // 5. FPL's highest scorer of a finished week opens: an outside team from
+  // FPL, a Game On manager as his profile; and back returns to the team
+  {
+    const H = require(GOENV.APP + "/tests/audit/harness.js").loadCompute();
+    const done = H.ds.bootstrap.events.filter((e) => e.finished && e.id <= H.ds.pitchGw).map((e) => e.id);
+    const gA = done[done.length - 1], gB = done[done.length - 2];
+    const ours = H.ds.managers[3].id;
+    const raw = JSON.parse(fs.readFileSync(path.join(APP, "data.json"), "utf8"));
+    raw.dataset.bootstrap.events.forEach((e) => {
+      if (e.id === gA) { e.highest = 131; e.highestEntry = 9000005; }
+      if (e.id === gB) { e.highest = 127; e.highestEntry = ours; }
+      if (!e.finished) { e.highest = 77; e.highestEntry = 9000006; }   // a week still on: not shown
+    });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
+    await ctx.addInitScript(({ me }) => { try { localStorage.setItem("go12.me", String(me)); localStorage.setItem("go12.theo", "off"); } catch (e) {} }, { me: ME });
+    const p = await ctx.newPage(); const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.route(/data\.json/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(raw) }));
+    const donor = H.ds.managers.find((m) => H.ds.picks[gA] && H.ds.picks[gA][m.id] && H.ds.history[m.id][gB]).id;
+    await p.route((u) => /fantasy/.test(decodeURIComponent(u.toString())), (route) => {
+      const d = decodeURIComponent(route.request().url()), id = +((/entry\/(\d+)\//.exec(d) || [])[1]);
+      const pm = /\/event\/(\d+)\/picks\//.exec(d);
+      if (pm) { const q = (H.ds.picks[+pm[1]] || {})[donor] || H.ds.picks[gA][donor];
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ active_chip: q.c || null, picks: q.p.map((t, i) => ({ element: t[0], position: i + 1, multiplier: t[1], is_captain: !!t[2], is_vice_captain: !!t[3] })) }) }); }
+      if (/\/history\//.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ current: Object.keys(H.ds.history[donor]).map(Number).filter((g) => g <= H.ds.pitchGw).map((g) => { const r = H.ds.history[donor][g];
+        return { event: g, points: r.p, total_points: r.t, overall_rank: r.r || 1, bank: r.bk, value: r.v, event_transfers: r.tr || 0, event_transfers_cost: r.h || 0, points_on_bench: r.b }; }), past: [], chips: [] }) });
+      if (/entry\/\d+\/$/.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(id === ME ? ENTRY : { id, name: "Team " + (id % 10), player_first_name: "Manager", player_last_name: String(id % 10) }) });
+      return route.abort();
+    });
+    await p.goto("http://127.0.0.1:" + PORT + "/index.html#fpl/team/9000004", { waitUntil: "domcontentloaded" });
+    const hi = async (g) => {
+      if (g) { await p.waitForSelector("#fltGwSel", { timeout: 20000 }).catch(() => {}); await p.selectOption("#fltGwSel", String(g));
+        await p.waitForFunction((x) => { const b2 = document.querySelector('section.view[data-view="fpl"] [data-bgw]'); return b2 && +b2.getAttribute("data-bgw") === x; }, g, { timeout: 15000 }).catch(() => {}); }
+      else await p.waitForSelector('section.view[data-view="fpl"] .pstats', { timeout: 20000 }).catch(() => {});
+      return p.evaluate(() => { const x = [...document.querySelectorAll('section.view[data-view="fpl"] .pstats .pstat')][2];
+        return x ? { v: x.querySelector(".v").textContent, l: x.querySelector(".l").textContent, team: x.getAttribute("data-team"), entry: x.getAttribute("data-entry") } : null; });
+    };
+    let x = await hi(null);
+    chk(x && x.v === "—" && !x.team && !x.entry, "a week still being played shows no FPL highest, and links nowhere", JSON.stringify(x));
+    x = await hi(gA);
+    chk(x && x.v === "131" && x.team === "9000005" && /›/.test(x.l), "a finished week: FPL's highest, linked to that team", JSON.stringify(x));
+    await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="fpl"] .pstats .pstat')][2].click());
+    await p.waitForFunction(() => location.hash === "#fpl/team/9000005", null, { timeout: 5000 }).catch(() => {});
+    chk(await p.evaluate(() => location.hash) === "#fpl/team/9000005", "tapping it opens that team", await p.evaluate(() => location.hash));
+    await p.waitForSelector('section.view[data-view="fpl"] .pitchcard .pcard', { timeout: 20000 }).catch(() => {});
+    await p.evaluate(() => document.querySelector("#barBack").click()); await p.waitForTimeout(500);
+    chk(await p.evaluate(() => location.hash) === "#fpl/team/9000004", "and back is the team it was tapped on", await p.evaluate(() => location.hash));
+    x = await hi(gB);
+    chk(x && x.v === "127" && x.entry === String(ours) && !x.team, "a Game On manager at the top opens as his profile", JSON.stringify(x));
+    chk(!errs.length, "no JS errors", errs.join(" | "));
+    await ctx.close();
   }
 
   await b.close(); srv.close();
