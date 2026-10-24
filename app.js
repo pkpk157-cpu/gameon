@@ -3151,15 +3151,14 @@
       (icon ? '<span class="wmark ' + (tone || "") + '">' + sicon(icon) + '</span>' : '') + esc(label) + '</div></div>';
   }
 
-  // Each manager's place in the Classic, as the Classic tab prints it: the
-  // live-aware table, joint places marked the same way.
+  // Each manager's place in the Classic: the live-aware table the Classic
+  // tab prints. Just the number here; the Classic tab is where a joint
+  // place is marked as one.
   function classicRankCell(cr, id) {
     var c = cr[id];
-    if (!c) return '<td class="num c-cl"><span class="note">—</span></td>';
+    if (!c) return '<td class="num c-cl"><span class="note">\u2014</span></td>';
     var rc = c.computedRank <= 3 ? "rk" + c.computedRank : "";
-    var eq = c.tiedWith > 1
-      ? '<span class="jt" title="Level with ' + (c.tiedWith - 1) + ' other' + (c.tiedWith > 2 ? 's' : '') + ' in the Classic">=</span>' : '';
-    return '<td class="num c-cl"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + c.computedRank + '</span></span></td>';
+    return '<td class="num c-cl"><span class="r ' + rc + '">' + c.computedRank + '</span></td>';
   }
   function lmsGwTable(g, opts) {
     if (!g) return '';
