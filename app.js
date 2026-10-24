@@ -1295,11 +1295,13 @@
       COLS.map(function (c) {
         return '<th class="num c-' + c[0] + '" aria-label="' + esc(c[1]) + '">' + esc(c[2]) + '</th>';
       }).join("") + '<th class="num c-l5" aria-label="Last five results">Last 5</th></tr></thead><tbody>';
-    t.rows.forEach(function (r) {
+    t.rows.forEach(function (r, i) {
       // Three go down, which is fixed; four is the smallest number of European
       // places, which is not — so the band marks where a club sits and leaves
-      // the prize to the caption.
-      var band = r.pos <= 4 ? " top" : (r.pos > t.teams - 3 ? " drop" : "");
+      // the prize to the caption. It goes by row, not by the place printed:
+      // two clubs level on everything share a place, and the bottom three
+      // rows are still the three going down.
+      var band = i < 4 ? " top" : (i >= t.teams - 3 ? " drop" : "");
       h += '<tr class="plrow' + band + '"><td class="pos">' + r.pos + '</td>' +
         '<td class="name"><span class="who">' + crest(r.team) + esc(r.name) + '</span></td>' +
         COLS.map(function (c) {
