@@ -3119,7 +3119,7 @@
           'Nobody here has been eliminated: ' +
           esc(u.managers.map(function (m) { return m.name; }).join(", ")) + '.</div>';
       }
-      panel.innerHTML = note + lmsGwTable(o.week, { live: o.live });
+      panel.innerHTML = note + lmsGwTable(o.week, { live: o.live, ds: ds });
       filterRows(panel, $("#lmsSearch", host).value);
     };
     $("#lmsGwSel", host).addEventListener("change", function () { state.lmsGw = this.value; drawLms(); });
@@ -3143,21 +3143,33 @@
       (icon ? '<span class="wmark ' + (tone || "") + '">' + sicon(icon) + '</span>' : '') + esc(label) + '</div></div>';
   }
 
+  // Each manager's place in the Classic, as the Classic tab prints it: the
+  // live-aware table, joint places marked the same way.
+  function classicRankCell(cr, id) {
+    var c = cr[id];
+    if (!c) return '<td class="num c-cl"><span class="note">—</span></td>';
+    var rc = c.computedRank <= 3 ? "rk" + c.computedRank : "";
+    var eq = c.tiedWith > 1
+      ? '<span class="jt" title="Level with ' + (c.tiedWith - 1) + ' other' + (c.tiedWith > 2 ? 's' : '') + ' in the Classic">=</span>' : '';
+    return '<td class="num c-cl"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + c.computedRank + '</span></span></td>';
+  }
   function lmsGwTable(g, opts) {
     if (!g) return '';
     opts = opts || {};
+    var cr = {};
+    K.classic(opts.ds || S.dataset()).forEach(function (c) { cr[c.id] = c; });
     var rows = (g.table || []).map(function (r) {
       var red = r.eliminated || r.atRisk;
       var nameCls = red ? "who out-name" : "who";
       var played = (r.played == null) ? '<span class="note">—</span>' : (r.played + '/' + (r.playedTotal || 12));
-      return '<tr class="' + (red ? "gone" : "") + (isMe(r.id) ? " me" : "") + '">' +
+      return '<tr class="' + (red ? "gone" : "") + (isMe(r.id) ? " me" : "") + '">' + classicRankCell(cr, r.id) +
         '<td class="name" data-entry="' + r.id + '"><span class="' + nameCls + '">' + esc(r.name) + '</span><div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td>' +
         '<td class="num">' + played + '</td>' +
         '<td class="num c-hits">' + (r.hit ? '−' + r.hit : '0') + '</td>' +
         '<td class="num c-bench">' + num(r.bench) + '</td></tr>';
     }).join("");
-    return '<div class="freeze"><table class="t lmstbl"><thead><tr><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num c-hits">Hits</th><th class="num c-bench">Bench</th></tr></thead><tbody>' +
+    return '<div class="freeze"><table class="t lmstbl"><thead><tr><th class="num c-cl" title="Place in the Classic" aria-label="Classic rank">CL</th><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num c-hits">Hits</th><th class="num c-bench">Bench</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>';
   }
 
@@ -6695,7 +6707,7 @@
                 svg("download", 15) + 'Export image</button>'
               : (live ? '<span class="pill live">Live</span>' : '')) + '</div>';
     h += '<div class="note" style="margin:-4px 2px 10px">' + esc(note) + '</div>';
-    if (rows.length) h += '<div class="card">' + lmsGwTable({ table: rows }, {}) + '</div>';
+    if (rows.length) h += '<div class="card">' + lmsGwTable({ table: rows }, { ds: ds }) + '</div>';
     return h;
   }
 

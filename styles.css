@@ -383,6 +383,17 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
     display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 }
 @media (max-width:389px) { table.t.lmstbl td.name { max-width:158px; } }
+/* the Classic place before the name: as narrow as its numbers, and the name
+   gives up the room it needs on a phone */
+table.t.lmstbl .c-cl { width:1%; white-space:nowrap; }
+@media (max-width:479px) {
+  .freeze table.t.lmstbl th.c-cl, .freeze table.t.lmstbl td.c-cl { padding-left:10px; padding-right:4px; }
+  table.t.lmstbl td.name { min-width:104px; max-width:150px; }
+  table.t.lmstbl td.name .who, table.t.lmstbl td.name .mgr {
+    display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+}
+@media (max-width:419px) { table.t.lmstbl td.name { max-width:138px; } }
+@media (max-width:389px) { table.t.lmstbl td.name { max-width:112px; } }
 @media (max-width:359px) { table.t.lmstbl .c-hits { display:none; } }
 /* The side leagues keep four number columns down to 360px, and the general
    cap above leaves the name six points too wide beside them there once a tie
