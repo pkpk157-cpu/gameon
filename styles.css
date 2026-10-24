@@ -370,6 +370,19 @@ table.t td .mgr { font-size:11.5px; color:var(--ink-faint); }
 @media (max-width:359px) { table.t td.name { min-width:112px; max-width:calc(100vw - 200px); }
                            table.t th, table.t td { padding:10px 8px; } }
 @media (max-width:519px) { table.t.classictbl .c-xp { display:none; } }
+/* Out of Last Manager Standing: a red cross, and nothing for those still in */
+table.t.classictbl .c-lms { width:1%; text-align:center; padding-left:6px; padding-right:6px; }
+table.t.classictbl .lmsx { display:inline-flex; width:20px; height:20px; border-radius:50%;
+  align-items:center; justify-content:center; color:var(--bad); background:rgba(220,38,38,.12); background:color-mix(in srgb, var(--bad) 13%, transparent); }
+table.t.classictbl .lmsx .hi-ic { width:12px; height:12px; stroke-width:2.6; }
+/* the column costs the name its width on a phone, so the table still fits */
+@media (max-width:479px) {
+  table.t.classictbl td.name { max-width:calc(100vw - 240px); }
+  table.t.classictbl td.name .who, table.t.classictbl td.name .mgr {
+    display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+}
+@media (max-width:389px) { table.t.classictbl .c-lms { padding-left:3px; padding-right:3px; } }
+@media (max-width:359px) { table.t.classictbl td.name { min-width:100px; max-width:calc(100vw - 214px); } }
 @media (max-width:459px) { table.t.monthtbl .c-bench { display:none; } }
 /* LMS carries three number columns beside the name, and a team name with no
    spaces in it cannot wrap, so it steps down sooner than the others: bench

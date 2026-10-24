@@ -2917,14 +2917,18 @@
 
   function renderClassic(host, ds) {
     var rows = K.classic(ds);
+    // who is out of Last Manager Standing, and since when: the LMS tab's own
+    // reckoning, so a cross here is a name struck out there
+    var outAt = {};
+    try { outAt = K.lms(ds).eliminatedAt || {}; } catch (e) { outAt = {}; }
     var h = heldNote(ds);
 
     h += '<label class="field" style="margin-bottom:12px">' +
       '<input class="in" id="classicSearch" placeholder="Search manager or team…"></label>';
 
     h += '<div class="freeze"><table class="t classictbl"><thead><tr>' +
-      '<th class="num">#</th><th>Team</th><th class="num">GW</th><th class="num">Total</th><th class="num c-xp">XP</th>' +
-      '</tr></thead><tbody id="classicBody">' + classicRows(rows) + '</tbody></table></div>';
+      '<th class="num">#</th><th>Team</th><th class="c-lms" title="Last Manager Standing">LMS</th><th class="num">GW</th><th class="num">Total</th><th class="num c-xp">XP</th>' +
+      '</tr></thead><tbody id="classicBody">' + classicRows(rows, outAt) + '</tbody></table></div>';
 
     host.innerHTML = h;
     var search = $("#classicSearch", host);
@@ -2933,11 +2937,12 @@
       var filtered = !q ? rows : rows.filter(function (r) {
         return (r.entryName + " " + r.playerName).toLowerCase().indexOf(q) !== -1;
       });
-      fill("#classicBody", host, classicRows(filtered));
+      fill("#classicBody", host, classicRows(filtered, outAt));
     });
   }
 
-  function classicRows(rows) {
+  function classicRows(rows, outAt) {
+    outAt = outAt || {};
     return rows.map(function (r) {
       // The move sits under the rank rather than in a column of its own:
       // that column was the fifth of six and never made it onto a phone
@@ -2955,6 +2960,9 @@
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
         '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span>' + mv + '</td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
+        '<td class="c-lms">' + (outAt[r.id]
+          ? '<span class="lmsx" role="img" aria-label="Out of Last Manager Standing in GW' + outAt[r.id] + '" title="Out in GW' + outAt[r.id] + '">' + sicon("cross") + '</span>'
+          : '') + '</td>' +
         '<td class="num">' + num(r.eventTotal) + '</td>' +
         '<td class="num"><b>' + num(r.total) + '</b></td>' +
         '<td class="num c-xp">' + (r.prize ? '<span class="prize">' + xp(r.prize) + '</span>' : '') + '</td>' +
