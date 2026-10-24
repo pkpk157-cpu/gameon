@@ -2952,13 +2952,10 @@
              : r.move < 0 ? '<div class="mvu down">' + Math.abs(r.move) + '</div>'
              : '';
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
-      // Managers still level after months won share the place and the XP,
-      // so say so rather than showing an order the table cannot justify.
-      var eq = r.tiedWith > 1
-        ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
-          (r.tiedWith > 2 ? 's' : '') + ' — XP shared">=</span>' : '';
+      // Managers still level after months won share the place and the XP;
+      // the shared number says so on its own.
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + '>' +
-        '<td class="num"><span class="rankcell">' + eq + '<span class="r ' + rc + '">' + r.computedRank + '</span></span>' + mv + '</td>' +
+        '<td class="num"><span class="rankcell"><span class="r ' + rc + '">' + r.computedRank + '</span></span>' + mv + '</td>' +
         '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span><div class="mgr">' + esc(r.playerName) + '</div></td>' +
         '<td class="c-lms">' + (outAt[r.id]
           ? '<span class="lmsx" role="img" aria-label="Out of Last Manager Standing in GW' + outAt[r.id] + '" title="Out in GW' + outAt[r.id] + '">' + sicon("cross") + '</span>'
@@ -4033,11 +4030,8 @@
   function volRows(v) {
     return v.rows.map(function (r) {
       var rc = r.computedRank <= 3 ? "rk" + r.computedRank : "";
-      var eq = r.tiedWith > 1
-        ? '<span class="jt" title="Level with ' + (r.tiedWith - 1) + ' other' +
-          (r.tiedWith > 2 ? 's' : '') + ' \u2014 the XP is shared">=</span>' : '';
       return '<tr' + (isMe(r.id) ? ' class="me"' : '') + ' data-entry="' + r.id + '">' +
-        '<td class="num"><span class="rankcell">' + eq +
+        '<td class="num"><span class="rankcell">' +
         '<span class="r ' + rc + '">' + r.computedRank + '</span></span></td>' +
         '<td class="name"><span class="who">' + esc(r.entryName || r.name) + '</span>' +
         '<div class="mgr">' + esc(r.name) + '</div></td>' +
