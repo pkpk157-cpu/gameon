@@ -2528,3 +2528,10 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 .flrow .flr { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
 .flrow .flm { display:flex; width:20px; height:20px; }
 .flrow .flm.same { opacity:.4; }
+
+/* one FPL league's standings: the rank with its movement beside it */
+table.t.flstand td.pos { white-space:nowrap; }
+table.t.flstand .flpos { font-variant-numeric:tabular-nums; font-weight:700; }
+.flm.sm { display:inline-flex; width:14px; height:14px; margin-left:5px; vertical-align:-2px; }
+.flm.sm svg { width:14px; height:14px; }
+.flm.sm.same { opacity:.4; }

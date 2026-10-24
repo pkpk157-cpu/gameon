@@ -92,8 +92,8 @@ const ENTRY = { id: ME, name: meName, leagues: {
     chk(row("War Of The Titans").move === "up" && row("Eternal FPL").move === "same", "up and unchanged marked as such", row("War Of The Titans").move + "/" + row("Eternal FPL").move);
     chk(row("Gameweek 1").rank === "1,563,449", "big ranks read with separators", row("Gameweek 1").rank);
     chk(row("FPL Game On V12").href === "#classic" && !row("FPL Game On V12").ext, "Game On opens inside the app", row("FPL Game On V12").href);
-    chk(row("KPMG").href === "https://fantasy.premierleague.com/leagues/4/standings/c" && row("KPMG").ext, "another classic league opens its standings on FPL", row("KPMG").href);
-    chk(row("Nivs Buoys H2H").href === "https://fantasy.premierleague.com/leagues/22/standings/h", "a head-to-head league opens its own standings", row("Nivs Buoys H2H").href);
+    chk(row("KPMG").href === "#fpl/c/4" && !row("KPMG").ext, "another classic league opens inside the app, not on FPL's site", row("KPMG").href);
+    chk(row("Nivs Buoys H2H").href === "#fpl/h/22" && !row("Nivs Buoys H2H").ext, "a head-to-head league opens inside the app too", row("Nivs Buoys H2H").href);
     const hostile = r.rows.find((x) => /onerror/.test(x.name));
     chk(hostile && !r.pwned && r.imgs === 0, "a league name is text, never markup", hostile && hostile.name);
     chk(hostile && hostile.move === "same", "a league joined since the last gameweek reads as unchanged", hostile && hostile.move);
@@ -154,6 +154,133 @@ const ENTRY = { id: ME, name: meName, leagues: {
     chk(await p.evaluate(() => document.querySelector("#youBack").classList.contains("show")), "Choose your team opens the profile sheet to pick it");
     chk(!errs.length, "no JS errors", errs.join(" | "));
     await ctx.close();
+  }
+
+  // 5. a league, inside the app
+  {
+    const gameOnMate = ds.managers.find((m) => m.id !== ME).id;
+    const mk = (n, start, meAt, h2h, total) => Array.from({ length: n }, (_, i) => {
+      const rank = start + i, isMe = rank === meAt;
+      const e = isMe ? ME : (rank === start + 1 && start === 1 ? gameOnMate : 9000000 + rank);
+      const o = { entry: e, entry_name: isMe ? meName : (rank === 3 ? "<b onclick=alert(1)>Bold FC</b>" : "Team " + rank), player_name: "Manager " + rank,
+        rank, last_rank: rank + (rank % 3 === 0 ? 2 : rank % 3 === 1 ? -1 : 0), total: total - rank * 3, event_total: 40 + (rank % 17) };
+      if (h2h) Object.assign(o, { matches_won: 5, matches_drawn: 1, matches_lost: 2, points_for: 500 - rank });
+      return o;
+    });
+    const standings = (u) => {
+      const m = decodeURIComponent(u).match(/leagues-(classic|h2h)\/(\d+)\/standings\/\?page_standings=(\d+)/);
+      if (!m) return null;
+      const kind = m[1], id = +m[2], page = +m[3];
+      if (id === 5) return { league: { id, name: "Aravalli" }, standings: { has_next: false, page, results: mk(33, 1, 21, false, 600) } };
+      if (id === 11) {
+        if (page === 1 || page === 2) return { league: { id, name: "India" }, standings: { has_next: true, page, results: mk(50, (page - 1) * 50 + 1, 0, false, 900) } };
+        if (page === 689) return { league: { id, name: "India" }, standings: { has_next: true, page, results: mk(50, 34401, 34402, false, 600) } };
+      }
+      if (id === 22) return { league: { id, name: "Nivs Buoys H2H" }, standings: { has_next: false, page, results: mk(8, 1, 6, true, 24) } };
+      return { league: { id, name: "?" }, standings: { has_next: false, page, results: [] } };
+    };
+    let standDown = false;
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
+    await ctx.addInitScript(({ me }) => { try { localStorage.setItem("go12.me", String(me)); localStorage.setItem("go12.theo", "off"); } catch (e) {} }, { me: ME });
+    const p = await ctx.newPage(); const errs = [], sreq = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.route((u) => /leagues-(classic|h2h)/.test(decodeURIComponent(u.toString())) || (/fantasy\.premierleague\.com(%2F|\/)api(%2F|\/)entry(%2F|\/)\d+(%2F|\/)?($|[^a-z])/i.test(decodeURIComponent(u.toString())) && !/history|event|transfers/.test(decodeURIComponent(u.toString()))), (route) => {
+      const u = route.request().url(), d = decodeURIComponent(u);
+      if (/leagues-/.test(d)) {
+        sreq.push(d.replace(/^.*leagues-/, "leagues-"));
+        if (standDown) return route.fulfill({ status: 503, body: "down" });
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(standings(u)) });
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ENTRY) });
+    });
+    await p.goto("http://127.0.0.1:" + PORT + "/index.html#fpl", { waitUntil: "domcontentloaded" });
+    await p.waitForSelector('section.view[data-view="fpl"] .flrow', { timeout: 20000 });
+    const readStand = () => p.evaluate(() => {
+      const host = document.querySelector('section.view[data-view="fpl"]');
+      const tables = [...host.querySelectorAll("table.flstand")];
+      const rows = (t) => t ? [...t.querySelectorAll("tbody tr")].map((tr) => ({ me: tr.classList.contains("me"), entry: tr.getAttribute("data-entry"),
+        cells: [...tr.children].map((td) => td.innerText.replace(/\s+/g, " ").trim()), move: (tr.querySelector(".flm") || {}).className })) : [];
+      return { hash: location.hash, title: document.querySelector("#barTitle").textContent, sub: document.querySelector("#barSub").textContent,
+        heads: tables[0] ? [...tables[0].querySelectorAll("th")].map((x) => x.textContent) : [], tables: tables.map(rows),
+        labels: [...host.querySelectorAll(".lab-sm")].map((x) => x.textContent), more: !!host.querySelector("#flsMore"),
+        callout: (host.querySelector(".callout") || {}).textContent || "", note: (host.querySelector(".note") || {}).textContent || "",
+        bold: !!host.querySelector("table.flstand b[onclick]"), wide: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    await p.evaluate(() => { [...document.querySelectorAll(".flrow")].find((a) => a.querySelector(".fln").textContent === "Aravalli").click(); });
+    await p.waitForSelector("table.flstand tbody tr", { timeout: 15000 }).catch(() => {});
+    let r = await readStand();
+    chk(r.hash === "#fpl/c/5", "tapping a league opens it inside the app", r.hash);
+    chk(r.title === "Aravalli" && /^You're 21st/.test(r.sub), "the bar names the league and your place", r.title + " / " + r.sub);
+    chk(r.heads.join("|") === "#|Team|GW|Total", "a classic league: rank, team, gameweek points, total", r.heads.join("|"));
+    chk(r.tables.length === 1 && r.tables[0].length === 33, "everyone in the league is listed", r.tables[0] && r.tables[0].length);
+    const meRow = (r.tables[0] || []).find((x) => x.me);
+    chk(meRow && meRow.cells[0].indexOf("21") === 0 && meRow.cells[1].indexOf(meName) !== -1, "your row is lit, at your rank", meRow && meRow.cells.join(" | "));
+    chk(/up|down|same/.test((r.tables[0][2] || {}).move || ""), "each rank carries its movement", (r.tables[0][2] || {}).move);
+    chk(!r.bold && (r.tables[0][2] || {}).cells[1].indexOf("<b onclick") !== -1, "a team name is text, never markup", (r.tables[0][2] || {}).cells[1]);
+    chk(!r.wide, "fits the phone");
+    const mate = (r.tables[0] || []).find((x) => x.entry);
+    chk(!!mate && +mate.entry === gameOnMate && (r.tables[0] || []).filter((x) => x.entry).length <= 2, "a Game On manager's row opens their profile, others do not pretend to", mate && mate.entry);
+    await p.evaluate((e) => document.querySelector('table.flstand tr[data-entry="' + e + '"] td.num').click(), gameOnMate);
+    await p.waitForTimeout(500);
+    chk(await p.evaluate(() => location.hash) === "#profile/" + gameOnMate, "and tapping it does", await p.evaluate(() => location.hash));
+    await p.goBack(); await p.waitForTimeout(600);
+    await p.evaluate(() => document.querySelector("#barBack").click()); await p.waitForTimeout(500);
+    chk(await p.evaluate(() => location.hash) === "#fpl", "back from a league is the list of leagues", await p.evaluate(() => location.hash));
+    // a huge league: the top fifty, and your own place above them
+    const before = sreq.length;
+    await p.evaluate(() => { [...document.querySelectorAll(".flrow")].find((a) => a.querySelector(".fln").textContent === "India").click(); });
+    await p.waitForSelector("table.flstand tbody tr", { timeout: 15000 }).catch(() => {});
+    await p.waitForTimeout(300);
+    r = await readStand();
+    const asked = sreq.slice(before).map((x) => +(x.match(/page_standings=(\d+)/) || [])[1]).sort((a, b) => a - b);
+    chk(JSON.stringify(asked) === "[1,689]", "a huge league asks for page one and your page, nothing else", JSON.stringify(asked));
+    chk(r.labels.join("|") === "Your place|From the top" && r.tables.length === 2 && r.tables[0].length === 1 && r.tables[0][0].me && r.tables[0][0].cells[0].indexOf("34,402") === 0,
+      "your place shows above the top of the table", JSON.stringify(r.tables[0] && r.tables[0][0]));
+    chk(r.tables[1].length === 50 && r.more, "the top fifty, with more to come", r.tables[1].length);
+    chk(/^You're 34,402nd/.test(r.sub), "the bar reads your rank in full", r.sub);
+    await p.click("#flsMore"); await p.waitForFunction(() => document.querySelectorAll("table.flstand")[1] && document.querySelectorAll("table.flstand")[1].querySelectorAll("tbody tr").length === 100, null, { timeout: 15000 }).catch(() => {});
+    r = await readStand();
+    chk(r.tables[1] && r.tables[1].length === 100 && r.tables[1][99].cells[0].indexOf("100") === 0, "Show the next 50 adds the next fifty, in order", r.tables[1] && r.tables[1].length);
+    await p.evaluate(() => { location.hash = "#fpl"; }); await p.waitForTimeout(400);
+    // a head-to-head league
+    await p.evaluate(() => { [...document.querySelectorAll(".flrow")].find((a) => a.querySelector(".fln").textContent === "Nivs Buoys H2H").click(); });
+    await p.waitForSelector("table.flstand tbody tr", { timeout: 15000 }).catch(() => {});
+    r = await readStand();
+    chk(r.heads.join("|") === "#|Team|W-D-L|Score|Pts" && r.tables[0].length === 8, "a head-to-head league: the record, points scored and league points", r.heads.join("|"));
+    chk((r.tables[0].find((x) => x.me) || { cells: [] }).cells[2] === "5-1-2", "with your record on your row", JSON.stringify(r.tables[0].find((x) => x.me)));
+    // the second visit is drawn at once, without asking FPL again
+    const n1 = sreq.length;
+    await p.evaluate(() => { location.hash = "#fpl"; }); await p.waitForTimeout(300);
+    await p.evaluate(() => { location.hash = "#fpl/c/5"; }); await p.waitForTimeout(400);
+    r = await readStand();
+    chk(r.tables[0] && r.tables[0].length === 33 && sreq.length === n1, "opening it again inside a few minutes is instant and asks FPL nothing", (sreq.length - n1) + " requests");
+    // FPL down on a league never opened
+    standDown = true;
+    await p.evaluate(() => { location.hash = "#fpl/c/4"; });
+    await p.waitForFunction(() => /could not be reached/.test((document.querySelector('section.view[data-view="fpl"] .callout') || {}).textContent || ""), null, { timeout: 90000 }).catch(() => {});
+    r = await readStand();
+    chk(/could not be reached/.test(r.callout) && !r.tables.length, "FPL down on a league never opened: said plainly, with Try again", r.callout.slice(0, 40));
+    chk(!errs.length, "no JS errors", errs.join(" | "));
+    await ctx.close();
+    // opened straight from a saved link, before the list of leagues is in:
+    // your rank is learnt from it, and your place still shows
+    standDown = false;
+    const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
+    await ctx2.addInitScript(({ me }) => { try { localStorage.setItem("go12.me", String(me)); localStorage.setItem("go12.theo", "off"); } catch (e) {} }, { me: ME });
+    const p2 = await ctx2.newPage(); const errs2 = [];
+    p2.on("pageerror", (e) => errs2.push(e.message));
+    await p2.route((u) => /fantasy/.test(decodeURIComponent(u.toString())), (route) => {
+      const d = decodeURIComponent(route.request().url());
+      if (/leagues-/.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(standings(route.request().url())) });
+      if (/entry\/\d+\/$/.test(d)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(ENTRY) });
+      return route.abort();
+    });
+    await p2.goto("http://127.0.0.1:" + PORT + "/index.html#fpl/c/11", { waitUntil: "domcontentloaded" });
+    await p2.waitForFunction(() => [...document.querySelectorAll(".lab-sm")].some((x) => x.textContent === "Your place"), null, { timeout: 20000 }).catch(() => {});
+    const d2 = await p2.evaluate(() => ({ labels: [...document.querySelectorAll('section.view[data-view="fpl"] .lab-sm')].map((x) => x.textContent), sub: document.querySelector("#barSub").textContent }));
+    chk(d2.labels.indexOf("Your place") !== -1 && /34,402nd/.test(d2.sub), "a league opened straight from a link still finds your place", JSON.stringify(d2));
+    chk(!errs2.length, "no JS errors", errs2.join(" | "));
+    await ctx2.close();
   }
 
   await b.close(); srv.close();

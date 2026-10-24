@@ -2581,6 +2581,9 @@
       // page no longer opens that row, so only the id is read.
       state.playerId = +parts[1] || null;
     }
+    if (view === "fpl") {
+      state.fplLeague = (parts[1] === "c" || parts[1] === "h") && +parts[2] ? { kind: parts[1], id: +parts[2] } : null;
+    }
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
       state.plGw = +parts[1] || null;
@@ -2658,6 +2661,11 @@
       if (who) { title = who.entryName; sub = esc(who.playerName); }
     }
     if (state.view === "prices" && state.prTab === "stats") title = "Player stats";
+    // A league opened from FPL carries its own name, and your place in it
+    if (state.view === "fpl" && state.fplLeague && state.fplLeagueBar) {
+      title = state.fplLeagueBar.name || "League";
+      sub = state.fplLeagueBar.sub ? esc(state.fplLeagueBar.sub) : "";
+    } else
     // FPL carries the team whose leagues are shown, as a profile does
     if (state.view === "fpl" && state.me) {
       var fds = S.dataset(), fme = fds && K.managerMap(fds)[+state.me];
@@ -2753,6 +2761,8 @@
   function goBack() {
     // A match was opened from a list of fixtures; that is where back leads.
     if (state.view === "pl" && state.plMatch) { location.hash = "pl/" + state.plMatch.gw; return; }
+    // A league was opened from the list of them; back is that list.
+    if (state.view === "fpl" && state.fplLeague) { location.hash = "fpl"; return; }
     // And a player was opened from wherever he was tapped.
     if (state.view === "player" && state.playerFrom) {
       // the origin stays set until the hash sync has used it for the scroll
@@ -4041,10 +4051,10 @@
     return K.fplLeagues(rec.leagues).map(function (g) {
       return '<div class="section-title"><h2>' + esc(g.title) + '</h2><div class="rule"></div></div>' +
         '<div class="fllist">' + g.rows.map(function (r) {
-          // Game On itself opens here; any other league opens on FPL
-          var href = (!r.h2h && r.id === gameOn) ? "#classic"
-            : "https://fantasy.premierleague.com/leagues/" + r.id + "/standings/" + (r.h2h ? "h" : "c");
-          var ext = href.charAt(0) !== "#";
+          // Game On opens its own table; every other league opens here too,
+          // its standings read from FPL
+          var href = (!r.h2h && r.id === gameOn) ? "#classic" : "#fpl/" + (r.h2h ? "h" : "c") + "/" + r.id;
+          var ext = false;
           return '<a class="flrow" href="' + href + '"' + (ext ? ' target="_blank" rel="noopener"' : '') +
             ' aria-label="' + esc(r.name + ", rank " + (r.rank == null ? "not yet ranked" : r.rank) + ", " + FPL_MOVE_SAYS[r.move]) + '">' +
             '<span class="fln">' + esc(r.name) + '</span>' +
@@ -4053,7 +4063,181 @@
         }).join("") + '</div>';
     }).join("");
   }
+  /* ---- one FPL league, inside the app ------------------------------------
+     The standings as FPL publishes them, fifty to a page: rank and its
+     movement, team and manager, the gameweek's points and the total (for a
+     head-to-head league, the record and the points). Your row is lit; in a
+     league too big to read from the top, such as Overall or a country, your
+     own page is fetched as well and your place shown above the table. A
+     Game On manager's row opens their profile. Kept on the phone like the
+     list of leagues, drawn at once, refreshed when a few minutes old. */
+  var FPL_STAND_KEY = "go12.fplStand", FPL_STAND_KEEP = 8, FPL_PAGE = 50;
+  var fplStandBusy = {};
+  function fplStandAll() { var all = lsGet(FPL_STAND_KEY); return all && typeof all === "object" ? all : {}; }
+  function fplStandGet(key) { return fplStandAll()[key] || null; }
+  function fplStandPut(key, rec) {
+    var all = fplStandAll();
+    all[key] = rec;
+    // the most recently opened few, so the phone does not fill with leagues
+    var keys = Object.keys(all).sort(function (a, b) { return (all[b].at || 0) - (all[a].at || 0); });
+    keys.slice(FPL_STAND_KEEP).forEach(function (k) { delete all[k]; });
+    lsSet(FPL_STAND_KEY, all);
+  }
+  function fplSlimRow(r, h2h) {
+    var o = { e: r.entry, t: r.entry_name, m: r.player_name, r: r.rank, l: r.last_rank, tot: r.total };
+    if (h2h) { o.w = r.matches_won; o.d = r.matches_drawn; o.x = r.matches_lost; o.pf = r.points_for; }
+    else o.gw = r.event_total;
+    return o;
+  }
+  function fplStandPage(kind, id, page) {
+    var path = (kind === "h" ? "/leagues-h2h/" : "/leagues-classic/") + id + "/standings/?page_standings=" + page;
+    return window.GO_API.getJSON(path, { attempts: 1, timeout: 12000 }).then(function (j) {
+      var st = j && j.standings;
+      if (!st || !st.results) throw new Error("no standings in FPL's answer");
+      return { name: (j.league && j.league.name) || null, page: page, more: !!st.has_next,
+               rows: st.results.map(function (r) { return fplSlimRow(r, kind === "h"); }) };
+    });
+  }
+  // Page one, and the page with you on it when that is further down.
+  function fplStandFetch(kind, id, myRank, extraPages) {
+    var key = kind + id;
+    if (fplStandBusy[key]) return fplStandBusy[key];
+    var want = [1];
+    var mine = myRank ? Math.ceil(myRank / FPL_PAGE) : 1;
+    if (mine > 1) want.push(mine);
+    (extraPages || []).forEach(function (n) { if (want.indexOf(n) === -1) want.push(n); });
+    fplStandBusy[key] = Promise.all(want.map(function (n) { return fplStandPage(kind, id, n); }))
+      .then(function (pages) {
+        var rec = { at: Date.now(), name: pages[0].name, pages: {} };
+        pages.forEach(function (pg) { rec.pages[pg.page] = { more: pg.more, rows: pg.rows }; });
+        fplStandPut(key, rec);
+        return rec;
+      })
+      .catch(function () { return null; })
+      .then(function (r) { delete fplStandBusy[key]; return r; });
+    return fplStandBusy[key];
+  }
+  function fplMoveMark(r, l) {
+    var move = (r && l) ? (r < l ? "up" : r > l ? "down" : "same") : "same";
+    return '<span class="flm sm ' + move + '" role="img" aria-label="' + FPL_MOVE_SAYS[move] + '">' + FPL_MOVE[move] + '</span>';
+  }
+  function renderFplLeague(host, ds, kind, id) {
+    var me = state.me ? +state.me : null;
+    var h2h = kind === "h";
+    var key = kind + id;
+    var known = ds ? K.managerMap(ds) : {};
+    // the list of leagues knows the name and your rank before FPL answers
+    var lrec = me ? fplCached(me) : null;
+    var fromList = null;
+    if (lrec) (h2h ? lrec.leagues.h2h : lrec.leagues.classic).forEach(function (l) { if (+l.id === id) fromList = l; });
+    var myRank = fromList && +fromList.rank ? +fromList.rank : null;
+    var setBar = function (name, size) {
+      var rank = myRank;
+      state.fplLeagueBar = { name: name || (fromList && fromList.name) || "League",
+        sub: rank ? "You're " + num(rank) + ordinal(rank).replace(/^\d+/, "") + (size ? " of " + num(size) : "") : "" };
+      updateBanner();
+    };
+    setBar(null, fromList && fromList.size);
+    var row = function (r) {
+      var mine = me && +r.e === me, ours = !!known[+r.e];
+      var cells = '<td class="pos"><span class="flpos">' + (r.r == null ? "\u2013" : num(r.r)) + '</span>' + fplMoveMark(r.r, r.l) + '</td>' +
+        '<td class="name"><span class="who">' + esc(r.t || "") + '</span><div class="mgr">' + esc(r.m || "") + '</div></td>';
+      cells += h2h
+        ? '<td class="num">' + num(r.w || 0) + '-' + num(r.d || 0) + '-' + num(r.x || 0) + '</td><td class="num">' + num(r.pf || 0) + '</td><td class="num"><b>' + num(r.tot || 0) + '</b></td>'
+        : '<td class="num">' + num(r.gw || 0) + '</td><td class="num"><b>' + num(r.tot || 0) + '</b></td>';
+      return '<tr' + (mine ? ' class="me"' : '') + (ours ? ' data-entry="' + r.e + '"' : '') + '>' + cells + '</tr>';
+    };
+    var head = '<thead><tr><th class="pos" aria-label="Rank">#</th><th class="name">Team</th>' +
+      (h2h ? '<th class="num">W-D-L</th><th class="num">Score</th><th class="num">Pts</th>'
+           : '<th class="num">GW</th><th class="num">Total</th>') + '</tr></thead>';
+    var paint = function (rec, mode) {
+      if (!host.isConnected || location.hash.replace("#", "") !== "fpl/" + kind + "/" + id) return;
+      if (!rec) {
+        host.innerHTML = mode === "error"
+          ? '<div class="callout">FPL could not be reached just now. It goes offline for a while after each deadline; try again in a few minutes.</div>' +
+            '<button type="button" class="btn" id="flsRetry" style="margin-top:12px">Try again</button>'
+          : '<div class="callout">Fetching the standings from FPL\u2026</div>';
+        var rb = $("#flsRetry", host);
+        if (rb) rb.addEventListener("click", function () { paint(null, "loading"); fplStandFetch(kind, id, myRank).then(after); });
+        return;
+      }
+      if (rec.name) setBar(rec.name, fromList && fromList.size);
+      var nums = Object.keys(rec.pages).map(Number).sort(function (a, b) { return a - b; });
+      // the run of pages from the top, and your page if it stands apart
+      var run = [], n = 1;
+      while (rec.pages[n]) { run.push(n); n++; }
+      var lastRun = run[run.length - 1] || 1;
+      var apart = nums.filter(function (k) { return run.indexOf(k) === -1; });
+      var top = [];
+      run.forEach(function (k) { top = top.concat(rec.pages[k].rows); });
+      var h = "";
+      if (!top.length) {
+        h += '<div class="callout">FPL has not published standings for this league yet.</div>';
+      } else {
+        if (apart.length && me) {
+          var meRow = null;
+          apart.forEach(function (k) { rec.pages[k].rows.forEach(function (r) { if (+r.e === me) meRow = r; }); });
+          if (meRow) {
+            h += '<div class="lab-sm" style="margin:2px 4px 6px">Your place</div>' +
+              '<div class="card"><div class="tablewrap"><table class="t flstand">' + head + '<tbody>' + row(meRow) + '</tbody></table></div></div>';
+            h += '<div class="lab-sm" style="margin:14px 4px 6px">From the top</div>';
+          }
+        }
+        h += '<div class="card"><div class="tablewrap"><table class="t flstand">' + head + '<tbody>' +
+          top.map(row).join("") + '</tbody></table></div></div>';
+        if (rec.pages[lastRun] && rec.pages[lastRun].more) {
+          h += '<button type="button" class="fxtoggle" id="flsMore">Show the next ' + FPL_PAGE + '</button>';
+        }
+      }
+      h += '<div class="note" style="margin:14px 2px 0">From FPL \u00b7 updated ' + esc(agoText(Date.now() - rec.at)) +
+        (mode === "stale" ? " \u00b7 FPL could not be reached just now" : "") + '</div>';
+      host.innerHTML = h;
+      var more = $("#flsMore", host);
+      if (more) more.addEventListener("click", function () {
+        more.disabled = true; more.textContent = "Fetching\u2026";
+        fplStandPage(kind, id, lastRun + 1).then(function (pg) {
+          rec.pages[pg.page] = { more: pg.more, rows: pg.rows };
+          fplStandPut(key, rec);
+          paint(rec, "fresh");
+        }).catch(function () { more.disabled = false; more.textContent = "FPL could not be reached \u2014 try again"; });
+      });
+    };
+    var after = function (r) {
+      if (r) paint(r, "fresh");
+      else { var c2 = fplStandGet(key); paint(c2, c2 ? "stale" : "error"); }
+    };
+    // Opened before the list of leagues has arrived (straight after launch,
+    // or from a saved link), the page does not yet know your rank: ask for the
+    // list, and if you are further down than what is loaded, fetch your page
+    // and show your place too.
+    var findMe = function (rec) {
+      if (!me || !rec) return;
+      var have = false;
+      Object.keys(rec.pages).forEach(function (k) { rec.pages[k].rows.forEach(function (r) { if (+r.e === me) have = true; }); });
+      if (have) return;
+      fplFetch(me).then(function (lr) {
+        if (!lr) return;
+        (h2h ? lr.leagues.h2h : lr.leagues.classic).forEach(function (l) { if (+l.id === id) fromList = l; });
+        if (!fromList || !+fromList.rank) return;
+        myRank = +fromList.rank;
+        var pg = Math.ceil(myRank / FPL_PAGE);
+        if (rec.pages[pg]) { setBar(rec.name, fromList.size); return; }
+        fplStandPage(kind, id, pg).then(function (page) {
+          rec.pages[page.page] = { more: page.more, rows: page.rows };
+          fplStandPut(key, rec);
+          paint(rec, "fresh");
+        }).catch(function () { setBar(rec.name, fromList.size); });
+      });
+    };
+    var cached = fplStandGet(key);
+    paint(cached, cached ? "fresh" : "loading");
+    findMe(cached);
+    if (!cached || Date.now() - cached.at >= FPL_FRESH_MS) fplStandFetch(kind, id, myRank).then(function (r) { after(r); findMe(r); });
+  }
+
   function renderFpl(host, ds) {
+    if (state.fplLeague) return renderFplLeague(host, ds, state.fplLeague.kind, state.fplLeague.id);
+    state.fplLeagueBar = null;
     var me = state.me ? +state.me : null;
     if (!me) {
       host.innerHTML = '<div class="callout">Choose your team in your profile, and every FPL league you are in shows here.</div>' +
