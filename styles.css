@@ -388,7 +388,9 @@ table.t.classictbl .lmsx .hi-ic { width:12px; height:12px; stroke-width:2.6; }
    spaces in it cannot wrap, so it steps down sooner than the others: bench
    goes below 480, the numbers tighten and the name trails off below 420, and
    hits go below 360. Measured against the card, not the screen. */
-@media (max-width:479px) { table.t.lmstbl .c-bench { display:none; } }
+/* bench waits until 520: the Classic place before the name costs the room
+   it would have taken from 480 */
+@media (max-width:519px) { table.t.lmstbl .c-bench { display:none; } }
 @media (max-width:419px) {
   table.t.lmstbl th.num, table.t.lmstbl td.num { padding-left:8px; padding-right:8px; }
   table.t.lmstbl td.name { min-width:128px; max-width:170px; }
