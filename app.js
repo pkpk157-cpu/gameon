@@ -2034,11 +2034,11 @@
     var backTo = TABS.map(function (t) { return t.id; }).indexOf(state.backView) === -1
       ? "classic" : state.backView;
     var items = [
-      { k: "pl", go: "pl", t: "Premier League", s: "Live scores and results, match by match",
+      { k: "pl", go: "pl", t: "Premier League", s: "Live scores, results and the table",
         i: markTile("mpl", "#9d5bd2", "#43146e", G_FOOT, "pl-lion.webp") },
       // FPL lives in the Premier League app now, so its mark is that app's
       // icon: the purple lion on white, coloured at the corners
-      { k: "fpl", go: "fpl", t: "FPL", s: "Every league you're in, and where you stand",
+      { k: "fpl", go: "fpl", t: "FPL", s: "Your leagues, and where you stand",
         i: markTile("mfp", "#7d2f9e", "#37003c", G_FOOT, "fpl-tile.webp") },
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: markTile("mgo", "#ffd76a", "#e6a417", G_TROPHY, "logo-tile.webp") },

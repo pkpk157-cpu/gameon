@@ -489,9 +489,11 @@ tr.me:nth-child(even) td { background:var(--accent-wash); }
 /* The section list inside the burger drawer. These are two-line cards rather
    than the single-line rows below them, so every property .menu button sets
    has to be answered here — it carries more specificity than a lone class. */
-.menulist { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+/* every section the same height: each row as tall as the tallest card, so a
+   subtitle that wraps on a narrow phone never makes one card stand out */
+.menulist { display:grid; grid-template-columns:minmax(0,1fr); grid-auto-rows:1fr; gap:8px; margin-bottom:14px; }
 .menulist .menuitem { display:grid; grid-template-columns:auto 1fr; column-gap:12px; row-gap:2px;
-  align-items:center; justify-items:start;
+  align-items:center; justify-items:start; align-content:center;
   width:100%; text-align:left; cursor:pointer; padding:12px 14px; border-radius:14px;
   border:1px solid var(--line); background:var(--chip); color:var(--ink); }
 .menulist .menuitem .mi-i { grid-row:1 / span 2; display:flex; }

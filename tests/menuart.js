@@ -143,6 +143,22 @@ async function open(p) {
     await ctx.close();
   }
 
+  /* --- every section card the same height, at every phone width ------- */
+  for (const w of [320, 360, 390, 430, 768]) {
+    const ctx = await mk({ viewport: { width: w, height: 820 } }); const p = await ctx.newPage(); const errs = [];
+    p.on("pageerror", e => errs.push(e.message));
+    await p.goto("http://127.0.0.1:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    await p.waitForSelector("table.t tbody tr", { timeout: 15000 });
+    await open(p); await p.waitForTimeout(300);
+    const hs = await p.evaluate(() => [...document.querySelectorAll("#menuBody .menulist .menuitem")].map(x => {
+      const r = x.getBoundingClientRect(), t = x.querySelector(".mi-t").getBoundingClientRect(), s2 = x.querySelector(".mi-s").getBoundingClientRect();
+      return { h: Math.round(r.height), inside: t.top >= r.top && s2.bottom <= r.bottom, gap: Math.round(s2.top - t.bottom) }; }));
+    chk(hs.length === 4 && hs.every(x => x.h === hs[0].h), w + "px: all four sections are the same height", hs.map(x => x.h).join(","));
+    chk(hs.every(x => x.inside && x.gap <= 4), w + "px: each card's title and line sit together inside it", JSON.stringify(hs.map(x => x.gap)));
+    chk(errs.length === 0, w + "px: no page errors", errs.join(" | "));
+    await ctx.close();
+  }
+
   await b.close(); srv.close();
   console.log(fails ? fails + " FAILURES" : "all ok");
   process.exit(fails ? 1 : 0);
