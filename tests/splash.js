@@ -25,18 +25,6 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
       "maskable icons have files of their own, at 192 and 512", mk.map(i => i.src + " " + i.sizes).join(", "));
   chk(pngSize(APP + "/icon-512.png") === "512x512" && pngSize(APP + "/icon-192.png") === "192x192" && pngSize(APP + "/apple-touch-icon.png") === "180x180" && pngSize(APP + "/favicon-64.png") === "64x64", "icons are 512, 192, 180 and 64 square");
   chk(!fs.existsSync(APP + "/icon.svg") && !/icon\.svg/.test(fs.readFileSync(APP + "/index.html", "utf8") + fs.readFileSync(APP + "/sw.js", "utf8") + fs.readFileSync(APP + "/app.js", "utf8")), "the old SVG icon is gone and nothing refers to it");
-  // iOS shows a startup image while the app starts: one for every iPhone and
-  // iPad size, each at exactly its screen's pixels, so the hand-over to the
-  // opening screen is not seen
-  const jpegSize = (f) => { const b2 = fs.readFileSync(f); let i = 2;
-    while (i < b2.length) { if (b2[i] !== 0xFF) return null; const m = b2[i + 1], L = b2.readUInt16BE(i + 2);
-      if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) return b2.readUInt16BE(i + 7) + "x" + b2.readUInt16BE(i + 5);
-      i += 2 + L; } return null; };
-  const html = fs.readFileSync(APP + "/index.html", "utf8");
-  const su = [...html.matchAll(/<link rel="apple-touch-startup-image" href="([^"]+)" media="\(device-width: (\d+)px\) and \(device-height: (\d+)px\) and \(-webkit-device-pixel-ratio: (\d)\) and \(orientation: portrait\)"/g)];
-  const bad = su.filter((m) => !fs.existsSync(APP + "/" + m[1]) || jpegSize(APP + "/" + m[1]) !== (m[2] * m[4]) + "x" + (m[3] * m[4]));
-  chk(su.length >= 20 && !bad.length, "a startup image for every iPhone and iPad, each its screen's exact size", su.length + " · " + bad.map((m) => m[1]).join(","));
-  chk(["390x844x3", "393x852x3", "402x874x3", "430x932x3", "440x956x3", "375x667x2"].every((k) => su.some((m) => m[2] + "x" + m[3] + "x" + m[4] === k)), "including today's iPhones");
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
   // slow data: the splash shows, then leaves once drawn
   delay = 1500;
@@ -79,6 +67,45 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
       return { fits: i.left >= 0 && i.right <= innerWidth && i.top >= 0 && t.bottom <= innerHeight && t.left >= 0 && t.right <= innerWidth, apart: t.top >= i.bottom - 2 }; });
     chk(f.fits && f.apart, "on a 320px phone the crest and its line fit, apart", JSON.stringify(f));
     await c.close();
+  }
+  // Opened from the home screen, the phone has just shown its own launch
+  // screen (the icon in a circle 47.9% of the width, dead centre, on the
+  // manifest's purple) and fades it into the page. The first frame is that
+  // same picture; the circle then draws away and the screen comes up.
+  // Measured off a real phone's launch screen. Android, then an iPhone.
+  delay = 2500;
+  for (const [dev, how] of [["Pixel 7", "android"], ["iPhone 13", "ios"]]) {
+    const c = await b.newContext({ ...devices[dev], serviceWorkers: "block" }); const pg = await c.newPage(); const er = [];
+    pg.on("pageerror", (e) => er.push(e.message));
+    if (how === "ios") await c.addInitScript(() => { Object.defineProperty(window.navigator, "standalone", { value: true, configurable: true }); });
+    else await c.addInitScript(() => { const mm = window.matchMedia.bind(window);
+      window.matchMedia = (q) => /display-mode:\s*standalone/.test(q) ? mm("(min-width: 0px)") : mm(q); });
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "commit" });
+    await pg.waitForSelector("#splash .sptile", { state: "attached", timeout: 5000 });
+    const f0 = await pg.evaluate(() => { const s = document.querySelector("#splash"), t = s.querySelector(".sptile"), r = t.getBoundingClientRect(), cs = getComputedStyle(t);
+      return { cls: document.documentElement.className, shown: cs.display !== "none", radius: cs.borderRadius, src: t.getAttribute("src"), op: +cs.opacity,
+        w: +(r.width / innerWidth * 100).toFixed(1), cx: Math.round(r.left + r.width / 2 - innerWidth / 2), cy: Math.round(r.top + r.height / 2 - innerHeight / 2),
+        bg: getComputedStyle(s).backgroundColor }; });
+    const man3 = JSON.parse(fs.readFileSync(APP + "/manifest.json", "utf8"));
+    chk(/applaunch/.test(f0.cls) && f0.shown && f0.op > 0.95 && f0.radius === "50%" && f0.src === "launch-tile.webp",
+        how + " home screen: the first frame is the phone's own launch picture, the icon in a circle", JSON.stringify(f0));
+    chk(Math.abs(f0.w - 47.9) < 0.3 && Math.abs(f0.cx) <= 1 && Math.abs(f0.cy) <= 1 && f0.bg === "rgb(55, 0, 60)" && man3.background_color === "#37003c",
+        how + ": at the launch screen's size and place, on the manifest's purple", f0.w + "% · " + f0.cx + "," + f0.cy + " · " + f0.bg);
+    await pg.waitForTimeout(1100);
+    const f1 = await pg.evaluate(() => { const s = document.querySelector("#splash"); const t = s.querySelector(".sptile"), cr = s.querySelector(".spcrest");
+      return { tile: +getComputedStyle(t).opacity, crest: +getComputedStyle(cr).opacity, bands: +getComputedStyle(s.querySelector(".spbands")).opacity,
+               text: +getComputedStyle(s.querySelector(".splashtxt")).opacity }; });
+    chk(f1.tile === 0 && f1.crest === 1 && f1.bands === 1 && f1.text === 1, how + ": then the circle has gone and the screen is itself", JSON.stringify(f1));
+    chk(!er.length, how + ": no JS errors on the launch", er.join(" | "));
+    await c.close();
+  }
+  {
+    // in a browser tab there is no launch screen to pick up from
+    const c2 = await b.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" }); const pg2 = await c2.newPage();
+    await pg2.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" }); await pg2.waitForTimeout(300);
+    const tab = await pg2.evaluate(() => ({ cls: document.documentElement.className, tile: getComputedStyle(document.querySelector("#splash .sptile")).display }));
+    chk(!/applaunch/.test(tab.cls) && tab.tile === "none", "in a browser tab: no circle, the screen straight away", JSON.stringify(tab));
+    await c2.close();
   }
   // data fails: the splash still leaves and the empty state shows the crest
   delay = 0; failData = true;

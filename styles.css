@@ -1148,13 +1148,13 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
    The crest on its own purple while the first standings load. It sits over
    everything and fades once the page is drawn. */
 #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:100; overflow:hidden;
-  /* the top bar's purple, crossed by wide, faint bands running down to the
-     right */
-  background-color:#37003c;
+  background-color:#37003c; transition:opacity .35s ease-out; }
+/* the top bar's purple, crossed by wide, faint bands running down to the
+   right; a layer of its own so it can come up over the plain purple */
+#splash .spbands { position:absolute; top:0; right:0; bottom:0; left:0;
   background-image:linear-gradient(48deg, transparent 0 14%, rgba(255,255,255,.045) 14% 27%, transparent 27% 41%,
     rgba(255,255,255,.045) 41% 52%, transparent 52% 66%, rgba(255,255,255,.045) 66% 79%, transparent 79%),
-    linear-gradient(170deg, #37003c 0%, #4a0050 55%, #6a0a5c 100%);
-  transition:opacity .35s ease-out; }
+    linear-gradient(170deg, #37003c 0%, #4a0050 55%, #6a0a5c 100%); }
 #splash.gone { opacity:0; pointer-events:none; }
 /* the app's own colours rising from the foot of the screen: the green and
    cyan of the crest's border into the pink of the bar */
@@ -1164,15 +1164,33 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
   mask-image:linear-gradient(to top, #000 0%, rgba(0,0,0,.75) 30%, transparent 100%);
   filter:blur(18px); opacity:.78; }
 /* the crest sits on the middle of the screen, the line just below it */
-#splash img { position:absolute; left:50%; top:50%; width:min(36vw, 150px); height:auto;
+#splash .spcrest { position:absolute; left:50%; top:50%; width:min(36vw, 150px); height:auto;
   transform:translate(-50%, -54%); animation:splashin .45s ease-out both; }
 #splash .splashtxt { position:absolute; left:0; right:0; top:calc(50% + min(18vw, 75px) + 10px);
   text-align:center; color:#ffffff; font-size:18px; font-weight:400; line-height:1.3; letter-spacing:.2px;
   animation:splashup .5s .1s ease-out both; }
 @keyframes splashin { from { opacity:0; transform:translate(-50%, -54%) scale(.95); } to { opacity:1; transform:translate(-50%, -54%); } }
 @keyframes splashup { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-@media (prefers-reduced-motion: reduce) { #splash img, #splash .splashtxt { animation:none; } #splash { transition:none; } }
-html.swreload #splash img, html.swreload #splash .splashtxt { animation:none; }
+/* Opened from the home screen, the phone first shows a launch screen of its
+   own (Android, and iOS too), the icon in a circle 47.9% of the screen wide
+   (measured off a phone), dead centre, on the manifest's purple, and fades
+   it into the page. The page's first frame
+   is that same picture, so the fade is not seen; then the circle draws away
+   while the bands, the colour, the crest and its line come up. */
+#splash .sptile { display:none; }
+html.applaunch #splash .sptile { display:block; position:absolute; left:50%; top:50%; width:47.9vw; height:47.9vw;
+  border-radius:50%; transform:translate(-50%, -50%); animation:sptileaway .55s .12s ease-in-out both; }
+html.applaunch #splash .spbands, html.applaunch #splash .spglow { animation:spfadein .6s .12s ease-out both; }
+html.applaunch #splash .spcrest { animation:splashin .5s .3s ease-out both; }
+html.applaunch #splash .splashtxt { animation:splashup .5s .4s ease-out both; }
+@keyframes sptileaway { to { opacity:0; transform:translate(-50%, -50%) scale(.72); } }
+@keyframes spfadein { from { opacity:0; } }
+@keyframes sptilefade { to { opacity:0; } }
+@media (prefers-reduced-motion: reduce) {
+  #splash .spcrest, #splash .splashtxt, html.applaunch #splash .spbands, html.applaunch #splash .spglow { animation:none; }
+  #splash { transition:none; }
+  html.applaunch #splash .sptile { animation:sptilefade .25s .1s both; } }
+html.swreload #splash .spcrest, html.swreload #splash .splashtxt { animation:none; }
 .empty img.big { width:120px; height:120px; border-radius:24px; }
 
 /* ---- pull to refresh ----------------------------------------------------
