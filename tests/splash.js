@@ -14,7 +14,15 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
   await new Promise(r => srv.listen(PORT, r));
   // files and manifest
   const man = JSON.parse(fs.readFileSync(APP + "/manifest.json", "utf8"));
-  chk(man.icons.length === 3 && man.icons.every(i => fs.existsSync(APP + "/" + i.src)), "manifest lists three PNG icons that exist", man.icons.map(i => i.src + " " + i.purpose).join(", "));
+  chk(man.icons.length === 4 && man.icons.every(i => fs.existsSync(APP + "/" + i.src)), "manifest lists four PNG icons that exist", man.icons.map(i => i.src + " " + i.purpose).join(", "));
+  // Android fills its icon shape only from an icon marked maskable; one with
+  // a file of its own, at both sizes Chrome asks for, and never the same file
+  // listed twice, so Chrome cannot settle on the plain one and sit it in a
+  // white circle
+  const mk = man.icons.filter(i => i.purpose === "maskable"), any = man.icons.filter(i => i.purpose === "any");
+  chk(mk.map(i => i.sizes).sort().join(",") === "192x192,512x512" && any.length === 2 &&
+      mk.every(i => any.every(a => a.src !== i.src)) && mk.every(i => pngSize(APP + "/" + i.src) === i.sizes),
+      "maskable icons have files of their own, at 192 and 512", mk.map(i => i.src + " " + i.sizes).join(", "));
   chk(pngSize(APP + "/icon-512.png") === "512x512" && pngSize(APP + "/icon-192.png") === "192x192" && pngSize(APP + "/apple-touch-icon.png") === "180x180" && pngSize(APP + "/favicon-64.png") === "64x64", "icons are 512, 192, 180 and 64 square");
   chk(!fs.existsSync(APP + "/icon.svg") && !/icon\.svg/.test(fs.readFileSync(APP + "/index.html", "utf8") + fs.readFileSync(APP + "/sw.js", "utf8") + fs.readFileSync(APP + "/app.js", "utf8")), "the old SVG icon is gone and nothing refers to it");
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
