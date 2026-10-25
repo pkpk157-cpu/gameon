@@ -1,7 +1,9 @@
 /* FPL Game On V12 — service worker (network-first for app + data, cache fallback) */
 // Bumped so devices that already stored a failed response under the old name
 // drop it on activate rather than serving that miss for the rest of the season.
-const CACHE = "gameon-v12-8";
+// v12-9: the page itself is fetched past the browser's own cache, and every
+// file is taken fresh when a new worker installs (see below).
+const CACHE = "gameon-v12-9";
 const ASSETS = [
   "./", "./index.html", "./styles.css",
   "./config.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./theo.js", "./app.js",
@@ -13,7 +15,11 @@ const ASSETS = [
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(CACHE)
-      .then((c) => Promise.allSettled(ASSETS.map((a) => c.add(a))))
+      // fresh from the server, not from the browser's HTTP cache: GitHub
+      // Pages lets a browser keep any file for ten minutes, so a worker
+      // installed just after a deploy could store the old page beside the
+      // new styles and serve that pair for as long as it lives
+      .then((c) => Promise.allSettled(ASSETS.map((a) => c.add(new Request(a, { cache: "reload" })))))
       .then(() => self.skipWaiting())
   );
 });
@@ -35,8 +41,15 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return;
 
   if (req.mode === "navigate" || req.destination === "document") {
+    // The page is revalidated like every other file. Fetched as it came, it
+    // could be the browser's ten-minute-old copy while styles.css and app.js
+    // (revalidated below) were already the new release: an old page wearing
+    // new styles, which is what a phone opened mid-deploy showed.
     e.respondWith(
-      fetch(req).then((res) => {
+      fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then((res) => {
+        // a page reached through a redirect is handed back the way it was
+        // asked for, which some browsers insist on for a navigation
+        if (res.redirected) return fetch(req);
         const copy = res.clone();
         if (res.ok) caches.open(CACHE).then((c) => c.put("./index.html", copy)).catch(() => {});
         return res;

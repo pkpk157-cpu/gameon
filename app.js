@@ -2526,6 +2526,9 @@
   // The opening screen is on for a second at the least, counted from when
   // the app was opened, so it is seen rather than flashed.
   var SPLASH_MIN_MS = 1000;
+  // straight after the reload a new version makes, the screen was already up
+  // a moment ago, so it does not hold again
+  try { if (sessionStorage.getItem("go12.swreload")) { sessionStorage.removeItem("go12.swreload"); SPLASH_MIN_MS = 0; } } catch (e) {}
   function hideSplash() {
     var sp = $("#splash");
     if (!sp || sp.classList.contains("gone")) return;

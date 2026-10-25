@@ -25,6 +25,9 @@
       var t = JSON.parse(localStorage.getItem("go12.theme"));
       if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
     } catch (e) {}
+    /* straight after the reload a new version makes, the opening screen was
+       on a moment ago: it comes back without its fade-in */
+    try { if (sessionStorage.getItem("go12.swreload")) document.documentElement.classList.add("swreload"); } catch (e) {}
   })();
 </script>
 <link rel="stylesheet" href="styles.css" />
@@ -112,6 +115,9 @@
       navigator.serviceWorker.addEventListener("controllerchange", function () {
         if (!hadWorker || reloading) return;
         reloading = true;
+        // the opening screen was just seen; the reload shows it without the
+        // second's hold and the fade, so it does not play twice
+        try { sessionStorage.setItem("go12.swreload", "1"); } catch (e) {}
         location.reload();
       });
       window.addEventListener("load", function () {
