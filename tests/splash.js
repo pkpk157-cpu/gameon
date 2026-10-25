@@ -37,12 +37,12 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
       img: !!(i && i.complete && i.naturalWidth > 0), src: i.getAttribute("src"), bg: s && getComputedStyle(s).backgroundColor, text: t.innerText.replace(/\s+/g, " ").trim(),
       midX: Math.round(ir.left + ir.width / 2 - innerWidth / 2), midY: Math.round(ir.top + ir.height / 2 - innerHeight / 2),
       below: tr.top >= ir.bottom - 2 && tr.bottom < innerHeight, glow: !!s.querySelector(".spglow") }; });
-  chk(mid.on && mid.covers && mid.img && mid.src === "logo-crest-light.webp" && mid.bg === "rgb(243, 241, 246)" && mid.glow,
-      "while loading: the crest on the light ground, the colour rising from the foot, covers the screen", JSON.stringify(mid));
+  chk(mid.on && mid.covers && mid.img && mid.src === "logo-crest.webp" && mid.bg === "rgb(55, 0, 60)" && mid.glow,
+      "while loading: the crest on the app's purple, its colours rising from the foot, covers the screen", JSON.stringify(mid));
   chk(mid.text === "The home of the FPL addicts" && mid.below, "and under it: The home of the FPL addicts", mid.text);
   chk(Math.abs(mid.midX) <= 1 && Math.abs(mid.midY) <= 20, "the crest sits in the middle of the screen", mid.midX + "," + mid.midY);
   const man2 = JSON.parse(fs.readFileSync(APP + "/manifest.json", "utf8"));
-  chk(man2.background_color === "#f3f1f6", "the phone's own launch screen is on the same light ground", man2.background_color);
+  chk(man2.background_color === "#37003c", "the phone's own launch screen is on the same purple", man2.background_color);
   await p.screenshot({ path: "splash.png" });
   await p.waitForTimeout(2500);
   chk(await p.evaluate(() => !document.querySelector("#splash") && document.querySelectorAll("section.view.active table.t tbody tr").length > 0), "once the standings are drawn the splash is gone from the page");

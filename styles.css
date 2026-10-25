@@ -1148,23 +1148,26 @@ table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600;
    The crest on its own purple while the first standings load. It sits over
    everything and fades once the page is drawn. */
 #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:100; overflow:hidden;
-  /* light ground, crossed by wide white bands running down to the right */
-  background-color:#f3f1f6;
-  background-image:linear-gradient(48deg, transparent 0 14%, rgba(255,255,255,.95) 14% 27%, transparent 27% 41%,
-    rgba(255,255,255,.95) 41% 52%, transparent 52% 66%, rgba(255,255,255,.95) 66% 79%, transparent 79%);
+  /* the top bar's purple, crossed by wide, faint bands running down to the
+     right */
+  background-color:#37003c;
+  background-image:linear-gradient(48deg, transparent 0 14%, rgba(255,255,255,.045) 14% 27%, transparent 27% 41%,
+    rgba(255,255,255,.045) 41% 52%, transparent 52% 66%, rgba(255,255,255,.045) 66% 79%, transparent 79%),
+    linear-gradient(170deg, #37003c 0%, #4a0050 55%, #6a0a5c 100%);
   transition:opacity .35s ease-out; }
 #splash.gone { opacity:0; pointer-events:none; }
-/* the colour rising from the foot of the screen, green through to red */
+/* the app's own colours rising from the foot of the screen: the green and
+   cyan of the crest's border into the pink of the bar */
 #splash .spglow { position:absolute; left:-10%; right:-10%; bottom:-6%; height:52%;
-  background:linear-gradient(90deg, #3dff6e 0%, #2bf5c8 22%, #33e9ff 40%, #9a7bff 60%, #c44dff 72%, #ff3fae 86%, #ff5a5a 100%);
+  background:linear-gradient(90deg, #00ff87 0%, #04f5ff 32%, #7a3cff 58%, #b4128f 76%, #e90052 100%);
   -webkit-mask-image:linear-gradient(to top, #000 0%, rgba(0,0,0,.75) 30%, transparent 100%);
   mask-image:linear-gradient(to top, #000 0%, rgba(0,0,0,.75) 30%, transparent 100%);
-  filter:blur(18px); opacity:.9; }
+  filter:blur(18px); opacity:.78; }
 /* the crest sits on the middle of the screen, the line just below it */
 #splash img { position:absolute; left:50%; top:50%; width:min(36vw, 150px); height:auto;
   transform:translate(-50%, -54%); animation:splashin .45s ease-out both; }
 #splash .splashtxt { position:absolute; left:0; right:0; top:calc(50% + min(18vw, 75px) + 10px);
-  text-align:center; color:#37003c; font-size:18px; font-weight:400; line-height:1.3; letter-spacing:.2px;
+  text-align:center; color:#ffffff; font-size:18px; font-weight:400; line-height:1.3; letter-spacing:.2px;
   animation:splashup .5s .1s ease-out both; }
 @keyframes splashin { from { opacity:0; transform:translate(-50%, -54%) scale(.95); } to { opacity:1; transform:translate(-50%, -54%); } }
 @keyframes splashup { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
