@@ -3194,10 +3194,9 @@
         '<td class="name" data-entry="' + r.id + '"><span class="' + nameCls + '">' + esc(r.name) + '</span><div class="mgr">' + esc(r.player) + '</div></td>' +
         '<td class="num"><b>' + num(r.score) + '</b></td>' +
         '<td class="num">' + played + '</td>' +
-        '<td class="num c-hits">' + (r.hit ? '−' + r.hit : '0') + '</td>' +
         '<td class="num c-bench">' + num(r.bench) + '</td></tr>';
     }).join("");
-    return '<div class="freeze"><table class="t lmstbl"><thead><tr><th class="num c-cl" title="Place in the Classic" aria-label="Classic rank">CL</th><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num c-hits">Hits</th><th class="num c-bench">Bench</th></tr></thead><tbody>' +
+    return '<div class="freeze"><table class="t lmstbl"><thead><tr><th class="num c-cl" title="Place in the Classic" aria-label="Classic rank">CL</th><th>Team</th><th class="num">GW pts</th><th class="num">Played</th><th class="num c-bench">Bench</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>';
   }
 
