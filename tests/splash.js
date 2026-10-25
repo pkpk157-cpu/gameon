@@ -114,7 +114,9 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
       window.matchMedia = (q) => /display-mode:\s*standalone/.test(q) ? mm("(min-width: 0px)") : mm(q); });
     await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "commit" });
     await pg.waitForSelector("#splash .sptile", { state: "attached", timeout: 5000 });
-    const f0 = await pg.evaluate(() => { const s = document.querySelector("#splash"), t = s.querySelector(".sptile"), r = t.getBoundingClientRect(), cs = getComputedStyle(t);
+    // the first frame itself: every animation held at its start, so a busy
+    // machine reaching this a moment late still reads frame zero
+    const f0 = await pg.evaluate(() => { document.getAnimations().forEach((a) => { a.pause(); a.currentTime = 0; }); const s = document.querySelector("#splash"), t = s.querySelector(".sptile"), r = t.getBoundingClientRect(), cs = getComputedStyle(t);
       return { cls: document.documentElement.className, shown: cs.display !== "none", radius: cs.borderRadius, src: t.getAttribute("src"), op: +cs.opacity,
         w: +(r.width / innerWidth * 100).toFixed(1), cx: Math.round(r.left + r.width / 2 - innerWidth / 2), cy: Math.round(r.top + r.height / 2 - innerHeight / 2),
         bg: getComputedStyle(s).backgroundColor }; });
@@ -123,8 +125,8 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
         how + " home screen: the first frame is the phone's own launch picture, the icon in a circle", JSON.stringify(f0));
     chk(Math.abs(f0.w - 47.9) < 0.3 && Math.abs(f0.cx) <= 1 && Math.abs(f0.cy) <= 1 && f0.bg === "rgb(55, 0, 60)" && man3.background_color === "#37003c",
         how + ": at the launch screen's size and place, on the manifest's purple", f0.w + "% · " + f0.cx + "," + f0.cy + " · " + f0.bg);
-    await pg.waitForTimeout(1100);
-    const f1 = await pg.evaluate(() => { const s = document.querySelector("#splash"); const t = s.querySelector(".sptile"), cr = s.querySelector(".spcrest");
+    // and the end of the hand-over
+    const f1 = await pg.evaluate(() => { document.getAnimations().forEach((a) => { a.finish(); }); const s = document.querySelector("#splash"); const t = s.querySelector(".sptile"), cr = s.querySelector(".spcrest");
       return { tile: +getComputedStyle(t).opacity, crest: +getComputedStyle(cr).opacity, bands: +getComputedStyle(s.querySelector(".spbands")).opacity,
                text: +getComputedStyle(s.querySelector(".splashtxt")).opacity }; });
     chk(f1.tile === 0 && f1.crest === 1 && f1.bands === 1 && f1.text === 1, how + ": then the circle has gone and the screen is itself", JSON.stringify(f1));

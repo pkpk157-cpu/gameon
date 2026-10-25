@@ -15,8 +15,13 @@ const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x !=
 // two releases of the same app: the second marks its page and its styles
 const rel = { 1: {}, 2: {} };
 ["index.html", "styles.css", "sw.js"].forEach((f) => { rel[1][f] = fs.readFileSync(path.join(APP, f), "utf8"); });
-rel[2]["index.html"] = rel[1]["index.html"].replace("<body>", '<body data-release="2">');
-rel[2]["styles.css"] = rel[1]["styles.css"] + '\n:root { --release:"2"; }\n';
+// each release marks its page and its styles, so a stylesheet still loading
+// reads as nothing rather than as the old release
+const base1 = rel[1]["index.html"], css1 = rel[1]["styles.css"];
+rel[1]["index.html"] = base1.replace("<body>", '<body data-release="1">');
+rel[1]["styles.css"] = css1 + '\n:root { --release:"1"; }\n';
+rel[2]["index.html"] = base1.replace("<body>", '<body data-release="2">');
+rel[2]["styles.css"] = css1 + '\n:root { --release:"2"; }\n';
 // a new release carries a new BUILD, as stamp-sw.js gives every release
 rel[2]["sw.js"] = rel[1]["sw.js"].replace(/const BUILD = "([^"]*)";/, 'const BUILD = "$1-r2";');
 let live = 1;
@@ -38,9 +43,10 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
   if (!(await p.evaluate(() => !!navigator.serviceWorker.controller))) { await p.reload({ waitUntil: "load" }); }
   chk(await p.evaluate(() => !!navigator.serviceWorker.controller), "the worker takes charge of the app");
   // the worker's own reload can land mid-read: wait it out and read again
-  const read = async () => { for (let k = 0; k < 6; k++) { try { return await read1(); } catch (e) { await p.waitForLoadState("load").catch(() => {}); await p.waitForTimeout(300); } } return read1(); };
-  const read1 = () => p.evaluate(() => ({ page: document.body.getAttribute("data-release") || "1",
-    css: (getComputedStyle(document.documentElement).getPropertyValue("--release").replace(/["\s]/g, "")) || "1",
+  const read = async () => { for (let k = 0; k < 20; k++) { try { const r = await read1(); if (r.page && r.css) return r; } catch (e) {}
+      await p.waitForLoadState("load").catch(() => {}); await p.waitForTimeout(300); } return read1(); };
+  const read1 = () => p.evaluate(() => ({ page: document.body.getAttribute("data-release") || "",
+    css: (getComputedStyle(document.documentElement).getPropertyValue("--release").replace(/["\s]/g, "")) || "",
     splashImg: (document.querySelector("#splash img") || {}).getAttribute ? document.querySelector("#splash img").getAttribute("src") : "(gone)" }));
   const r1 = await read();
   chk(r1.page === "1" && r1.css === "1", "release 1: its page and its styles", JSON.stringify(r1));
