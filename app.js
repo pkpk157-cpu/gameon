@@ -2512,6 +2512,13 @@
     // the load fails or hangs, after a few seconds regardless, so it can
     // never sit in front of the empty state that explains what is wrong.
     var splashTimer = setTimeout(hideSplash, 6000);
+    // the stored copy painted first and the network has now brought a newer
+    // publish: shown at once, with the motion every update gets
+    S.onLate(function () {
+      if (busyReading()) return;
+      liveMotion(function () { keepPlace(render); });
+      updateBanner();
+    });
     S.load().then(function () {
       syncFromHash();
       updateDataState();
@@ -2523,9 +2530,9 @@
       hideSplash();
     }, function () { clearTimeout(splashTimer); syncFromHash(); hideSplash(); });
   }
-  // The opening screen is on for a second at the least, counted from when
+  // The opening screen is on for a moment at the least, counted from when
   // the app was opened, so it is seen rather than flashed.
-  var SPLASH_MIN_MS = 1000;
+  var SPLASH_MIN_MS = 600;
   // straight after the reload a new version makes, the screen was already up
   // a moment ago, so it does not hold again
   try { if (sessionStorage.getItem("go12.swreload")) { sessionStorage.removeItem("go12.swreload"); SPLASH_MIN_MS = 0; } } catch (e) {}

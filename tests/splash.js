@@ -4,9 +4,12 @@ const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8749;
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
-let delay = 0, failData = false;
+let delay = 0, failData = false, stamp = null;
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
   if (u === "/data.json" && failData) { r.writeHead(500); r.end(); return; }
+  // a newer publish: the same data under a later stamp
+  if (u === "/data.json" && stamp) { const j = JSON.parse(fs.readFileSync(path.join(APP, u), "utf8")); (j.dataset || j).updatedAt = stamp;
+    setTimeout(() => { r.writeHead(200, { "content-type": "application/json" }); r.end(JSON.stringify(j)); }, delay); return; }
   setTimeout(() => fs.readFile(path.join(APP, u), (e, b) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { "content-type": T[path.extname(u)] || "text/plain" }); r.end(b); }), u === "/data.json" ? delay : 0); });
 let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? "  " + x : "")); if (!ok) fails++; };
 const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) + "x" + b.readUInt32BE(20); };
@@ -56,7 +59,36 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
     await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
     const at = await pg.evaluate(() => new Promise((res) => { const t = setInterval(() => { const s = document.querySelector("#splash");
       if (!s || s.classList.contains("gone")) { clearInterval(t); res(Math.round(performance.now())); } }, 15); }));
-    chk(at >= 990 && at <= 1700, "with the data quick, the opening screen is on for a second", at + "ms");
+    chk(at >= 590 && at <= 1200, "with the data quick, the opening screen is on for a moment and no longer", at + "ms");
+    await c.close();
+  }
+  // A phone that already holds the data does not wait for the whole file to
+  // come down again: it paints its own copy within a moment, its age in the
+  // bar, and the newer publish replaces it on screen the moment it lands.
+  for (const stale of [false, true]) {
+    const c = await b.newContext({ ...devices["Pixel 7"], serviceWorkers: "block" }); const pg = await c.newPage(); const er = [];
+    pg.on("pageerror", (e) => er.push(e.message));
+    // the copy on the phone: just published, or twenty minutes old
+    delay = 0; stamp = new Date(Date.now() - (stale ? 20 : 1) * 60000).toISOString();
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    await pg.waitForSelector("section.view.active table.t tbody tr", { timeout: 15000 });
+    await pg.waitForTimeout(800);                               // the copy is stored
+    const older = await pg.evaluate(() => window.GO_STORE.dataset().updatedAt);
+    stamp = new Date().toISOString(); delay = 4000;
+    await pg.goto("about:blank");
+    const t0 = Date.now();
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    await pg.waitForFunction(() => !document.querySelector("#splash") && document.querySelectorAll("section.view.active table.t tbody tr").length > 0, null, { timeout: 15000 });
+    const shown = Date.now() - t0;
+    const first = await pg.evaluate(() => ({ at: window.GO_STORE.dataset().updatedAt, sub: (document.querySelector("#barSub") || {}).textContent }));
+    const age = Date.now() - Date.parse(older);
+    chk(shown < (age < 5 * 60 * 1000 ? 1500 : 2600) && first.at === older, (stale ? "an older stored copy" : "a fresh stored copy") + " is on screen in a moment, not after the download", shown + "ms · " + first.sub);
+    await pg.waitForFunction((st) => window.GO_STORE.dataset().updatedAt === st, stamp, { timeout: 15000 }).catch(() => {});
+    await pg.waitForTimeout(600);
+    const later = await pg.evaluate(() => ({ at: window.GO_STORE.dataset().updatedAt, sub: (document.querySelector("#barSub") || {}).textContent, rows: document.querySelectorAll("section.view.active table.t tbody tr").length }));
+    chk(later.at === stamp && /just now|0m|1m/.test(later.sub || "") && later.rows > 0, (stale ? "older copy: " : "fresh copy: ") + "the newer publish replaces it on screen when it lands, no reload", JSON.stringify(later));
+    chk(!er.length, "no JS errors when the newer data lands late", er.join(" | "));
+    stamp = null; delay = 0;
     await c.close();
   }
   // a small phone: the crest and its line both fit

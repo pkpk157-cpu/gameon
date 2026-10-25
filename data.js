@@ -160,16 +160,23 @@
           .then(function (r) { return r.ok ? r.json() : null; })
           .catch(function () { return null; });
         if (!stored) return net; // nothing to show yet, so wait for the network
-        // A device that already holds a dataset must not sit on a blank screen
-        // behind a request that hangs — stadium wifi will produce one sooner or
-        // later. After six seconds the stored copy paints; the fetch carries on
-        // and whatever it brings is absorbed quietly for the next redraw.
-        var slow = new Promise(function (res) { setTimeout(function () { res(SLOW); }, 6000); });
+        // A device that already holds a dataset does not sit on the opening
+        // screen while the whole file comes down again. A copy published
+        // within the updater's own cycle is as new as the server's, so it
+        // paints at once; an older one waits for the network a moment
+        // (FIRST_PAINT_MS), then paints, its age in the bar. Whatever the
+        // fetch brings after that is taken in and shown (STORE.onLate).
+        var age = Date.now() - Date.parse(stored.updatedAt || 0);
+        var wait = (age >= 0 && age < FRESH_STORED_MS) ? 0 : FIRST_PAINT_MS;
+        var slow = new Promise(function (res) { setTimeout(function () { res(SLOW); }, wait); });
         return Promise.race([net, slow]).then(function (w) {
           if (w !== SLOW) return w;
           net.then(function (bundle) {
             var late = absorb(bundle, stored);
-            if (late) { _dataset = late; keep(late, stored); }
+            if (late && late !== stored && late.updatedAt !== (_dataset || {}).updatedAt) {
+              _dataset = late; keep(late, stored);
+              if (_onLate) { try { _onLate(late); } catch (e) {} }
+            }
           }).catch(function () {});
           return null; // fall through to the stored copy below
         });
@@ -185,6 +192,12 @@
       .catch(function () { _dataset = stored; return _dataset; });
   };
   var SLOW = { slow: true };
+  // The updater publishes every five minutes: a stored copy younger than that
+  // is the newest there is. An older one waits this long for the network.
+  var FRESH_STORED_MS = 5 * 60 * 1000, FIRST_PAINT_MS = 1200;
+  // Told when a newer dataset arrives after the stored one has painted.
+  var _onLate = null;
+  STORE.onLate = function (fn) { _onLate = fn; };
   function keep(ds, stored) {
     if (ds && (!stored || stored.updatedAt !== ds.updatedAt)) {
       idbSet(DATASET_KEY, ds).catch(function () {});
