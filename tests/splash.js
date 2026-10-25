@@ -25,6 +25,18 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
       "maskable icons have files of their own, at 192 and 512", mk.map(i => i.src + " " + i.sizes).join(", "));
   chk(pngSize(APP + "/icon-512.png") === "512x512" && pngSize(APP + "/icon-192.png") === "192x192" && pngSize(APP + "/apple-touch-icon.png") === "180x180" && pngSize(APP + "/favicon-64.png") === "64x64", "icons are 512, 192, 180 and 64 square");
   chk(!fs.existsSync(APP + "/icon.svg") && !/icon\.svg/.test(fs.readFileSync(APP + "/index.html", "utf8") + fs.readFileSync(APP + "/sw.js", "utf8") + fs.readFileSync(APP + "/app.js", "utf8")), "the old SVG icon is gone and nothing refers to it");
+  // iOS shows a startup image while the app starts: one for every iPhone and
+  // iPad size, each at exactly its screen's pixels, so the hand-over to the
+  // opening screen is not seen
+  const jpegSize = (f) => { const b2 = fs.readFileSync(f); let i = 2;
+    while (i < b2.length) { if (b2[i] !== 0xFF) return null; const m = b2[i + 1], L = b2.readUInt16BE(i + 2);
+      if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) return b2.readUInt16BE(i + 7) + "x" + b2.readUInt16BE(i + 5);
+      i += 2 + L; } return null; };
+  const html = fs.readFileSync(APP + "/index.html", "utf8");
+  const su = [...html.matchAll(/<link rel="apple-touch-startup-image" href="([^"]+)" media="\(device-width: (\d+)px\) and \(device-height: (\d+)px\) and \(-webkit-device-pixel-ratio: (\d)\) and \(orientation: portrait\)"/g)];
+  const bad = su.filter((m) => !fs.existsSync(APP + "/" + m[1]) || jpegSize(APP + "/" + m[1]) !== (m[2] * m[4]) + "x" + (m[3] * m[4]));
+  chk(su.length >= 20 && !bad.length, "a startup image for every iPhone and iPad, each its screen's exact size", su.length + " · " + bad.map((m) => m[1]).join(","));
+  chk(["390x844x3", "393x852x3", "402x874x3", "430x932x3", "440x956x3", "375x667x2"].every((k) => su.some((m) => m[2] + "x" + m[3] + "x" + m[4] === k)), "including today's iPhones");
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
   // slow data: the splash shows, then leaves once drawn
   delay = 1500;
