@@ -66,13 +66,43 @@
     var x = ds && ds._extSquads;
     return (x && x[gw] && x[gw][id]) || null;
   }
+  // Whether a gameweek has any live points at all. The answer for a points
+  // table is kept once it is yes: the live feed brings new tables rather than
+  // filling an old one, and a table never empties.
+  var _hasPts = typeof WeakMap === "function" ? new WeakMap() : null;
+  function hasAny(o) {
+    if (!o) return false;
+    if (_hasPts && _hasPts.has(o)) return true;
+    for (var k in o) { if (Object.prototype.hasOwnProperty.call(o, k)) { if (_hasPts) _hasPts.set(o, true); return true; } }
+    return false;
+  }
+  // Every table, badge and line that scores a live week asks this of every
+  // manager, many times an open. The sums are kept for the live points and
+  // provisional bonus they were made from: a new live poll brings new tables,
+  // and with them new sums.
+  var _liveSums = typeof WeakMap === "function" ? new WeakMap() : null;
   function liveSquadTotal(ds, entryId, gw, benchInstead) {
     if (!ds || C.liveGwId(ds) !== +gw) return null;
+    var lp0 = liveAt(ds, gw), pb0 = bonusAt(ds, gw);
+    var memo = null, mk = entryId + (benchInstead ? "b" : "x");
+    if (_liveSums && ds.picks) {
+      var byDs = _liveSums.get(ds);
+      if (!byDs || byDs.gw !== +gw || byDs.lp !== lp0 || byDs.pb !== pb0 || byDs.picks !== ds.picks[gw] || byDs.ext !== ds._extSquads) {
+        byDs = { gw: +gw, lp: lp0, pb: pb0, picks: ds.picks[gw], ext: ds._extSquads, sums: {} };
+        _liveSums.set(ds, byDs);
+      }
+      memo = byDs.sums;
+      if (Object.prototype.hasOwnProperty.call(memo, mk)) return memo[mk];
+    }
+    var v = liveSquadTotal0(ds, entryId, gw, benchInstead, lp0, pb0);
+    if (memo) memo[mk] = v;
+    return v;
+  }
+  function liveSquadTotal0(ds, entryId, gw, benchInstead, lp, pb) {
     var squad = (ds.picks && ds.picks[gw] && ds.picks[gw][entryId]) || extSquad(ds, gw, entryId);
     var picks = squad && squad.p;
     if (!picks || !picks.length) return null;
-    var lp = liveAt(ds, gw), pb = bonusAt(ds, gw);
-    if (!lp || !Object.keys(lp).length) return null;
+    if (!lp || !hasAny(lp)) return null;
     var total = 0;
     picks.forEach(function (pk) {
       var mult = pk[1] || 0;
@@ -181,10 +211,17 @@
     return Object.keys(have).map(Number).sort(function (a, b) { return a - b; });
   };
   // The in-progress gameweek (current but not yet finalised), or null.
+  // Asked thousands of times an open, so the answer is kept per events list:
+  // a publish brings a new list, and nothing edits one in place.
+  var _liveGwOf = typeof WeakMap === "function" ? new WeakMap() : null;
   C.liveGwId = function (ds) {
     if (!ds || !ds.bootstrap) return null;
-    var e = ds.bootstrap.events.filter(function (e) { return e.is_current && !(e.finished && e.data_checked); })[0];
-    return e ? e.id : null;
+    var evs = ds.bootstrap.events;
+    if (_liveGwOf && evs && _liveGwOf.has(evs)) return _liveGwOf.get(evs);
+    var e = (evs || []).filter(function (e) { return e.is_current && !(e.finished && e.data_checked); })[0];
+    var id = e ? e.id : null;
+    if (_liveGwOf && evs) _liveGwOf.set(evs, id);
+    return id;
   };
   C.currentGw = function (ds) {
     if (!ds || !ds.bootstrap) return null;
@@ -1058,16 +1095,19 @@
     _worth = { key: key, val: out };
     return out;
   };
+  // One empty table for every gameweek with none, rather than a new one per
+  // call, so what is kept per table (liveSquadTotal) is kept. Read only.
+  var NONE = Object.freeze({});
   function liveAt(ds, gw) {
-    if (!ds || !ds.livePoints) return {};
-    if (ds.picksV >= 2) return ds.livePoints[gw] || {};
-    return (+gw === +ds.pitchGw) ? ds.livePoints : {};
+    if (!ds || !ds.livePoints) return NONE;
+    if (ds.picksV >= 2) return ds.livePoints[gw] || NONE;
+    return (+gw === +ds.pitchGw) ? ds.livePoints : NONE;
   }
   // Bonus FPL has not published yet, ranked from bps by the updater. It exists
   // only for fixtures still in play: once one is finalised its bonus is already
   // inside the player's points and this is empty for them again.
   function bonusAt(ds, gw) {
-    return (ds && ds.liveBonus && ds.liveBonus[gw]) || {};
+    return (ds && ds.liveBonus && ds.liveBonus[gw]) || NONE;
   }
   C.provisionalBonus = bonusAt;
   // What a player is on in a gameweek, the same on every screen: FPL's live

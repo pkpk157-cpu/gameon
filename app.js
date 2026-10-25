@@ -204,7 +204,16 @@
   }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  function num(n) { if (n == null || isNaN(n)) return "—"; return Number(n).toLocaleString("en-US"); }
+  // One formatter for every number on every screen: toLocaleString builds a
+  // new one on each call, and a table asks for hundreds. Same output, to the
+  // character; whole numbers under a thousand need no grouping at all.
+  var NUMF = (typeof Intl === "object" && Intl.NumberFormat) ? new Intl.NumberFormat("en-US") : null;
+  function num(n) {
+    if (n == null || isNaN(n)) return "—";
+    var v = Number(n);
+    if (v % 1 === 0 && v > -1000 && v < 1000 && !(v === 0 && 1 / v < 0)) return String(v);
+    return NUMF ? NUMF.format(v) : v.toLocaleString("en-US");
+  }
   // Experience points. Bare inside a table whose column head already says XP;
   // xpa() carries the unit for anything standing on its own. Plain grouping —
   // nothing about these figures should read as a currency.

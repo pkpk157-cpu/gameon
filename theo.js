@@ -644,7 +644,21 @@
   // A line for now: something about the week when there is something to say,
   // otherwise something general; never one already said while another that
   // fits is still unsaid, and never the words just shown.
+  // The facts he works from, brought up to date when the page has a moment,
+  // or at once when he is about to speak.
+  var due = null, dueT = null;
+  function know() {
+    if (dueT) { (window.cancelIdleCallback || clearTimeout)(dueT); dueT = null; }
+    if (due) { var d = due; due = null; ctx = build(d.ds, d.me); }
+  }
+  function later(ds, me) {
+    due = { ds: ds, me: me };
+    if (dueT) return;
+    dueT = window.requestIdleCallback ? window.requestIdleCallback(function () { dueT = null; know(); }, { timeout: 2500 })
+                                      : setTimeout(function () { dueT = null; know(); }, 800);
+  }
   function pick(poked) {
+    know();
     var can = [];
     L.forEach(function (l, i) {
       if (i === last) return;
@@ -682,6 +696,7 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
   function lineText(i) {
+    know();
     try { return L[i].t(ctx); } catch (e) { return ""; }
   }
 
@@ -767,6 +782,7 @@
   }
   function poke() {
     if (!root) return;
+    know();
     taps++;
     if (!savage && taps >= SAVAGE_AT) {
       savage = true;
@@ -822,7 +838,10 @@
     try {
       if (isOff()) { unmount(); return; }
       var ds = o && o.ds;
-      ctx = build(ds, o && o.me);
+      // What he knows of the week is worked out once the page is up, not
+      // in front of it: it reads half the league's numbers, and nothing he
+      // says is said before he is asked or before his greeting.
+      later(ds, o && o.me);
       if (!ds || !ds.managers || !ds.managers.length) return;
       mount();
       if (!greeted) {
@@ -840,8 +859,8 @@
   T.lines = function () { return L.map(function (l) { return l.k; }); };
   T.say = function (i) { return say(i, true); };
   T.text = function (i) { return lineText(i); };
-  T.fits = function (i) { try { return !!L[i].w(ctx); } catch (e) { return false; } };
-  T.context = function () { return ctx; };
+  T.fits = function (i) { know(); try { return !!L[i].w(ctx); } catch (e) { return false; } };
+  T.context = function () { know(); return ctx; };
   T.pick = function (poked) { return pick(!!poked); };
   T.taps = function () { return taps; };
   T.savage = function () { return savage; };
