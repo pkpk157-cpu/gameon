@@ -2523,9 +2523,14 @@
       hideSplash();
     }, function () { clearTimeout(splashTimer); syncFromHash(); hideSplash(); });
   }
+  // The opening screen is on for a second at the least, counted from when
+  // the app was opened, so it is seen rather than flashed.
+  var SPLASH_MIN_MS = 1000;
   function hideSplash() {
     var sp = $("#splash");
     if (!sp || sp.classList.contains("gone")) return;
+    var since = (window.performance && performance.now) ? performance.now() : SPLASH_MIN_MS;
+    if (since < SPLASH_MIN_MS) { setTimeout(hideSplash, SPLASH_MIN_MS - since); return; }
     sp.classList.add("gone");
     var drop = function () { if (sp.parentNode) sp.parentNode.removeChild(sp); };
     sp.addEventListener("transitionend", drop);

@@ -31,14 +31,43 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
   let ctx = await b.newContext({ ...devices["iPhone 12"], serviceWorkers: "block" });
   let p = await ctx.newPage(); const errs = []; p.on("pageerror", e => errs.push(e.message));
   await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(500);
-  const mid = await p.evaluate(() => { const s = document.querySelector("#splash"); const i = s && s.querySelector("img"); const r = s && s.getBoundingClientRect(); return { on: !!s && !s.classList.contains("gone"), covers: r && r.width === window.innerWidth && r.height === window.innerHeight, img: !!(i && i.complete && i.naturalWidth > 0), bg: s && getComputedStyle(s).backgroundColor, text: s && s.textContent.trim() }; });
-  chk(mid.on && mid.covers && mid.img && mid.bg === "rgb(30, 1, 56)", "while loading: the crest on its purple covers the screen", JSON.stringify(mid));
+  const mid = await p.evaluate(() => { const s = document.querySelector("#splash"); const i = s && s.querySelector("img"), t = s && s.querySelector(".splashtxt");
+    const r = s && s.getBoundingClientRect(), ir = i.getBoundingClientRect(), tr = t.getBoundingClientRect();
+    return { on: !!s && !s.classList.contains("gone"), covers: r && r.width === window.innerWidth && r.height === window.innerHeight,
+      img: !!(i && i.complete && i.naturalWidth > 0), src: i.getAttribute("src"), bg: s && getComputedStyle(s).backgroundColor, text: t.innerText.replace(/\s+/g, " ").trim(),
+      midX: Math.round(ir.left + ir.width / 2 - innerWidth / 2), midY: Math.round(ir.top + ir.height / 2 - innerHeight / 2),
+      below: tr.top >= ir.bottom - 2 && tr.bottom < innerHeight, glow: !!s.querySelector(".spglow") }; });
+  chk(mid.on && mid.covers && mid.img && mid.src === "logo-crest-light.webp" && mid.bg === "rgb(243, 241, 246)" && mid.glow,
+      "while loading: the crest on the light ground, the colour rising from the foot, covers the screen", JSON.stringify(mid));
+  chk(mid.text === "The home of the FPL addicts" && mid.below, "and under it: The home of the FPL addicts", mid.text);
+  chk(Math.abs(mid.midX) <= 1 && Math.abs(mid.midY) <= 20, "the crest sits in the middle of the screen", mid.midX + "," + mid.midY);
+  const man2 = JSON.parse(fs.readFileSync(APP + "/manifest.json", "utf8"));
+  chk(man2.background_color === "#f3f1f6", "the phone's own launch screen is on the same light ground", man2.background_color);
   await p.screenshot({ path: "splash.png" });
   await p.waitForTimeout(2500);
   chk(await p.evaluate(() => !document.querySelector("#splash") && document.querySelectorAll("section.view.active table.t tbody tr").length > 0), "once the standings are drawn the splash is gone from the page");
   chk(await p.evaluate(() => [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(l => l.getAttribute("href"))).then(a => a.join(",") === "apple-touch-icon.png,favicon-64.png,icon-192.png"), "the page links the PNG icons");
   chk(errs.length === 0, "no JS errors", errs.join(" | "));
   await ctx.close();
+  // quick data: the opening screen is still on for a second, and no longer
+  delay = 0;
+  {
+    const c = await b.newContext({ ...devices["Pixel 7"], serviceWorkers: "block" }); const pg = await c.newPage();
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    const at = await pg.evaluate(() => new Promise((res) => { const t = setInterval(() => { const s = document.querySelector("#splash");
+      if (!s || s.classList.contains("gone")) { clearInterval(t); res(Math.round(performance.now())); } }, 15); }));
+    chk(at >= 990 && at <= 1700, "with the data quick, the opening screen is on for a second", at + "ms");
+    await c.close();
+  }
+  // a small phone: the crest and its line both fit
+  {
+    const c = await b.newContext({ viewport: { width: 320, height: 568 }, isMobile: true, serviceWorkers: "block" }); const pg = await c.newPage();
+    delay = 1500; await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" }); await pg.waitForTimeout(500);
+    const f = await pg.evaluate(() => { const s = document.querySelector("#splash"), i = s.querySelector("img").getBoundingClientRect(), t = s.querySelector(".splashtxt").getBoundingClientRect();
+      return { fits: i.left >= 0 && i.right <= innerWidth && i.top >= 0 && t.bottom <= innerHeight && t.left >= 0 && t.right <= innerWidth, apart: t.top >= i.bottom - 2 }; });
+    chk(f.fits && f.apart, "on a 320px phone the crest and its line fit, apart", JSON.stringify(f));
+    await c.close();
+  }
   // data fails: the splash still leaves and the empty state shows the crest
   delay = 0; failData = true;
   ctx = await b.newContext({ ...devices["iPhone 12"], serviceWorkers: "block" });

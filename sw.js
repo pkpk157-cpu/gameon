@@ -6,7 +6,7 @@ const ASSETS = [
   "./", "./index.html", "./styles.css",
   "./config.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./theo.js", "./app.js",
   "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-maskable-192.png", "./icon-maskable-512.png", "./apple-touch-icon.png",
-  "./favicon-64.png", "./logo-splash.webp",
+  "./favicon-64.png", "./logo-splash.webp", "./logo-crest-light.webp",
   "./logo-tile.webp", "./logo-tile-inv.webp", "./pl-lion.webp", "./fpl-tile.webp"
 ];
 
