@@ -1,25 +1,39 @@
-/* FPL Game On V12 — service worker (network-first for app + data, cache fallback) */
-// Bumped so devices that already stored a failed response under the old name
-// drop it on activate rather than serving that miss for the rest of the season.
-// v12-9: the page itself is fetched past the browser's own cache, and every
-// file is taken fresh when a new worker installs (see below).
-const CACHE = "gameon-v12-9";
+/* FPL Game On V12 — service worker.
+
+   The app itself (the page, its styles and scripts, the crest) opens from the
+   phone, every file from one stored release, and never waits on the network.
+   A new release is fetched in the background when one is published and takes
+   over on the next open. Opening used to revalidate every file with the
+   server first, which on a weak signal held the opening screen for ten
+   seconds; and since files were fetched one by one, a deploy landing mid-open
+   could pair an old page with new styles.
+
+   BUILD is a hash of the release's files, written by scripts/stamp-sw.js and
+   checked by scripts/check-sources.js on every push: it changes when, and
+   only when, the app does, so a worker is reinstalled for a new release and
+   not for the data the updater publishes every five minutes. */
+const BUILD = "ebcbfcbe01b8";
+const CACHE = "gameon-" + BUILD;
+// Player and club pictures, kept across releases: they do not change with one.
+const PHOTOS = "gameon-photos";
 const ASSETS = [
-  "./", "./index.html", "./styles.css",
-  "./config.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./theo.js", "./app.js",
-  "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-maskable-192.png", "./icon-maskable-512.png", "./apple-touch-icon.png",
-  "./favicon-64.png", "./logo-splash.webp", "./logo-crest.webp", "./launch-tile.webp",
+  "./index.html", "./styles.css",
+  "./config.js", "./scripts/bonus.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./theo.js", "./app.js",
+  "./manifest.json", "./favicon-64.png", "./logo-splash.webp", "./logo-crest.webp", "./launch-tile.webp",
   "./logo-tile.webp", "./logo-tile-inv.webp", "./pl-lion.webp", "./fpl-tile.webp"
 ];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(CACHE)
-      // fresh from the server, not from the browser's HTTP cache: GitHub
-      // Pages lets a browser keep any file for ten minutes, so a worker
-      // installed just after a deploy could store the old page beside the
-      // new styles and serve that pair for as long as it lives
-      .then((c) => Promise.allSettled(ASSETS.map((a) => c.add(new Request(a, { cache: "reload" })))))
+      // Revalidated, not trusted from the browser's own cache (GitHub Pages
+      // lets it keep a file ten minutes, which could be the release before),
+      // and all or nothing: a release missing a file is not installed, and
+      // the one before carries on until the next try.
+      .then((c) => Promise.all(ASSETS.map((a) => fetch(new Request(a, { cache: "no-cache" })).then((res) => {
+        if (!res.ok) throw new Error(a + " " + res.status);
+        return c.put(a, res);
+      }))))
       .then(() => self.skipWaiting())
   );
 });
@@ -27,54 +41,49 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== PHOTOS).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
+
+const SHELL = new Set(ASSETS.map((a) => new URL(a, self.location).pathname));
+SHELL.add(new URL("./", self.location).pathname);
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-
   // Never cache cross-origin (proxy/FPL) calls — always go to network.
   if (url.origin !== self.location.origin) return;
+  // The data has its own keeping (data.js): the browser fetches it as asked.
+  if (url.pathname.endsWith("data.json")) return;
 
-  if (req.mode === "navigate" || req.destination === "document") {
-    // The page is revalidated like every other file. Fetched as it came, it
-    // could be the browser's ten-minute-old copy while styles.css and app.js
-    // (revalidated below) were already the new release: an old page wearing
-    // new styles, which is what a phone opened mid-deploy showed.
+  // The page and its files: from the stored release, at once. Only a phone
+  // with nothing stored yet (the very first open) goes to the network.
+  if (req.mode === "navigate" || SHELL.has(url.pathname)) {
+    const key = (req.mode === "navigate" || url.pathname === new URL("./", self.location).pathname) ? "./index.html" : req;
     e.respondWith(
-      fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then((res) => {
-        // a page reached through a redirect is handed back the way it was
-        // asked for, which some browsers insist on for a navigation
-        if (res.redirected) return fetch(req);
-        const copy = res.clone();
-        if (res.ok) caches.open(CACHE).then((c) => c.put("./index.html", copy)).catch(() => {});
-        return res;
-      }).catch(() => caches.match("./index.html").then((c) => c || caches.match("./")))
+      caches.open(CACHE).then((c) => c.match(key, { ignoreSearch: true })).then((hit) => hit ||
+        fetch(req.mode === "navigate" ? req.url : req, { credentials: "same-origin" }).then((res) => {
+          if (res.redirected && req.mode === "navigate") return fetch(req);
+          return res;
+        }))
     );
     return;
   }
 
-  // Don't cache data.json (it changes each gameweek): network-first.
-  // Ask the server to revalidate rather than trusting the browser's own HTTP
-  // cache — otherwise a stale app.js can outlive a deploy for as long as its
-  // max-age, and the device sits on an old build with no way to notice.
-  const fresh = new Request(req.url, { cache: "no-cache", credentials: "same-origin" });
+  // Pictures and anything else of ours: kept once fetched, shown from the
+  // phone, and refreshed behind it for next time.
   e.respondWith(
-    fetch(fresh).then((res) => {
-      const copy = res.clone();
-      // Only a good answer is worth keeping. A 404 or a 500 stored here is
-      // served back for as long as the cache lives: a player with no
-      // photograph would keep its miss, and a file that 404s for the seconds
-      // a deploy is swapping the site over would outlive the deploy on that
-      // device with nothing to correct it.
-      if (res.ok && !url.pathname.endsWith("data.json")) {
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-      }
-      return res;
-    }).catch(() => caches.match(req))
+    caches.open(PHOTOS).then((c) => c.match(req).then((hit) => {
+      const net = fetch(req).then((res) => {
+        // Only a good answer is worth keeping: a miss stored here would be
+        // served back for as long as the cache lives.
+        if (res.ok) c.put(req, res.clone()).catch(() => {});
+        return res;
+      });
+      if (hit) { net.catch(() => {}); return hit; }
+      return net;
+    }))
   );
 });

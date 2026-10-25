@@ -122,23 +122,30 @@
   <script src="app.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      /* A device that already has a worker gets reloaded once when a newer one
-         takes over, so a deploy reaches everyone without a hard refresh. */
-      var hadWorker = !!navigator.serviceWorker.controller, reloading = false;
-      navigator.serviceWorker.addEventListener("controllerchange", function () {
-        if (!hadWorker || reloading) return;
-        reloading = true;
-        // the opening screen was just seen; the reload shows it without the
-        // second's hold and the fade, so it does not play twice
+      /* The app opens from the release the worker keeps on the phone. A newer
+         release is fetched in the background and takes over the next time
+         the app is opened, never by reloading it in front of the reader. A
+         page left open across a release (back from the background hours
+         later) is brought up to date the next time it comes to the front. */
+      var hadWorker = !!navigator.serviceWorker.controller, newer = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () { if (hadWorker) newer = true; });
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState !== "visible" || !newer) return;
+        newer = false;
+        // the opening screen shows without its hold and its fade-in
         try { sessionStorage.setItem("go12.swreload", "1"); } catch (e) {}
         location.reload();
       });
+      // Registered once the app has drawn and settled, so on a first open
+      // the worker's own download never competes with the league's data.
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").then(function (reg) {
-          var check = function () { if (document.visibilityState === "visible") reg.update().catch(function () {}); };
-          check();
-          document.addEventListener("visibilitychange", check);
-        }).catch(function () {});
+        setTimeout(function () {
+          navigator.serviceWorker.register("sw.js").then(function (reg) {
+            var check = function () { if (document.visibilityState === "visible") reg.update().catch(function () {}); };
+            check();
+            document.addEventListener("visibilitychange", check);
+          }).catch(function () {});
+        }, window.__SW_DELAY != null ? window.__SW_DELAY : 4000);
       });
     }
   </script>

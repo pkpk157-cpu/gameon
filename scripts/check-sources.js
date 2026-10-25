@@ -81,5 +81,10 @@ if (fs.existsSync(wfDir)) {
   });
 }
 
+// The worker's BUILD must be the hash of the release it stores, or a phone
+// would keep an old release after a deploy (or reinstall one for nothing).
+try { require("child_process").execFileSync(process.execPath, [path.join(ROOT, "scripts/stamp-sw.js"), "--check"], { stdio: "pipe" }); }
+catch (e) { fail("sw.js", String((e.stdout || "") + (e.stderr || "")).trim() || "BUILD is out of date"); }
+
 console.log(bad ? bad + " source problem(s)" : "every source parses and every workflow is valid");
 process.exit(bad ? 1 : 0);

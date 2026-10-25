@@ -1,12 +1,11 @@
 const GOENV = require("./lib/env.js");
-/* A deploy reaches a phone whole. GitHub Pages lets a browser keep any file
- * for ten minutes; the service worker must still hand over the new page with
- * the new styles, never the old page beside the new styles (which is what a
- * phone opened mid-deploy showed: the new background behind the old crest).
- * Served here as Pages serves it, max-age=600 on everything: open the app so
- * the worker takes charge, put a new release on the server, open it again,
- * and the page and its styles must both be the new release, the worker's
- * own reload included, with no error. */
+/* A deploy reaches a phone whole, and opening never waits on it. The app
+ * opens from the release the worker keeps on the phone, so it is never the
+ * old page beside the new styles (which a phone opened mid-deploy showed:
+ * the new background behind the old crest). A new release comes down in the
+ * background without reloading the app in front of anyone, and is what the
+ * next open shows, offline too. Served here as GitHub Pages serves it,
+ * max-age=600 on everything. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path"), os = require("os");
 const APP = GOENV.APP, PORT = 8897;
@@ -18,7 +17,8 @@ const rel = { 1: {}, 2: {} };
 ["index.html", "styles.css", "sw.js"].forEach((f) => { rel[1][f] = fs.readFileSync(path.join(APP, f), "utf8"); });
 rel[2]["index.html"] = rel[1]["index.html"].replace("<body>", '<body data-release="2">');
 rel[2]["styles.css"] = rel[1]["styles.css"] + '\n:root { --release:"2"; }\n';
-rel[2]["sw.js"] = rel[1]["sw.js"] + "\n// release 2\n";
+// a new release carries a new BUILD, as stamp-sw.js gives every release
+rel[2]["sw.js"] = rel[1]["sw.js"].replace(/const BUILD = "([^"]*)";/, 'const BUILD = "$1-r2";');
 let live = 1;
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
   const f = u.slice(1), head = { "content-type": T[path.extname(u)] || "text/plain", "cache-control": "max-age=600" };
@@ -29,7 +29,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
   await new Promise((r) => srv.listen(PORT, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
   const ctx = await b.newContext({ ...devices["Pixel 7"], serviceWorkers: "allow" });
-  await ctx.addInitScript(() => { try { localStorage.setItem("go12.theo", "off"); } catch (e) {} });
+  await ctx.addInitScript(() => { window.__SW_DELAY = 0; try { localStorage.setItem("go12.theo", "off"); } catch (e) {} });
   const p = await ctx.newPage(); const errs = [];
   p.on("pageerror", (e) => errs.push(e.message));
   const base = "http://127.0.0.1:" + PORT + "/index.html#classic";
@@ -47,21 +47,31 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
 
   // the deploy
   live = 2;
-  // opened afresh, as from the home screen: an ordinary visit, which the
-  // browser may answer from its own copy (a reload would revalidate anyway)
-  await p.goto("about:blank");
-  await p.goto(base, { waitUntil: "load" });
-  const first = await read();
-  chk(first.page === first.css, "opened again straight after the deploy: page and styles are one release, not a mix", JSON.stringify(first));
-  chk(first.page === "2", "and it is the new one, though the browser could keep the old for ten minutes", JSON.stringify(first));
-  // the new worker takes over and reloads the page once; afterwards, the same
-  await p.waitForTimeout(4000);
-  const after = await read();
-  chk(after.page === "2" && after.css === "2", "after the new worker takes over, still the new page with the new styles", JSON.stringify(after));
-  const cached = await p.evaluate(async () => { const keys = await caches.keys(); const c = await caches.open(keys[0]);
-    const h = await (await c.match("./index.html")).text(); const s = await (await c.match("./styles.css")).text();
-    return { keys, page: /data-release="2"/.test(h), css: /--release:"2"/.test(s) }; });
-  chk(cached.keys.length === 1 && cached.page && cached.css, "what the worker keeps for offline is the new release, page and styles both", JSON.stringify(cached));
+  const open = async () => { await p.goto("about:blank"); await p.goto(base, { waitUntil: "load" }); return read(); };
+  const reloads = [];
+  p.on("framenavigated", (f) => { if (f === p.mainFrame() && /index\.html/.test(f.url())) reloads.push(Date.now()); });
+  const t0 = Date.now();
+  const first = await open();
+  chk(first.page === first.css, "opened straight after the deploy: page and styles are one release, never a mix", JSON.stringify(first));
+  chk(first.page === "1", "and it opens from the phone, not held waiting on the new release", JSON.stringify(first));
+  // the new release comes down in the background and takes over the worker
+  const n0 = reloads.length;
+  // (asked in a loop of real waits: the answer is a promise, which a plain
+  // truthy check would take as yes at once)
+  let took = false;
+  for (let k = 0; k < 60 && !took; k++) {
+    took = await p.evaluate(() => caches.keys().then((ks) => ks.some((x) => /-r2$/.test(x)) && !ks.some((x) => /^gameon-[0-9a-f]{12}$/.test(x)))).catch(() => false);
+    if (!took) await p.waitForTimeout(500);
+  }
+  await p.waitForTimeout(800);
+  chk(took, "the new release is stored in the background and the old one dropped");
+  chk(reloads.length === n0, "without reloading the app in front of the reader", (reloads.length - n0) + " reloads");
+  const next = await open();
+  chk(next.page === "2" && next.css === "2", "the next open is the new release, page and styles both", JSON.stringify(next));
+  await p.context().setOffline(true);
+  const off = await open().catch((e) => ({ page: "error", css: e.message.slice(0, 40) }));
+  await p.context().setOffline(false);
+  chk(off.page === "2" && off.css === "2", "and so is an open with no signal", JSON.stringify(off));
   chk(!errs.length, "no JS errors", errs.join(" | "));
   await b.close(); srv.close();
   console.log(fails ? "\n" + fails + " FAILURES" : "\na deploy reaches the phone whole");
