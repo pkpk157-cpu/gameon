@@ -195,18 +195,19 @@
     return out;
   };
   // Gameweeks whose points stand: FPL has checked them, or every match's bonus
-  // is in and the squads were re-read with the substitutions. FPL's own H2H
-  // tables count a week from that moment, hours before it is checked, so a
-  // result marked here is one FPL is already showing. A check can still move
-  // a score, which is why what depends on a week being closed for good — a
-  // month won, a group complete, an elimination, a badge — waits for the check.
+  // is in and the squads were re-read after FPL made its substitutions (mark
+  // 2). FPL makes the subs only when it signs the week off, so until then a
+  // score can still change and no result is called; the older level-1 mark,
+  // written when the bonus landed, held the eleven as picked and does not
+  // count. What depends on a week being closed for good — a month won, a
+  // group complete, an elimination, a badge — reads finishedGws.
   C.scoredGws = function (ds) {
     var have = {};
     C.finishedGws(ds).forEach(function (g) { have[g] = 1; });
     var fx = (ds && ds.gwFixtures) || {}, fin = (ds && ds.picksFinal) || {};
     Object.keys(fx).forEach(function (g) {
       var list = fx[g] || [];
-      if (list.length && fin[g] && list.every(function (f) { return f[3]; })) have[g] = 1;
+      if (list.length && fin[g] >= 2 && list.every(function (f) { return f[3]; })) have[g] = 1;
     });
     return Object.keys(have).map(Number).sort(function (a, b) { return a - b; });
   };
@@ -1138,7 +1139,7 @@
       // substitutions and the updater has re-read the squad. Before that the
       // stored squad is the eleven picked, which is a different set and would
       // break the tie on the wrong players.
-      if (!(ds.picksFinal && ds.picksFinal[gw])) return;
+      if (!(ds.picksFinal && ds.picksFinal[gw] >= 2)) return;
       if (!st || !squad || !squad.p) return;
       squad.p.forEach(function (pk) {
         if (!pk[1]) return;                       // benched, so not in the XI
@@ -2975,9 +2976,8 @@
     // While the gameweek is being played the scores are live: shown, but not
     // a verdict. Marking a mid-gameweek leader as the winner — or a 0-0 at
     // the deadline as a draw — would state a result that does not exist yet.
-    // Once every match's bonus is in and the subs are stored, the points
-    // stand and the result is called, as FPL calls it, before the week is
-    // checked.
+    // Once FPL has made its substitutions and the squads are stored again,
+    // the points stand and the result is called.
     var live = scored && C.liveGwId(ds) === +f.gw && C.scoredGws(ds).indexOf(+f.gw) === -1;
     return {
       gw: f.gw, group: f.group, groupIndex: f.groupIndex,
@@ -3733,8 +3733,8 @@
     { k: "ko",     t: "First match kicked off" },
     { k: "ft",     t: "Every match at full time" },
     { k: "bonus",  t: "Bonus confirmed on every match" },
-    { k: "squads", t: "Auto subs stored here" },
-    { k: "final",  t: "Gameweek finalised by FPL" }
+    { k: "final",  t: "Gameweek finalised by FPL" },
+    { k: "squads", t: "Auto subs stored here" }
   ];
 
   /* The Gameweek tab's tiles, for every gameweek at once: what a tile shows
@@ -3817,7 +3817,7 @@
       var ft = fx.length > 0 && fx.every(function (f) { return f[3] || f[8]; });
       var bonus = fx.length > 0 && fx.every(function (f) { return f[3]; });
       var final = !!(e.finished && e.data_checked);
-      var squads = !!fin[e.id];
+      var squads = (fin[e.id] || 0) >= 2;
       var steps = { lock: lock, ko: ko, ft: ft, bonus: bonus, final: final, squads: squads };
       // A gameweek is played across two or three days, and each of those days
       // reaches full time and then has its bonus confirmed on its own. Grouped

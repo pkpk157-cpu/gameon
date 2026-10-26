@@ -463,7 +463,9 @@ function buildWeek(S, gw, phase) {
   } else {
     ev.is_current = true;
     if (gw < LAST) S.events[gw].is_next = true;
-    ev.finished = phase === "bonus" || phase === "final";
+    // FPL flags the week finished and checked together, minutes apart, the
+    // afternoon after the bonus lands: the bonus phase is neither
+    ev.finished = phase === "final";
     ev.data_checked = phase === "final";
   }
 
@@ -507,21 +509,24 @@ function buildWeek(S, gw, phase) {
   S.liveStats[gw] = PP.stats;
   const liveBonus = {}; if (phase === "live") liveBonus[gw] = PP.bonus;
 
-  // subs, once the bonus is in
-  const subsIn = phase === "bonus" || phase === "final";
+  // subs, once FPL signs the week off and the updater reads the squads again
+  // (GW6–GW8: every read taken with only the bonus in still held the eleven
+  // as picked)
+  const subsIn = phase === "final";
   if (subsIn) {
     S.entries.forEach((m) => {
       const sq = m.extra ? S.extraPicks[m.id] : S.picks[gw][m.id];
       sq.p = autoSub(S, sq.p, PP.bd);
     });
   }
-  S.picksFinal[gw] = phase === "final" ? 2 : (phase === "bonus" ? 1 : undefined);
+  S.picksFinal[gw] = phase === "final" ? 2 : undefined;
   if (S.picksFinal[gw] === undefined) delete S.picksFinal[gw];
   // a stamp for each step reached
   const stamps = {};
-  if (phase === "ft" || subsIn) stamps.ft = iso(Date.parse(fx[fx.length - 1][7]) + 2 * H);
-  if (subsIn) { stamps.bonus = iso(now - (phase === "final" ? 6 * H : 5 * 60 * 1000)); stamps.squads = iso(Date.parse(stamps.bonus) + 40 * 60 * 1000); }
-  if (phase === "final") stamps.final = iso(now - 5 * 60 * 1000);
+  const bonusIn = phase === "bonus" || phase === "final";
+  if (phase === "ft" || bonusIn) stamps.ft = iso(Date.parse(fx[fx.length - 1][7]) + 2 * H);
+  if (bonusIn) stamps.bonus = iso(now - (phase === "final" ? 6 * H : 5 * 60 * 1000));
+  if (phase === "final") stamps.final = stamps.squads = iso(now - 5 * 60 * 1000);
   if (Object.keys(stamps).length) S.gwStamps[gw] = stamps; else delete S.gwStamps[gw];
 
   // history rows
@@ -594,7 +599,7 @@ function assemble(S, gw, now, extra) {
     let g = 0;
     S.events.forEach((e) => { if (e.finished && e.data_checked) g = e.id; });
     const fin = S.picksFinal[gw];
-    if (fin && (S.gwFixtures[gw] || []).every((f) => f[3])) g = Math.max(g, gw);
+    if (fin >= 2 && (S.gwFixtures[gw] || []).every((f) => f[3])) g = Math.max(g, gw);
     return g;
   })();
   const ds = {

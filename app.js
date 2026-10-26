@@ -1821,8 +1821,8 @@
     ko:     "Points and ranks move every ten minutes or so. Bonus is provisional; auto subs not yet.",
     ft:     "Every player\u2019s points are in apart from bonus. Nothing is settled yet.",
     bonus:  "FPL\u2019s official bonus replaces the provisional one, usually the next morning.",
-    squads: "FPL has made its auto subs. We re-read every squad, so the eleven shown is the eleven that played.",
-    final:  "FPL signs the week off, usually early the next afternoon. LMS, months and groups settle."
+    final:  "FPL signs the week off, usually early the next afternoon, and makes its auto subs. LMS, months and groups settle.",
+    squads: "Within minutes we re-read every squad, so the eleven shown is the eleven that played, subs in."
   };
   function stepRow(st, on, when) {
     var line = "";
@@ -1931,20 +1931,20 @@
         "no elimination, no month, no group result, no XP."],
       ["Bonus confirmed", "FPL awards the official bonus on every match, in practice the morning after the last match. " +
         "It replaces the provisional bonus and the * goes. Almost always the same numbers, but only now are they FPL\u2019s."],
-      ["Auto subs stored here", "With the bonus in, FPL makes its automatic substitutions. Within ten minutes this app re-reads every squad, " +
-        "so the eleven shown is the eleven that played, substitutes in, and the pitch and the points agree with FPL\u2019s."],
       ["Gameweek finalised by FPL", "FPL checks the week and signs it off: points final, overall ranks updated. This season that has landed " +
         "early in the afternoon after the last match; the Expected time above is worked from the gameweeks watched so far. Only now do the " +
         "competitions that need a closed gameweek settle: the week\u2019s LMS elimination (its tie-breakers count the playing XI), a month once " +
         "its last gameweek is closed, UCL group results, and the pyramid at the end of its season. XP moves from on course to settled only " +
-        "when a competition finishes."]
+        "when a competition finishes."],
+      ["Auto subs stored here", "FPL makes its automatic substitutions when it signs the week off, not when the bonus lands. Within ten minutes " +
+        "this app re-reads every squad, so the eleven shown is the eleven that played, substitutes in, and the pitch and the points agree with FPL\u2019s."]
     ]);
     h += list("Who moves when", [
       ["Classic", "Moves live through the gameweek, provisional bonus included. Final once FPL finalises."],
       ["Manager of the Month", "The table moves live. A month is won only when its last gameweek is finalised."],
       ["Last Manager Standing", "Nothing moves during the week. The elimination is decided when FPL finalises the gameweek."],
       ["Pyramid", "Mini-season totals move live. Promotion and relegation are decided when the season\u2019s last gameweek is finalised."],
-      ["UCL", "A gameweek counts in the group tables once its bonus is in and the subs are stored, as FPL counts it; while it is in play the matches show live scores and no result. The stage is complete only once FPL has checked every week."]
+      ["UCL", "A gameweek counts in the group tables once FPL has made its auto subs and they are stored here; until then the matches show live scores and no result. The stage is complete only once FPL has checked every week."]
     ]);
     h += list("A match day's badge", [
       ["Confirmed", "Every match that day is done and its bonus is official."],

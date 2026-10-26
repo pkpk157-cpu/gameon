@@ -119,7 +119,9 @@ function audit(app, st) {
   const fin = call(label, "finishedGws", () => C.finishedGws(ds));
   chk(label, fin && fin.length === finishedExp && fin[fin.length - 1] === (finishedExp || undefined), "finished gameweeks are " + finishedExp, fin && fin.length);
   const scored = call(label, "scoredGws", () => C.scoredGws(ds));
-  const scoredExp = finishedExp + ((phase === "bonus") ? 1 : 0);
+  // the bonus phase holds the squads as picked: FPL makes its subs when it
+  // signs the week off, so nothing is scored before then
+  const scoredExp = finishedExp;
   chk(label, scored && scored.length === scoredExp, "scored gameweeks are " + scoredExp, scored && scored.join(","));
   chk(label, C.liveGwId(ds) === liveExp, "live gameweek is " + liveExp, C.liveGwId(ds));
   chk(label, C.currentGw(ds) === cur, "current gameweek is " + cur, C.currentGw(ds));
@@ -297,11 +299,11 @@ function audit(app, st) {
           else chk(label, r.ties.every((t) => !t.winner), comp + " " + r.key + " has no winners before the round before is scored");
         }
       });
-      // the final is decided once its points stand (the bonus phase) and
-      // settled once FPL has checked it
-      if (gw === 38 && (phase === "bonus" || phase === "final")) {
+      // the final is decided once its points stand, which is when FPL has
+      // signed it off and made its subs
+      if (gw === 38 && phase === "final") {
         chk(label, !!(B.champion && B.runnerUp), comp + " has a champion and a runner-up once the final is scored", JSON.stringify(B.champion));
-        chk(label, B.settled === (phase === "final"), comp + " settles only when the final is checked", B.settled);
+        chk(label, B.settled, comp + " settles when the final is checked", B.settled);
       } else {
         chk(label, !B.champion, comp + " has no champion before the final is scored");
       }
@@ -336,8 +338,6 @@ function audit(app, st) {
     if (gw === 38 && phase === "final") {
       chk(label, lmsPaid === lp.champion + lp.runnerUp + lp.third, "Last Manager pays champion, runner-up and third at the end", lmsPaid);
       chk(label, uclPaid === koPool && uclSettled === koPool, "UCL and UEL pay winner and runner-up, settled, at the end", uclPaid + "/" + uclSettled);
-    } else if (gw === 38 && phase === "bonus") {
-      chk(label, lmsPaid === 0 && uclPaid === koPool && uclSettled === 0, "the finals are decided but unsettled until checked", lmsPaid + "/" + uclPaid + "/" + uclSettled);
     } else {
       chk(label, lmsPaid === 0 && uclPaid === 0, "no knockout or Last Manager money before the end", lmsPaid + "/" + uclPaid);
     }
@@ -399,7 +399,7 @@ function audit(app, st) {
       locked: { lock: true, ko: false, ft: false, bonus: false, final: false, squads: false },
       live: { lock: true, ko: true, ft: false, bonus: false, final: false, squads: false },
       ft: { lock: true, ko: true, ft: true, bonus: false, final: false, squads: false },
-      bonus: { lock: true, ko: true, ft: true, bonus: true, final: false, squads: true },
+      bonus: { lock: true, ko: true, ft: true, bonus: true, final: false, squads: false },
       final: { lock: true, ko: true, ft: true, bonus: true, final: true, squads: true }
     }[phase];
     const diff = Object.keys(expect).filter((k) => s[k] !== expect[k]);

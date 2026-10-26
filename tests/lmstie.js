@@ -44,7 +44,7 @@ function build(aStats, bStats, opts) {
     history: { 1: { 1: { p: 50, h: 0, b: opts.aBench || 0, t: 50 } },
                2: { 1: { p: 50, h: 0, b: opts.bBench || 0, t: 50 } } },
     picks: { 1: { 1: mk(1), 2: mk(21) } },
-    picksFinal: opts.notFinal ? {} : { 1: 1 },
+    picksFinal: opts.notFinal ? {} : { 1: 2 },
     livePoints: { 1: {} },
     liveStats: { 1: { g: g, c: c, a: a } }
   };
@@ -131,7 +131,7 @@ chk("a missing squad does not crash", typeof worse(ds) === "number");
     bootstrap: { events: [{ id: 1, name: "GW1", is_current: true, is_next: false,
       finished: true, data_checked: true, deadline_time: "2026-08-14T17:30:00Z" }] },
     elements: els, managers: managers, history: history,
-    picks: { 1: picks }, picksFinal: { 1: 1 }, livePoints: { 1: {} },
+    picks: { 1: picks }, picksFinal: { 1: 2 }, livePoints: { 1: {} },
     liveStats: { 1: { g: g, c: {}, a: {} } }
   };
   const lms = C.lms(ds2);
@@ -168,7 +168,7 @@ chk("a missing squad does not crash", typeof worse(ds) === "number");
       { id: 1, name: "GW1", is_current: false, finished: true, data_checked: true, deadline_time: "2026-08-14T17:30:00Z" },
       { id: 2, name: "GW2", is_current: true, finished: true, data_checked: true, deadline_time: "2026-08-21T17:30:00Z" }] },
     elements: els, managers: managers, history: history,
-    picks: { 1: picks1, 2: picks2 }, picksFinal: { 1: 1, 2: 1 },
+    picks: { 1: picks1, 2: picks2 }, picksFinal: { 1: 2, 2: 2 },
     livePoints: { 1: {}, 2: {} },
     liveStats: { 1: { g: {}, c: {}, a: {} }, 2: { g: g2, c: {}, a: {} } }
   };

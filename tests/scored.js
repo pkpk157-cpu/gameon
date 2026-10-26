@@ -1,8 +1,9 @@
-/* When a gameweek's points stand. FPL's H2H tables count a week once every
- * match's bonus is in and the subs are made, hours before the week is
- * checked; the app's group tables and match results follow the same rule,
- * while anything closed for good — the stage complete, a month, an
- * elimination, a badge — still waits for the check. No browser: the rule is
+/* When a gameweek's points stand. FPL makes its automatic substitutions when
+ * it signs the week off, so until the squads are read again after that (mark
+ * 2) a score can still move and no result is called; the bonus-time mark 1
+ * older data carries held the eleven as picked and counts for nothing.
+ * Anything closed for good — the stage complete, a month, an elimination, a
+ * badge — waits for the check. No browser: the rule is
  * in compute.js and is tried on the live data bent into each state. */
 const GOENV = require("./lib/env.js");
 const fs = require("fs"), path = require("path");
@@ -24,9 +25,15 @@ const gwsOf = (h) => h.groupStageGws;
 const state = (mods) => { ds = fresh(); const e = ds.bootstrap.events.find((x) => x.id === cur); mods(ds, e); return ds; };
 const fxOf = (d, gw) => C.fixtures(d, gw, 0);
 
-// 1. bonus in and subs stored, not checked: the week counts and results are called
+// 0. bonus in, squads read then (the old mark 1): FPL has made no subs, still live
 state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.picksFinal[cur] = 1; });
+chk(C.scoredGws(ds).indexOf(cur) === -1 && fxOf(ds, cur).every((f) => !f.played || (f.live && !f.result)), "bonus in, a bonus-time read only: not scored, matches live");
+chk(!C.gwStatus(ds).rows.find((r) => r.gw === cur).steps.squads, "and the status page does not call the auto subs stored");
+
+// 1. bonus in and subs stored, not checked: the week counts and results are called
+state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.picksFinal[cur] = 2; });
 chk(C.scoredGws(ds).indexOf(cur) !== -1 && C.finishedGws(ds).indexOf(cur) === -1, "bonus in, subs stored, unchecked: the week is scored but not finished");
+chk(C.gwStatus(ds).rows.find((r) => r.gw === cur).steps.squads, "and the status page calls the auto subs stored");
 let fx = fxOf(ds, cur);
 chk(fx.length > 0 && fx.every((f) => f.played && !f.live && f.result), "its matches carry a result, not a live tag", fx.slice(0, 2).map((f) => f.result).join(","));
 let h = C.h2h(ds);
@@ -35,7 +42,7 @@ chk(h.groupGwsPlayed === gwsOf(window.GO_DEFAULT_CONFIG.h2h).filter((g) => C.sco
 chk(!h.groups[0].complete, "but the stage is not complete on an unchecked week");
 
 // 2. a match still unfinished: live, no result, not counted
-state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.gwFixtures[cur][0][3] = 0; d.picksFinal[cur] = 1; });
+state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.gwFixtures[cur][0][3] = 0; d.picksFinal[cur] = 2; });
 chk(C.scoredGws(ds).indexOf(cur) === -1, "one match without its bonus: the week does not count yet");
 fx = fxOf(ds, cur);
 chk(fx.every((f) => !f.played || (f.live && !f.result)), "its matches are live with no result");
@@ -49,7 +56,7 @@ state((d, e) => { e.finished = true; e.data_checked = true; d.gwFixtures[cur].fo
 chk(C.finishedGws(ds).indexOf(cur) !== -1 && C.scoredGws(ds).indexOf(cur) !== -1 && fxOf(ds, cur).every((f) => !f.played || (!f.live && f.result)), "checked: finished and scored, results called");
 
 // 5. what waits for the check still waits: badges read finished gameweeks only
-state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.picksFinal[cur] = 1; });
+state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.picksFinal[cur] = 2; });
 const anyCur = ds.managers.some((m) => C.badges(ds, m.id).some((b) => b.gws.indexOf(cur) !== -1));
 chk(!anyCur, "no badge or blot names the unchecked week");
 console.log(fails ? "\nFAILS: " + fails : "\na week counts when its points stand");
