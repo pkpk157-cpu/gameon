@@ -42,6 +42,10 @@ function audit(L, ds, now) {
   const ids = ds.managers.map((m) => m.id);
   const probe = ids.filter((_, i) => i % 3 === 0);
   const H = {}; gws.forEach((g) => { H[g] = C.highlights(ds, g); });
+  // the captain to forget is never the best captain, and scored below him
+  gws.forEach((g) => { const q = H[g] && H[g].squads; if (!q || !q.worstCaptain || !q.bestCaptain) return;
+    chk(q.worstCaptain.el !== q.bestCaptain.el && q.worstCaptain.pts < q.bestCaptain.pts && q.worstCaptain.caps >= 2,
+      L + " GW" + g + ": the captain to forget is not the best captain, and scored less", q.worstCaptain.name + " " + q.worstCaptain.pts + " vs " + q.bestCaptain.name + " " + q.bestCaptain.pts); });
   const pp = (g, el) => C.playerPts(ds, g, el);
 
   probe.forEach((id, i) => {

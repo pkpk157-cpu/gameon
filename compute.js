@@ -2072,6 +2072,7 @@
         movedOut = churnList(outC);
       }
 
+      var bestCap = capList.slice().sort(function (a, b) { return b.pts - a.pts; })[0] || null;
       squads = {
         managers: n, chips: chips,
         // how owned the average starting eleven in the league is, on the
@@ -2098,9 +2099,20 @@
         mostOwned: ownedList.slice().sort(function (a, b) { return b.owners - a.owners; }).slice(0, 5),
         topScorers: ownedList.slice().sort(function (a, b) { return b.pts - a.pts; }).slice(0, 5),
         mostCaptained: capList.slice().sort(function (a, b) { return b.caps - a.caps; }).slice(0, 5),
-        bestCaptain: capList.slice().sort(function (a, b) { return b.pts - a.pts; })[0] || null,
-        worstCaptain: capList.filter(function (x) { return x.caps >= Math.max(2, n * 0.03); })
-          .sort(function (a, b) { return a.pts - b.pts; })[0] || null,
+        bestCaptain: bestCap,
+        // The lowest-scoring armband a real share of the league chose (3%,
+        // and never fewer than two), but never the best captain's own player
+        // and only below him. A week when nearly everyone captained one man
+        // who delivered (GW7: Haaland, 220 of 245) leaves no one else at 3%,
+        // so it looks to the armbands two or more chose; with none of those
+        // either there is no captain to forget, rather than the best captain
+        // named twice.
+        worstCaptain: (function () {
+          var below = function (x) { return !bestCap || (x.el !== bestCap.el && x.pts < bestCap.pts); };
+          var low = function (min) { return capList.filter(function (x) { return x.caps >= min && below(x); })
+            .sort(function (a, b) { return (a.pts - b.pts) || (b.caps - a.caps); })[0] || null; };
+          return low(Math.max(2, n * 0.03)) || low(2);
+        })(),
         differentials: diffs.sort(function (a, b) { return b.pts - a.pts; }).slice(0, 5),
         bestValue: priced.sort(function (a, b) { return b.value - a.value; }).slice(0, 5),
         priciest: ownedList.slice().sort(function (a, b) { return b.price - a.price; }).slice(0, 5)
