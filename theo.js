@@ -212,7 +212,7 @@
     { k: "live", w: function (c) { return liv(c) && c.move <= -10; }, t: function (c) { return "Down " + num(-c.move) + " places. The table is a mean thing. Tomorrow’s another day."; } },
     { k: "live", w: function (c) { return liv(c) && c.inPlay > 0; }, t: function (c) { return pl(c.inPlay, "match") + " in play. Nobody move."; } },
     { k: "live", w: function (c) { return liv(c) && c.toCome > 0 && c.inPlay === 0; }, t: function (c) { return pl(c.toCome, "match") + " still to come this week. Your points aren’t finished; neither is the league."; } },
-    { k: "live", w: function (c) { return liv(c) && c.done && !c.checked; }, t: function () { return "Every match done. The auto subs land once FPL has checked the week; sleep on it."; } },
+    { k: "live", w: function (c) { return liv(c) && c.done && !c.checked; }, t: function () { return "Every match done. Bonus first, then FPL's auto subs, then the sign-off. Sleep on it."; } },
     { k: "live", w: function (c) { return liv(c) && c.hits > 0 && c.pts > c.avg; }, t: function (c) { return "A " + num(c.hits) + "-point hit and still above the average. Justified. This time."; } },
     { k: "live", w: function (c) { return liv(c) && c.hits > 0 && c.pts <= c.avg; }, t: function (c) { return "The hit was " + num(c.hits) + ". The reward, so far, is " + num(c.pts) + ". I say nothing."; } },
     { k: "live", w: function (c) { return liv(c) && c.leader; }, t: function () { return "Top of the league while it’s live. Every phone in the league is watching you."; } },

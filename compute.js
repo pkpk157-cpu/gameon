@@ -196,11 +196,12 @@
   };
   // Gameweeks whose points stand: FPL has checked them, or every match's bonus
   // is in and the squads were re-read after FPL made its substitutions (mark
-  // 2). FPL makes the subs only when it signs the week off, so until then a
-  // score can still change and no result is called; the older level-1 mark,
-  // written when the bonus landed, held the eleven as picked and does not
-  // count. What depends on a week being closed for good — a month won, a
-  // group complete, an elimination, a badge — reads finishedGws.
+  // 3, or 2 once FPL has signed off). FPL makes the subs some hours after the
+  // bonus lands, and until they are stored a score can still change, so no
+  // result is called; the older level-1 mark, written when the bonus landed,
+  // held the eleven as picked and does not count. What depends on a week
+  // being closed for good — a month won, a group complete, an elimination, a
+  // badge — reads finishedGws.
   C.scoredGws = function (ds) {
     var have = {};
     C.finishedGws(ds).forEach(function (g) { have[g] = 1; });
@@ -3733,8 +3734,8 @@
     { k: "ko",     t: "First match kicked off" },
     { k: "ft",     t: "Every match at full time" },
     { k: "bonus",  t: "Bonus confirmed on every match" },
-    { k: "final",  t: "Gameweek finalised by FPL" },
-    { k: "squads", t: "Auto subs stored here" }
+    { k: "squads", t: "Auto subs stored here" },
+    { k: "final",  t: "Gameweek finalised by FPL" }
   ];
 
   /* The Gameweek tab's tiles, for every gameweek at once: what a tile shows

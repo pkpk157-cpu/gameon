@@ -152,21 +152,47 @@ async function h2hAll(id) {
 // Which read a gameweek gets, decided in one place so it can be tested:
 //   reuse — settled, and read after it settled: everything from the last run
 //   live  — squads frozen, so only the points are read
-//   full  — every squad read again: the first time, or FPL has signed off
-// FPL makes its automatic substitutions when it signs the gameweek off, not
-// when the bonus lands: GW6, GW7 and GW8 were each read with every bonus in,
-// and every one of those reads still held the eleven as picked (65, 111 and
-// 231 teams with a blank starter and a bench player who played), while the
-// read after the sign-off held none. So the squads are read again once, when
-// FPL flags the week finished and checked, and that read is the one marked
-// final (2). The level-1 mark older data carries, written when the bonus
-// landed, held no subs and counts for nothing.
+//   full  — every squad read again: the first time, FPL has made its subs,
+//           or FPL has signed off
+// FPL makes its automatic substitutions some hours after the bonus lands and
+// before it flags the week finished, and no flag says when: GW8's squads
+// read with every bonus in (09:05) still held the eleven as picked for 231
+// teams, while FPL's app showed the subs made by early afternoon with the
+// week not yet finished. So once every bonus is in, each run asks FPL for a
+// handful of the squads that need a sub (subsCandidates); the moment one of
+// them comes back changed (subsShown), every squad is read again and marked
+// 3. FPL's sign-off is read once more and marked 2, the final word. Either
+// mark means the stored squads carry the subs; the level-1 mark older data
+// carries was written at bonus time and counts for nothing.
 function squadPlan(o) {
   if (!o.cached) return "full";
-  if (o.settled) return o.prevFinal >= 2 ? "reuse" : "full";
+  if (o.settled) return o.prevFinal === 2 ? "reuse" : "full";
+  if (o.prevFinal !== 3 && o.subsSeen) return "full";
   return "live";
 }
-module.exports = { squadPlan };
+// The squads worth asking about: a starter who did not play and a bench
+// player who did, so FPL has a substitution to make. Bench Boost plays all
+// fifteen and has none.
+function subsCandidates(squads, mins, limit) {
+  const out = [];
+  Object.keys(squads || {}).forEach((id) => {
+    const sq = squads[id];
+    if (!sq || !sq.p || sq.c === "bboost" || out.length >= limit) return;
+    const xi = sq.p.slice(0, 11), bench = sq.p.slice(11);
+    if (xi.some((p) => p[1] > 0 && !(mins[p[0]] > 0)) && bench.some((p) => !p[1] && mins[p[0]] > 0)) out.push(id);
+  });
+  return out;
+}
+// Whether FPL's answer for a squad holds substitutions the stored one does
+// not: FPL lists them, or a player's multiplier has moved.
+function subsShown(stored, pk) {
+  if (!pk) return false;
+  if ((pk.automatic_subs || []).length) return true;
+  const was = {};
+  ((stored && stored.p) || []).forEach((p) => { was[p[0]] = p[1]; });
+  return (pk.picks || []).some((p) => p.element in was && was[p.element] !== p.multiplier);
+}
+module.exports = { squadPlan, subsCandidates, subsShown };
 
 if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
@@ -700,14 +726,25 @@ if (require.main === module) (async () => {
       const cached = !!(prevPicks[gw] && prevLive[gw] &&
         Object.keys(prevPicks[gw]).length >= Math.floor(managers.length * 0.9));
       // A gameweek in progress has frozen squads: nothing about a team can
-      // change until FPL signs the week off and makes its substitutions. So
-      // only its points are read, until it settles.
-      let fresh = null;
+      // change until FPL makes its substitutions. So its points are read
+      // first, and once every match's bonus is in, a few squads that need a
+      // sub are asked about to learn whether FPL has made them yet.
+      let fresh = null, subsSeen = false;
       if (!settled && cached) {
         try { fresh = await liveFor(gw, false); }
         catch (e) { console.log("GW " + gw + " — live refresh failed, falling back to a full read: " + e.message); }
       }
-      const plan = squadPlan({ cached, settled, prevFinal: prevFinal[gw] || 0 });
+      if (fresh && fresh.allFinished && !(prevFinal[gw] >= 2)) {
+        const ask = subsCandidates(prevPicks[gw], fresh.mins, 6);
+        for (const id of ask) {
+          try { subsSeen = subsShown(prevPicks[gw][id], await getJSON("/entry/" + id + "/event/" + gw + "/picks/", 2)); }
+          catch (e) { /* ask the next one */ }
+          if (subsSeen) break;
+        }
+        console.log("GW " + gw + " — every bonus in: asked " + ask.length + " squad(s) that need a sub, " +
+                    (subsSeen ? "FPL has made its subs" : "no subs made yet"));
+      }
+      const plan = squadPlan({ cached, settled, prevFinal: prevFinal[gw] || 0, subsSeen });
       // Squads are frozen at the deadline, so a settled gameweek can be reused
       // — but only once it has been read AFTER it settled. Anything read
       // earlier may hold the pre-substitution eleven.
@@ -736,6 +773,7 @@ if (require.main === module) (async () => {
         continue;
       }
       if (settled && cached) console.log("GW " + gw + " — settled: re-reading squads for FPL's final word");
+      else if (subsSeen) console.log("GW " + gw + " — FPL has made its subs: re-reading every squad");
       console.log("GW " + gw + " — fetching squads…");
       try {
         const stats = fresh || await liveFor(gw, settled);
@@ -759,9 +797,10 @@ if (require.main === module) (async () => {
           keepStats(gw, stats);
           breakdown[gw] = stats.expl;
           if (settled) picksFinal[gw] = 2;
+          else if (subsSeen) picksFinal[gw] = 3;
         }
         console.log("  GW " + gw + " — " + Object.keys(got).length + " squads" +
-                    (settled ? " (settled, auto-subs included)" : ""));
+                    (settled ? " (settled, auto-subs included)" : (subsSeen ? " (auto-subs in)" : "")));
         audit(gw, got, pts, bonus);
       } catch (e) { console.log("  GW " + gw + " squads failed (non-fatal): " + e.message); }
     }
@@ -1067,16 +1106,6 @@ if (require.main === module) (async () => {
   Object.keys(SEEN_BEFORE).forEach((gw) => {
     const slot = gwStamps[gw] || (gwStamps[gw] = {});
     Object.keys(SEEN_BEFORE[gw]).forEach((k) => { if (!slot[k]) slot[k] = SEEN_BEFORE[gw][k]; });
-  });
-  // Until GW8 the squads step was stamped when the bonus landed, on a read
-  // that held no substitutions. The read that did is the one taken when FPL
-  // signed the week off, in the same run that stamped "final"; a week not yet
-  // signed off has not reached the step at all.
-  Object.keys(gwStamps).forEach((gw) => {
-    const s = gwStamps[gw];
-    if (!s.squads) return;
-    if (!s.final) delete s.squads;
-    else if (Date.parse(s.squads) < Date.parse(s.final)) s.squads = s.final;
   });
   {
     const stampedAt = new Date().toISOString();

@@ -1,7 +1,8 @@
-/* When a gameweek's points stand. FPL makes its automatic substitutions when
- * it signs the week off, so until the squads are read again after that (mark
- * 2) a score can still move and no result is called; the bonus-time mark 1
- * older data carries held the eleven as picked and counts for nothing.
+/* When a gameweek's points stand. FPL makes its automatic substitutions some
+ * hours after the bonus lands, so until the squads are read again after that
+ * (mark 3, or 2 at the sign-off) a score can still move and no result is
+ * called; the bonus-time mark 1 older data carries held the eleven as picked
+ * and counts for nothing.
  * Anything closed for good — the stage complete, a month, an elimination, a
  * badge — waits for the check. No browser: the rule is
  * in compute.js and is tried on the live data bent into each state. */
@@ -34,6 +35,13 @@ chk(!C.gwStatus(ds).rows.find((r) => r.gw === cur).steps.squads, "and the status
 state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.picksFinal[cur] = 2; });
 chk(C.scoredGws(ds).indexOf(cur) !== -1 && C.finishedGws(ds).indexOf(cur) === -1, "bonus in, subs stored, unchecked: the week is scored but not finished");
 chk(C.gwStatus(ds).rows.find((r) => r.gw === cur).steps.squads, "and the status page calls the auto subs stored");
+
+// 1b. FPL made its subs before signing off (mark 3): the same
+state((d, e) => { e.finished = false; e.data_checked = false; d.gwFixtures[cur].forEach((f) => { f[3] = 1; f[8] = 1; }); d.picksFinal[cur] = 3; });
+chk(C.scoredGws(ds).indexOf(cur) !== -1 && C.finishedGws(ds).indexOf(cur) === -1 && fxOf(ds, cur).every((f) => !f.played || (!f.live && f.result)),
+    "subs made before the sign-off: scored, results called, not finished");
+chk(C.gwStatus(ds).rows.find((r) => r.gw === cur).steps.squads && !C.gwStatus(ds).rows.find((r) => r.gw === cur).steps.final,
+    "the status page has the subs stored and the week not yet finalised");
 let fx = fxOf(ds, cur);
 chk(fx.length > 0 && fx.every((f) => f.played && !f.live && f.result), "its matches carry a result, not a live tag", fx.slice(0, 2).map((f) => f.result).join(","));
 let h = C.h2h(ds);
