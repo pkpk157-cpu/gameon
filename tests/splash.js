@@ -52,16 +52,24 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
   chk(await p.evaluate(() => [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map(l => l.getAttribute("href"))).then(a => a.join(",") === "apple-touch-icon.png,favicon-64.png,icon-192.png"), "the page links the PNG icons");
   chk(errs.length === 0, "no JS errors", errs.join(" | "));
   await ctx.close();
-  // quick data: the opening screen is still on for a second, and no longer
-  delay = 0;
-  {
-    const c = await b.newContext({ ...devices["Pixel 7"], serviceWorkers: "block" }); const pg = await c.newPage();
-    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
-    const at = await pg.evaluate(() => new Promise((res) => { const t = setInterval(() => { const s = document.querySelector("#splash");
-      if (!s || s.classList.contains("gone")) { clearInterval(t); res(Math.round(performance.now())); } }, 15); }));
-    chk(at >= 590 && at <= 1200, "with the data quick, the opening screen is on for a moment and no longer", at + "ms");
+  // The opening screen is on for two seconds exactly, counted from the
+  // opening: quick data does not cut it short, slow data does not hold it,
+  // and failed data does not either. Its fade starts at 1.75s, so it is gone
+  // at two; with reduced motion it simply goes at two.
+  for (const [d, f, how, still] of [[0, false, "quick data"], [4000, false, "data still loading"], [0, true, "data failing"], [0, false, "reduced motion", true]]) {
+    delay = d; failData = f;
+    const c = await b.newContext({ ...devices["Pixel 7"], serviceWorkers: "block", reducedMotion: still ? "reduce" : "no-preference" }); const pg = await c.newPage();
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "commit" });
+    const t = await pg.evaluate(() => new Promise((res) => { let fade = null; const iv = setInterval(() => { const s = document.querySelector("#splash");
+      if (s && s.classList.contains("gone") && fade == null) fade = Math.round(performance.now());
+      if (!s || (s.classList.contains("gone") && +getComputedStyle(s).opacity === 0)) { clearInterval(iv);
+        res({ fade, gone: Math.round(performance.now()), text: ((document.querySelector("section.view.active") || {}).innerText || "").trim().slice(0, 40) }); } }, 10); }));
+    chk(t.fade >= (still ? 1990 : 1740) && t.fade <= (still ? 2150 : 1900) && t.gone >= 1990 && t.gone <= 2200,
+        how + ": the opening screen is on for two seconds, no less and no more", JSON.stringify(t));
+    if (d === 4000) chk(/Loading the league/.test(t.text), "a first open still loading says so behind it, rather than an empty page", t.text);
     await c.close();
   }
+  delay = 0; failData = false;
   // A phone that already holds the data does not wait for the whole file to
   // come down again: it paints its own copy within a moment, its age in the
   // bar, and the newer publish replaces it on screen the moment it lands.
@@ -78,11 +86,11 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
     await pg.goto("about:blank");
     const t0 = Date.now();
     await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
-    await pg.waitForFunction(() => !document.querySelector("#splash") && document.querySelectorAll("section.view.active table.t tbody tr").length > 0, null, { timeout: 15000 });
+    await pg.waitForFunction(() => document.querySelectorAll("section.view.active table.t tbody tr").length > 0, null, { timeout: 15000 });
     const shown = Date.now() - t0;
     const first = await pg.evaluate(() => ({ at: window.GO_STORE.dataset().updatedAt, sub: (document.querySelector("#barSub") || {}).textContent }));
     const age = Date.now() - Date.parse(older);
-    chk(shown < (age < 5 * 60 * 1000 ? 1500 : 2600) && first.at === older, (stale ? "an older stored copy" : "a fresh stored copy") + " is on screen in a moment, not after the download", shown + "ms · " + first.sub);
+    chk(shown < (age < 5 * 60 * 1000 ? 1500 : 2600) && first.at === older, (stale ? "an older stored copy" : "a fresh stored copy") + " is drawn in a moment, not after the download", shown + "ms · " + first.sub);
     await pg.waitForFunction((st) => window.GO_STORE.dataset().updatedAt === st, stamp, { timeout: 15000 }).catch(() => {});
     await pg.waitForTimeout(600);
     const later = await pg.evaluate(() => ({ at: window.GO_STORE.dataset().updatedAt, sub: (document.querySelector("#barSub") || {}).textContent, rows: document.querySelectorAll("section.view.active table.t tbody tr").length }));

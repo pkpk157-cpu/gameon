@@ -2518,10 +2518,11 @@
     window.addEventListener("pageshow", function (e) { if (e.persisted) onForeground(); });
     window.addEventListener("focus", onForeground);
 
-    // The opening screen leaves once the first standings are drawn — or, if
-    // the load fails or hangs, after a few seconds regardless, so it can
-    // never sit in front of the empty state that explains what is wrong.
-    var splashTimer = setTimeout(hideSplash, 6000);
+    // The opening screen is on for two seconds, counted from when the app
+    // was opened: a quick load does not cut it short and a slow one does not
+    // hold it, so whatever is behind it then — the standings, or the empty
+    // state that explains what is wrong — is what shows.
+    hideSplashAt();
     // the stored copy painted first and the network has now brought a newer
     // publish: shown at once, with the motion every update gets
     S.onLate(function () {
@@ -2536,21 +2537,34 @@
       // Ask the live feed straight away rather than after a first full
       // interval — during a match those two minutes are the whole point.
       tickLive();
-      clearTimeout(splashTimer);
-      hideSplash();
-    }, function () { clearTimeout(splashTimer); syncFromHash(); hideSplash(); });
+    }, function () { syncFromHash(); });
   }
-  // The opening screen is on for a moment at the least, counted from when
-  // the app was opened, so it is seen rather than flashed.
-  var SPLASH_MIN_MS = 600;
-  // straight after the reload a new version makes, the screen was already up
-  // a moment ago, so it does not hold again
-  try { if (sessionStorage.getItem("go12.swreload")) { sessionStorage.removeItem("go12.swreload"); SPLASH_MIN_MS = 0; } } catch (e) {}
+  // Two seconds on screen and no more, counted from when the app was opened.
+  // Its fade starts a quarter of a second before, so it is gone at two; with
+  // reduced motion there is no fade, and it goes at two.
+  var SPLASH_MS = 2000, SPLASH_FADE_MS = 250;
+  // the mark the reload of a new version leaves, read by the page head for
+  // this one opening only
+  try { sessionStorage.removeItem("go12.swreload"); } catch (e) {}
+  function hideSplashAt() {
+    var still = false;
+    try { still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) {}
+    var since = (window.performance && performance.now) ? performance.now() : 0;
+    setTimeout(hideSplash, Math.max(0, SPLASH_MS - (still ? 0 : SPLASH_FADE_MS) - since));
+  }
   function hideSplash() {
     var sp = $("#splash");
     if (!sp || sp.classList.contains("gone")) return;
-    var since = (window.performance && performance.now) ? performance.now() : SPLASH_MIN_MS;
-    if (since < SPLASH_MIN_MS) { setTimeout(hideSplash, SPLASH_MIN_MS - since); return; }
+    // a first open on a slow signal, with nothing stored to paint: the page
+    // says it is coming rather than standing empty; the first render
+    // replaces the line
+    if (!S.dataset()) {
+      var host = $('.view[data-view="' + state.view + '"]');
+      if (host && !host.innerHTML.trim()) {
+        setActiveView();
+        host.innerHTML = '<div class="callout">Loading the league\u2026</div>';
+      }
+    }
     sp.classList.add("gone");
     var drop = function () { if (sp.parentNode) sp.parentNode.removeChild(sp); };
     sp.addEventListener("transitionend", drop);

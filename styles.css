@@ -1143,8 +1143,8 @@ table.t.cmptable .cmid .note { font-size:10px; margin-top:1px; }
 table.t.cmptable td.num .txt { display:block; font-size:11.5px; font-weight:600; color:var(--ink-soft); line-height:1.35; }
 
 /* ---- opening screen -----------------------------------------------------
-   The crest on its own purple while the first standings load. It sits over
-   everything and fades once the page is drawn. */
+   The crest on its own purple for the first two seconds. It sits over
+   everything and fades out by the two-second mark (see hideSplashAt). */
 #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:100; overflow:hidden;
   background-color:#37003c; transition:opacity .25s ease-out; }
 /* the top bar's purple, crossed by wide, faint bands running down to the
