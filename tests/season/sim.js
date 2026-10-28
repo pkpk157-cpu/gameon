@@ -557,6 +557,10 @@ function buildWeek(S, gw, phase) {
     const ids = base.managers.map((m) => m.id).sort((a, b) => netScore(S, a, gw) - netScore(S, b, gw)).slice(0, 2);
     const [a, b] = ids;
     S.picks[gw][b] = clone(S.picks[gw][a]);
+    // the copied squad carries a's chip, so FPL's chip record for b says the
+    // same (b's planned chip, say a Free Hit, is not played after all)
+    const ca = (S.chips[a] || []).find((c) => c.gw === gw);
+    S.chips[b] = (S.chips[b] || []).filter((c) => c.gw !== gw).concat(ca ? [{ n: ca.n, gw }] : []).sort((x, y) => x.gw - y.gw);
     S.history[b][gw] = Object.assign({}, S.history[b][gw], { p: S.history[a][gw].p, h: S.history[a][gw].h, b: S.history[a][gw].b, pl: S.history[a][gw].pl, plt: S.history[a][gw].plt });
     S.history[b][gw].t = ((S.history[b][gw - 1] || {}).t || 0) + S.history[b][gw].p - S.history[b][gw].h;
   }
