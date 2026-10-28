@@ -2627,9 +2627,10 @@
     // Remember only a place worth coming back to: the same list the back arrow
     // uses, so adding a sub-view can never make it point at itself.
     if (SUB_VIEWS.indexOf(view) === -1) state.backView = state.backTo = view;
-    // FPL's own page is where the app opens, so it is somewhere to come back
-    // to as well; its leagues and teams are not
-    else if (view === "fpl" && !parts[1]) state.backTo = "fpl";
+    // A section's own page (Premier League, FPL, Voluntary) is somewhere to
+    // come back to as well, as it stood; a match, a league or a team is not
+    else if ((view === "fpl" && !parts[1]) || view === "vol" ||
+             (view === "pl" && !/^[A-Z]{3}-[A-Z]{3}$/.test(parts[2] || ""))) state.backTo = h;
     // A player can be opened from a match, a leaderboard, a pitch or a price
     // table, and back has to mean the page he was opened from. backView holds
     // only the five tabs, so it would have dropped a reader arriving from a
@@ -2848,10 +2849,12 @@
     subEl.innerHTML = sub;
     subEl.style.display = sub ? "" : "none";
 
-    // FPL's own page is the app's landing, so it has nowhere to go back to;
-    // a league or a team opened from it does
+    // A section's own page has nowhere to go back to: each is reached from
+    // the menu, as the tournament's tabs are from the bar. A match, a league,
+    // a team or a player opened inside one does.
     var back = $("#barBack");
-    var landing = state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory;
+    var landing = (state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory) ||
+      (state.view === "pl" && !state.plMatch) || state.view === "vol";
     back.style.display = SUB_VIEWS.indexOf(state.view) === -1 || landing ? "none" : "";
 
     var info = $("#barInfo");

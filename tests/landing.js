@@ -51,6 +51,21 @@ const ENTRY = { id: me, player_region_iso_code_short: "GB", leagues: { classic: 
   await p.click('.navitem[data-tab="classic"]'); await p.waitForTimeout(700);
   w = await where(p);
   chk(w.hash === "#classic" && w.table && !w.back, "Classic from the bottom bar, as before", JSON.stringify(w));
+  // every section's own page is home too: Premier League (fixtures and table) and Voluntary have no
+  // back arrow; a match opened inside one has one, and it leads back
+  const H = require(path.join(APP, "tests/audit/harness.js")).loadCompute().ds;
+  const fx = Object.keys(H.gwFixtures).map(Number).filter((g) => (H.gwFixtures[g] || []).some((f) => f[3])).pop();
+  const m0 = H.gwFixtures[fx].find((f) => f[3]);
+  for (const hash of ["pl", "pl/table", "vol"]) {
+    await p.evaluate((x) => { location.hash = x; }, hash); await p.waitForTimeout(800);
+    w = await where(p);
+    chk(w.hash === "#" + hash && !w.back, "the " + hash + " page, a section's own, has no back arrow", JSON.stringify(w));
+  }
+  await p.evaluate((x) => { location.hash = x; }, "pl/" + fx + "/" + m0[0] + "-" + m0[1]); await p.waitForTimeout(900);
+  w = await where(p);
+  chk(w.back, "a match opened in Premier League has a back arrow", JSON.stringify(w));
+  await p.click("#barBack"); await p.waitForTimeout(700);
+  chk((await where(p)).hash === "#pl/" + fx, "which returns to that gameweek's fixtures", (await where(p)).hash);
   chk(!p.__er.length, "no JS errors", p.__er.join(" | "));
   await c.close();
 
