@@ -2390,6 +2390,12 @@
   }
 
   function boot() {
+    // The app opens on FPL for anyone who has chosen their team: their card
+    // and their leagues first. Without a team, on Classic as before. A link
+    // to a particular page still opens that page.
+    if ((!location.hash || location.hash === "#") && state.me) {
+      try { history.replaceState(null, "", "#fpl"); } catch (e) {}
+    }
     warmMarks();
     // the signed-in manager's FPL leagues, fetched in the background a moment
     // after launch, so opening FPL from the menu rarely waits
@@ -2620,7 +2626,10 @@
     }
     // Remember only a place worth coming back to: the same list the back arrow
     // uses, so adding a sub-view can never make it point at itself.
-    if (SUB_VIEWS.indexOf(view) === -1) state.backView = view;
+    if (SUB_VIEWS.indexOf(view) === -1) state.backView = state.backTo = view;
+    // FPL's own page is where the app opens, so it is somewhere to come back
+    // to as well; its leagues and teams are not
+    else if (view === "fpl" && !parts[1]) state.backTo = "fpl";
     // A player can be opened from a match, a leaderboard, a pitch or a price
     // table, and back has to mean the page he was opened from. backView holds
     // only the five tabs, so it would have dropped a reader arriving from a
@@ -2832,8 +2841,11 @@
     subEl.innerHTML = sub;
     subEl.style.display = sub ? "" : "none";
 
+    // FPL's own page is the app's landing, so it has nowhere to go back to;
+    // a league or a team opened from it does
     var back = $("#barBack");
-    back.style.display = SUB_VIEWS.indexOf(state.view) === -1 ? "none" : "";
+    var landing = state.view === "fpl" && !state.fplTeam && !state.fplLeague;
+    back.style.display = SUB_VIEWS.indexOf(state.view) === -1 || landing ? "none" : "";
 
     var info = $("#barInfo");
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
@@ -2878,7 +2890,7 @@
       location.hash = state.playerFrom;
       return;
     }
-    location.hash = state.backView || "classic";
+    location.hash = state.backTo || state.backView || "classic";
   }
 
   function updateDataState() { /* data freshness now lives in the profile sheet */ }
