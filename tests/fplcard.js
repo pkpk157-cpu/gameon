@@ -30,12 +30,13 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     const c1 = await p.evaluate(() => { const card = document.querySelector(".fplcard"); const n = [...card.querySelectorAll(".fcn b")].map((x) => x.textContent);
       const first = document.querySelector("section.view.active").firstElementChild;
       return { who: card.querySelector(".fcwho b").textContent, mgr: card.querySelector(".fcwho span").textContent, badge: !!card.querySelector(".fcbadge"),
-        gw: card.querySelector(".fcgw").textContent, n, next: (card.querySelector(".fcnext") || {}).textContent || "", first: first === card,
+        gw: card.querySelector(".fcgw").textContent, n, labs: [...card.querySelectorAll(".fcn span")].map((x) => x.textContent.trim()), next: (card.querySelector(".fcnext") || {}).textContent || "", first: first === card,
         leagues: document.querySelectorAll(".flrow").length, wide: card.scrollWidth > card.clientWidth + 1,
         oneLine: card.querySelector(".fcnext b") ? card.querySelector(".fcnext b").getClientRects().length === 1 && card.querySelector(".fcnext b").getBoundingClientRect().height < 30 : true }; });
     const pts = K.gwScore(ds, me.id, gw);
     chk(c1.first && c1.who === me.entryName && c1.mgr === "\u{1F1EE}\u{1F1F3}" + me.playerName && !c1.badge, w + "px: the card leads the page: team, flag and manager, no badge", JSON.stringify({ who: c1.who, mgr: c1.mgr }));
     const fig = (v) => (v ? Number(v).toLocaleString("en-US") : "–");
+    chk(c1.labs.join("|") === "FPL average|Points|FPL highest", w + "px: the card names its average and highest as FPL's", c1.labs.join(" | "));
     chk(c1.gw.startsWith(ev.name) && c1.n[0] === fig(ev.average) && c1.n[1] === String(pts) && c1.n[2] === fig(ev.highest),
         w + "px: average and highest are FPL's, the points the app's own", JSON.stringify({ gw: c1.gw, n: c1.n, want: [ev.average, pts, ev.highest] }));
     if (next) {
@@ -48,6 +49,9 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     await p.click(".fcn.main"); await p.waitForTimeout(600);
     const sq = await p.evaluate(() => { const s = document.querySelector("#ps-squad"); const bar = document.querySelector("header.topbar").getBoundingClientRect().height + ((document.querySelector("#profChips") || { getBoundingClientRect: () => ({ height: 0 }) }).getBoundingClientRect().height);
       return { hash: location.hash, top: s ? Math.round(s.getBoundingClientRect().top - bar) : null }; });
+    // whose figures are whose, said on both: FPL's on the card, Game On's beside your squad
+    const labs = await p.evaluate(() => [...document.querySelectorAll(".pstats .l")].map((x) => x.textContent.trim()));
+    chk(labs[0] === "Game On avg" && /^Game On high/.test(labs[2]), w + "px: your squad names its average and highest as Game On's", labs.join(" | "));
     chk(sq.hash === "#profile/" + me.id + "/squad" && sq.top != null && sq.top >= -2 && sq.top <= 24, w + "px: your points open your profile at your squad, just under the bar", JSON.stringify(sq));
     // the arrow by your name opens your gameweek history: FPL's table, FPL's figures
     await p.goBack(); await p.waitForSelector(".fplcard", { timeout: 10000 }); await p.waitForTimeout(500);

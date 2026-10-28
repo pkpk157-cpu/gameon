@@ -774,7 +774,10 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pstats.money .pstat .v { white-space:nowrap; font-size:min(26px, 20.5cqw); }
 .pstats.money .pstat.main .v { font-size:min(30px, 20.5cqw); }
 .pstat .v { font-size:26px; font-weight:800; line-height:1.05; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
-.pstat .l { font-size:11.5px; font-weight:600; color:var(--ink-faint); margin-top:2px; }
+.pstat .l { font-size:11.5px; font-weight:600; color:var(--ink-faint); margin-top:2px; white-space:nowrap; }
+/* "Game On high" and "FPL highest" name whose figure it is, and hold one
+   line on the narrowest phones rather than break in two */
+@media (max-width:359px) { .pstats { gap:6px; } .pstat .l { font-size:10.5px; letter-spacing:-.1px; } }
 .pstat.main { min-width:104px; padding:10px 16px; border-radius:var(--radius-s);
   background:linear-gradient(150deg, #5a0a63, var(--pl-pink)); color:#fff;
   box-shadow:0 8px 20px -10px rgba(233,0,82,.7); }
@@ -2608,11 +2611,11 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 .fcgw { text-align:center; font-size:14px; opacity:.95; }
 .fclive { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; background:#00ff87; color:#37003c;
   font-size:11px; font-weight:800; vertical-align:2px; }
-.fcnums { display:grid; grid-template-columns:1fr 1.2fr 1fr; align-items:center; margin-top:6px; text-align:center; }
+.fcnums { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); align-items:center; margin-top:6px; text-align:center; }
 .fcn { display:flex; flex-direction:column; align-items:center; gap:2px; }
 .fcn b { font-size:30px; font-weight:900; line-height:1.15; font-variant-numeric:tabular-nums; }
 .fcn.main b { font-size:46px; }
-.fcn span { font-size:14px; display:inline-flex; align-items:center; gap:4px; }
+.fcn span { font-size:clamp(12px, 3.8vw, 14px); display:inline-flex; align-items:center; gap:3px; white-space:nowrap; }
 .fcn.main span, .fcn[role="button"] span { font-weight:800; }
 .fcn[role="button"] { cursor:pointer; }
 .fcnext { text-align:center; display:flex; flex-direction:column; gap:3px; }

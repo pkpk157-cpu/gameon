@@ -4276,9 +4276,9 @@
       '<div class="fcrule"></div>' +
       '<div class="fcgw">' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</div>' +
       '<div class="fcnums">' +
-        '<div class="fcn"><b>' + fig(ev.average) + '</b><span>Average</span></div>' +
+        '<div class="fcn"><b>' + fig(ev.average) + '</b><span>FPL average</span></div>' +
         '<a class="fcn main" href="#profile/' + (+me) + '/squad" aria-label="Your squad"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></a>' +
-        '<div class="fcn"' + (ev.highestEntry ? teamLink(ev.highestEntry) + ' role="button" tabindex="0"' : "") + '><b>' + fig(ev.highest) + '</b><span>Highest' +
+        '<div class="fcn"' + (ev.highestEntry ? teamLink(ev.highestEntry) + ' role="button" tabindex="0"' : "") + '><b>' + fig(ev.highest) + '</b><span>FPL highest' +
           (ev.highestEntry ? " " + arrow(16) : "") + '</span></div>' +
       '</div>' +
       (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
@@ -4621,7 +4621,7 @@
     function teamTiles(rec) {
       var sum = K.extSummary(fplTeamOverlay(ds, rec), id);
       return pcard("Total", sum.total == null ? "\u2013" : num(sum.total), "this season") +
-        pcard("Overall rank", sum.rank ? num(sum.rank) : "\u2013", sum.rankGw ? "after GW" + sum.rankGw : "");
+        pcard("FPL rank", sum.rank ? num(sum.rank) : "\u2013", sum.rankGw ? "after GW" + sum.rankGw : "");
     }
 
     // the squad block, as mountPitch draws a profile's
@@ -5065,11 +5065,11 @@
     var fpl = opts && opts.fpl;
     var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null, midSub = "", hiAttr = "";
     if (metric === "eo") {
-      leftLabel = fpl ? "Game On avg" : "League avg"; left = pit.leagueAvgEo + "%";
+      leftLabel = "Game On avg"; left = pit.leagueAvgEo + "%";
       midLabel = "Average EO"; mid = pit.avgEo + "%";
       rightLabel = "Most owned"; right = pit.topEo + "%";
     } else if (metric === "val") {
-      leftLabel = fpl ? "Game On avg" : "League avg"; left = mval(pit.leagueAvgValue);
+      leftLabel = "Game On avg"; left = mval(pit.leagueAvgValue);
       midLabel = "Squad value"; mid = mval(pit.squadValue);
       // what the squad would fetch today — FPL keeps half of every rise
       if (pit.sellValue != null && pit.sellValue !== pit.squadValue) {
@@ -5077,10 +5077,11 @@
       }
       rightLabel = "In the bank"; right = pit.bank == null ? "—" : mval(pit.bank);
     } else {
-      leftLabel = "Average"; left = pit.average === null ? "—" : num(pit.average);
+      // Game On's figures, named so, beside FPL's on an FPL team's pitch
+      leftLabel = "Game On avg"; left = pit.average === null ? "—" : num(pit.average);
       midLabel = "Total Pts" + (pit.hits ? ' <span class="hit">−' + num(pit.hits) + '</span>' : '');
       mid = num(pit.net);
-      rightLabel = 'Highest <span class="arw">›</span>';
+      rightLabel = 'Game On high <span class="arw">›</span>';
       right = pit.highest ? num(pit.highest.pts) : "—";
       hiId = pit.highest ? pit.highest.id : null;
       if (hiId) hiAttr = ' data-entry="' + hiId + '"';
@@ -5555,7 +5556,7 @@
       return '<div class="snaprank"><span class="k">' + k + '</span><b class="n">' + v + '</b>' + mv(d) + '</div>';
     };
     h += '<div class="snapranks">' +
-      (S.overall == null ? '' : rank("Overall", num(S.overall), S.overallMove || 0)) +
+      (S.overall == null ? '' : rank("FPL", num(S.overall), S.overallMove || 0)) +
       rank("GO", ordinal(S.rank), S.move) +
       '</div>';
     var tiles = [];
@@ -5914,7 +5915,7 @@
         tiles.push({ l: "In the bank", v: mval(v.averageBank), w: "on average" });
       } else {
         tiles.push({ l: "Richest squad", v: mval(v.richest.value), w: v.richest.name });
-        tiles.push({ l: "League average", v: mval(v.average), w: mval(v.averageBank) + " in the bank" });
+        tiles.push({ l: "Game On average", v: mval(v.average), w: mval(v.averageBank) + " in the bank" });
         tiles.push({ l: "Leanest squad", v: mval(v.poorest.value), w: v.poorest.name });
         if (v.mostBanked && v.mostBanked.bank > 0) tiles.push({ l: "Most in the bank", v: mval(v.mostBanked.bank), w: v.mostBanked.name });
       }
@@ -6039,7 +6040,7 @@
     }
     tiles.push({ l: "Top score", v: num(g.top.p), w: g.top.name });
     tiles.push({ l: "Lowest score", v: num(g.low.p), w: g.low.name });
-    tiles.push({ l: "League average", v: num(g.average), w: g.fplAverage !== null ? ("FPL average " + num(g.fplAverage)) : (num(g.count) + " managers") });
+    tiles.push({ l: "Game On average", v: num(g.average), w: g.fplAverage !== null ? ("FPL average " + num(g.fplAverage)) : (num(g.count) + " managers") });
     if (H.potw) tiles.push({ l: "Player of the week", v: num(H.potw.pts), w: H.potw.name });
     else if (g.mostBench && g.mostBench.bench > 0) tiles.push({ l: "Most benched", v: num(g.mostBench.bench), w: g.mostBench.name });
     base.file = "gameon-gw" + gw + ".png";
@@ -6772,7 +6773,7 @@
     };
     var strip;
     if (metric === "eo") {
-      strip = stat(B.ctx.leagueAvgOwned != null ? B.ctx.leagueAvgOwned + "%" : "\u2014", "League avg") +
+      strip = stat(B.ctx.leagueAvgOwned != null ? B.ctx.leagueAvgOwned + "%" : "\u2014", "Game On avg") +
         stat(Math.round((eoSum / n) * 10) / 10 + "%", "Average owned", null, true) +
         stat(most ? most.eo + "%" : "\u2014", "Most owned", most ? most.name : "");
     } else if (metric === "val") {
@@ -6780,7 +6781,7 @@
         stat(mval(val), "XI value", null, true) +
         stat(pricey ? mval(pricey.price) : "\u2014", "Priciest", pricey ? pricey.name : "");
     } else {
-      strip = stat(B.ctx.average != null ? num(B.ctx.average) : "\u2014", "League avg") +
+      strip = stat(B.ctx.average != null ? num(B.ctx.average) : "\u2014", "Game On avg") +
         stat(num(total), "Total Pts", null, true) +
         stat(top ? num(top.pts) : "\u2014", "Top scorer", top ? top.name : "");
     }
@@ -6829,7 +6830,7 @@
     h += statGroup("Scores", [
       hcard("Top score", num(g.top.p), g.top.name, g.top.id, g.top.player, "trophy", "top"),
       hcard("Lowest score", num(g.low.p), g.low.name, g.low.id, g.low.player, "down", "low"),
-      hcard("League average", num(g.average), g.count + " managers", null,
+      hcard("Game On average", num(g.average), g.count + " managers", null,
         g.median !== null ? ("median " + num(g.median)) : "", "chart", "average"),
       hcard("A good week was", num(g.topQuarter) + "+", "the top quarter", null,
         "bottom quarter: " + num(g.bottomQuarter) + " or less", "target", "topQuarter"),
@@ -7169,7 +7170,7 @@
       h += '<div class="hgrid">';
       h += hcard("Richest squad", mval(v.richest.value), v.richest.name, v.richest.id,
         mval(v.richest.bank) + " in the bank", "up");
-      h += hcard("League average", mval(v.average), v.count + " squads", null,
+      h += hcard("Game On average", mval(v.average), v.count + " squads", null,
         mval(v.averageBank) + " in the bank", "chart");
       h += hcard("Leanest squad", mval(v.poorest.value), v.poorest.name, v.poorest.id,
         mval(v.poorest.bank) + " in the bank", "down");
