@@ -1496,14 +1496,46 @@
      are paired within their position. A wildcard or Free Hit is one line,
      its changes counted and their points summed rather than paired off. A
      Free Hit squad is handed back after its week, so it counts that week. */
+  // A manager's chips by gameweek, and his fifteen in a gameweek.
+  function chipsByGw(ds, id) {
+    var at = {};
+    ((ds.chips || {})[+id] || []).forEach(function (c) { at[c.gw] = c.n; });
+    return at;
+  }
+  function squadEls(ds, id, g) {
+    var sq = (picksAt(ds, g) || {})[+id];
+    return sq && sq.p ? sq.p.map(function (x) { return +x[0]; }) : null;
+  }
+  // What a manager changed for gameweek g: the squad the deadline started
+  // from (the last one not borrowed for a Free Hit) against the squad after
+  // it, and who replaced whom, by FPL's log where it agrees and by position
+  // where it does not. Null when either squad is not held.
+  function weekChanges(ds, id, g, chipAt) {
+    var pre = null;
+    for (var b = g - 1; b >= 1; b--) if (chipAt[b] !== "freehit") { pre = squadEls(ds, id, b); break; }
+    var post = squadEls(ds, id, g), els = ds.elements || {};
+    if (!pre || !post) return null;
+    var ins = post.filter(function (el) { return pre.indexOf(el) === -1; });
+    var outs = pre.filter(function (el) { return post.indexOf(el) === -1; });
+    var pairs = [], freeIn = ins.slice(), freeOut = outs.slice();
+    (((ds.moves || {})[g] || {})[+id] || []).forEach(function (m) {
+      var i = freeIn.indexOf(+m[0]), o = freeOut.indexOf(+m[1]);
+      if (i === -1 || o === -1) return;
+      pairs.push([+m[0], +m[1]]); freeIn.splice(i, 1); freeOut.splice(o, 1);
+    });
+    freeIn.slice().forEach(function (el) {
+      var pos = (els[el] || [])[1];
+      var o = freeOut.filter(function (x) { return (els[x] || [])[1] === pos; })[0];
+      if (o == null) return;
+      pairs.push([el, o]); freeIn.splice(freeIn.indexOf(el), 1); freeOut.splice(freeOut.indexOf(o), 1);
+    });
+    return { ins: ins, outs: outs, pairs: pairs };
+  }
   C.transferLog = function (ds, entryId) {
     if (!ds || !ds.moves || !ds.picks) return null;
-    var id = +entryId, done = C.scoredGws(ds), lp = ds.livePoints || {}, els = ds.elements || {};
-    var chipAt = {};
-    ((ds.chips || {})[id] || []).forEach(function (c) { chipAt[c.gw] = c.n; });
-    var squad = function (g) { var sq = (picksAt(ds, g) || {})[id]; return sq && sq.p ? sq.p.map(function (x) { return +x[0]; }) : null; };
-    // the squad a deadline started from: the last one not borrowed for a Free Hit
-    var before = function (g) { for (var b = g - 1; b >= 1; b--) if (chipAt[b] !== "freehit") return squad(b); return null; };
+    var id = +entryId, done = C.scoredGws(ds), lp = ds.livePoints || {};
+    var chipAt = chipsByGw(ds, id);
+    var squad = function (g) { return squadEls(ds, id, g); };
     // a man bought in week g is owned until the first later squad, not a Free
     // Hit's, that is without him
     var stay = function (el, g) {
@@ -1520,26 +1552,12 @@
     var gws = Object.keys(ds.picks).map(Number).filter(function (g) { return g > 1 && g <= +ds.pitchGw; }).sort(function (a, b) { return a - b; });
     var weeks = [], count = 0, hits = 0, net = 0;
     gws.forEach(function (g) {
-      var pre = before(g), post = squad(g);
-      if (!pre || !post) return;
-      var ins = post.filter(function (el) { return pre.indexOf(el) === -1; });
-      var outs = pre.filter(function (el) { return post.indexOf(el) === -1; });
+      var wc = weekChanges(ds, id, g, chipAt);
+      if (!wc) return;
+      var ins = wc.ins, outs = wc.outs;
       var hit = (((ds.history || {})[id] || {})[g] || {}).h || 0;
       if (!ins.length && !outs.length) return;
-      // who replaced whom: the log first, then position by position
-      var pairs = [], freeIn = ins.slice(), freeOut = outs.slice();
-      (((ds.moves || {})[g] || {})[id] || []).forEach(function (m) {
-        var i = freeIn.indexOf(+m[0]), o = freeOut.indexOf(+m[1]);
-        if (i === -1 || o === -1) return;
-        pairs.push([+m[0], +m[1]]); freeIn.splice(i, 1); freeOut.splice(o, 1);
-      });
-      freeIn.slice().forEach(function (el) {
-        var pos = (els[el] || [])[1];
-        var o = freeOut.filter(function (x) { return (els[x] || [])[1] === pos; })[0];
-        if (o == null) return;
-        pairs.push([el, o]); freeIn.splice(freeIn.indexOf(el), 1); freeOut.splice(freeOut.indexOf(o), 1);
-      });
-      var rows = pairs.map(function (p) {
+      var rows = wc.pairs.map(function (p) {
         var span = stay(p[0], g);
         return { in: p[0], out: p[1], gain: span.length ? pts(p[0], span) - pts(p[1], span) : null, weeks: span.length };
       });
@@ -1552,6 +1570,84 @@
       if (played.length) net += sum - hit;
     });
     return { weeks: weeks, count: count, hits: hits, net: net };
+  };
+
+  /* The transfer market in one gameweek: what Game On bought and sold, how
+     many managers moved and what the hits cost, and what the players
+     returned that gameweek; beside it, what all of FPL bought and sold.
+
+     A locked gameweek is read off the squads (weekChanges, the same reading
+     as each profile's Transfers), every change counted, a wildcard's and a
+     Free Hit's included. Its return is the gameweek's own points, and is
+     marked live until those points stand. The week whose deadline is still
+     ahead is read off the transfers logged so far (ds.pending) and has no
+     return yet. FPL-wide counts come from the updater (ds.market): exact for
+     a locked gameweek it could read both deadlines of, as they stand for the
+     open one, and absent for the rest rather than guessed. */
+  C.marketGws = function (ds) {
+    if (!ds || !ds.picks) return [];
+    var out = Object.keys(ds.picks).map(Number).filter(function (g) { return g > 1 && g <= +ds.pitchGw; });
+    var open = ds.pending && ds.pending.gw ? +ds.pending.gw : (ds.market && ds.market.open ? +ds.market.open.gw : null);
+    if (open && open > +ds.pitchGw) out.push(open);
+    return out.sort(function (a, b) { return a - b; });
+  };
+  C.market = function (ds, gw) {
+    if (!ds || !ds.managers || !ds.elements) return null;
+    gw = +gw;
+    var lp = (ds.livePoints || {})[gw] || null, els = ds.elements;
+    var open = gw > +ds.pitchGw;
+    var bought = {}, sold = {}, moves = [], managers = 0, transfers = 0, hits = 0, hitters = 0, wc = 0, fh = 0, ret = 0;
+    ds.managers.forEach(function (m) {
+      var ins = [], outs = [], pairs = [];
+      if (open) {
+        var log = ((ds.pending || {}).moves || {})[m.id] || [];
+        var base = squadEls(ds, m.id, gw - 1);
+        if (!log.length || !base) return;
+        var now = base.slice();
+        log.forEach(function (mv) { var i = now.indexOf(+mv[1]); if (i !== -1) now[i] = +mv[0]; });
+        ins = now.filter(function (el) { return base.indexOf(el) === -1; });
+        outs = base.filter(function (el) { return now.indexOf(el) === -1; });
+      } else {
+        var chipAt = chipsByGw(ds, m.id);
+        var w = weekChanges(ds, m.id, gw, chipAt);
+        if (!w) return;
+        ins = w.ins; outs = w.outs;
+        if (chipAt[gw] !== "wildcard" && chipAt[gw] !== "freehit") pairs = w.pairs;
+        if (chipAt[gw] === "wildcard" && ins.length) wc++;
+        if (chipAt[gw] === "freehit" && ins.length) fh++;
+        var h = (((ds.history || {})[m.id] || {})[gw] || {}).h || 0;
+        if (h) { hits += h; hitters++; }
+      }
+      if (!ins.length && !outs.length) return;
+      managers++; transfers += Math.max(ins.length, outs.length);
+      ins.forEach(function (el) { bought[el] = (bought[el] || 0) + 1; });
+      outs.forEach(function (el) { sold[el] = (sold[el] || 0) + 1; });
+      if (lp) {
+        ins.forEach(function (el) { ret += lp[el] || 0; });
+        outs.forEach(function (el) { ret -= lp[el] || 0; });
+        pairs.forEach(function (p) { moves.push({ id: m.id, name: m.entryName, in: p[0], out: p[1], gain: (lp[p[0]] || 0) - (lp[p[1]] || 0) }); });
+      }
+    });
+    var pts = function (el) { return lp && !open ? (lp[el] || 0) : null; };
+    var rank = function (o) {
+      return Object.keys(o).map(function (k) { return { el: +k, name: (els[k] || [])[0] || "?", n: o[k], pts: pts(k) }; })
+        .sort(function (a, b) { return (b.n - a.n) || ((b.pts || 0) - (a.pts || 0)); });
+    };
+    moves.sort(function (a, b) { return b.gain - a.gain; });
+    var ev = ((ds.bootstrap || {}).events || []).filter(function (e) { return +e.id === gw; })[0] || {};
+    var mk = ds.market || {}, f = open ? (mk.open && +mk.open.gw === gw ? mk.open : null) : ((mk.gws || {})[gw] || null);
+    var fplList = function (list) {
+      return (list || []).map(function (x) { return { el: +x[0], name: (els[x[0]] || [])[0] || "?", n: x[1], pts: pts(x[0]) }; });
+    };
+    // FPL's own count for a locked week; the open one's so far is summed
+    var fplTotal = !open && ev.transfers ? ev.transfers : (f && f.total != null ? f.total : null);
+    return {
+      gw: gw, open: open, live: !open && C.scoredGws(ds).indexOf(gw) === -1,
+      go: { managers: managers, transfers: transfers, hits: hits, hitters: hitters, wildcards: wc, freehits: fh,
+            ret: lp && !open ? ret : null, bought: rank(bought), sold: rank(sold),
+            best: moves.slice(0, 5), worst: moves.slice().reverse().filter(function (x) { return x.gain < 0; }).slice(0, 5) },
+      fpl: { total: fplTotal, in: f ? fplList(f.in) : null, out: f ? fplList(f.out) : null, at: f && open ? f.at : null }
+    };
   };
 
   C.managerPitch = function (ds, id, gw) {

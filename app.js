@@ -490,6 +490,7 @@
     // a price check and a look at form are different questions, and asking
     // either took a tab hop through the other.
     h += '<div class="menu"><div class="lab-sm">Players</div>' +
+      menuItem("pfMarket", "swap", "Transfer market") +
       menuItem("pfPrices", "tag", "Price changes") +
       menuItem("pfPlayers", "chart", "Player stats") +
       '</div>';
@@ -546,6 +547,7 @@
       go("compare");
     });
     $("#pfRules").addEventListener("click", function () { go("rules"); });
+    $("#pfMarket").addEventListener("click", function () { go("market"); });
     $("#pfPrices").addEventListener("click", function () { go("prices"); });
     $("#pfPlayers").addEventListener("click", function () { go("prices/stats"); });
     if (me) {
@@ -2607,7 +2609,7 @@
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
       .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
-               "winnings", "gwstatus", "vol", "player", "fpl"]);
+               "winnings", "gwstatus", "vol", "player", "fpl", "market"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -2705,7 +2707,7 @@
   // idle; coming back draws it afresh, as it always did. Measured with the
   // CPU slowed to a mid-range phone's: a return to Classic 0.67s to 0.30s.
   var LIGHT_VIEWS = { classic: 1, monthly: 1, lms: 1, pyramid: 1, h2h: 1, stats: 1, prices: 1,
-                      pl: 1, gwstatus: 1, winnings: 1, chips: 1, rules: 1 };
+                      pl: 1, gwstatus: 1, winnings: 1, chips: 1, rules: 1, market: 1 };
   var trimDue = false;
   function trimLater() {
     if (trimDue) return;
@@ -2741,12 +2743,13 @@
     gwstatus:{ t: "Gameweek status" },
     vol:     { t: "Game On Voluntary", topic: "voluntary" },
     // the bar carries his name, so the page body never repeats it
-    player:  { t: "Player" }
+    player:  { t: "Player" },
+    market:  { t: "Transfer market" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
   var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
-                   "winnings", "gwstatus", "vol", "player", "fpl"];
+                   "winnings", "gwstatus", "vol", "player", "fpl", "market"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -2909,6 +2912,7 @@
     if (state.view === "fpl") return renderFpl(host, S.dataset());
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
     if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
+    if (state.view === "market") return renderMarket(host, S.dataset());
     if (state.view === "vol") return renderVoluntary(host, S.dataset());
     if (state.view === "player") return renderPlayer(host, S.dataset());
 
@@ -6934,6 +6938,77 @@
       h += '</div></div>';
     }
     return h;
+  }
+
+  /* The transfer market, one gameweek at a time: what Game On bought and
+     sold and what those players returned that week, the best and worst
+     single moves, and what all of FPL bought and sold beside it. The week
+     still open shows what has been logged so far. Figures from K.market. */
+  function bigCount(n) {
+    if (n >= 1e6) return (Math.round(n / 1e4) / 100).toFixed(2).replace(/\.?0+$/, "") + "M";
+    if (n >= 1e4) return Math.round(n / 1e3) + "k";
+    return num(n);
+  }
+  function signedPts(v) { return (v > 0 ? "+" : v < 0 ? "\u2212" : "") + num(Math.abs(v)); }
+  function renderMarket(host, ds) {
+    var gws = ds ? K.marketGws(ds) : [];
+    if (!gws.length) { host.innerHTML = '<div class="callout">No transfers to show yet.</div>'; return; }
+    var locked = gws.filter(function (g) { return g <= +ds.pitchGw; });
+    if (!state.marketGw || gws.indexOf(+state.marketGw) === -1) state.marketGw = locked.length ? locked[locked.length - 1] : gws[gws.length - 1];
+    var gw = +state.marketGw, M = K.market(ds, gw), g = M.go, f = M.fpl;
+    var elName = function (el) { return ((ds.elements || {})[el] || [])[0] || "?"; };
+    var h = '<div class="pgwline" style="margin-bottom:4px"><select class="in gwsel" id="mkGwSel" aria-label="Gameweek">' +
+      gws.map(function (x) {
+        return '<option value="' + x + '"' + (x === gw ? " selected" : "") + '>Gameweek ' + x + (x > +ds.pitchGw ? " \u00b7 open" : "") + '</option>';
+      }).join("") + '</select></div>';
+    h += '<div class="statlead">Gameweek ' + gw + (M.open ? " so far" : "") + '</div>';
+    if (M.open) h += '<div class="note" style="margin:-4px 2px 10px">Transfers logged before the deadline. Nothing is final until it passes.</div>';
+    else if (M.live) h += '<div class="note" style="margin:-4px 2px 10px">Points are still coming in for this gameweek.</div>';
+
+    var chips = [];
+    if (g.wildcards) chips.push(num(g.wildcards) + (g.wildcards === 1 ? " wildcard" : " wildcards"));
+    if (g.freehits) chips.push(num(g.freehits) + (g.freehits === 1 ? " Free Hit" : " Free Hits"));
+    h += '<div class="hgrid">' +
+      hcard("Transfers", num(g.transfers), g.managers ? num(g.managers) + " managers" : "nobody yet", null, chips.join(" \u00b7 "), "swap") +
+      (M.open ? "" : hcard("Hits taken", g.hits ? "\u2212" + num(g.hits) : "0", g.hitters ? num(g.hitters) + " managers" : "no hits", null, "", "down")) +
+      (g.ret != null ? hcard("Returned", signedPts(g.ret) + " pts", "brought in against sold", null, M.live ? "so far" : "in gameweek " + gw, "chart") : "") +
+      (f.total != null ? hcard("Across FPL", bigCount(f.total), M.open ? "transfers so far" : "transfers made", null, "", "globe") : "") +
+      '</div>';
+
+    var pt = function (x) { return x.pts == null ? "" : signedPts(x.pts).replace(/^\+/, "") + (Math.abs(x.pts) === 1 ? " pt" : " pts"); };
+    if (g.bought.length || g.sold.length) {
+      h += '<div class="card"><div class="bd hcols">' +
+        hlist("Bought by Game On", g.bought.slice(0, 8), function (x) {
+          return { name: x.name, tag: num(x.n) + (x.n === 1 ? " manager" : " managers"), val: pt(x) }; }) +
+        hlist("Sold by Game On", g.sold.slice(0, 8), function (x) {
+          return { name: x.name, tag: num(x.n) + (x.n === 1 ? " manager" : " managers"), val: pt(x) }; }, M.open ? "" : "Points are what each scored in gameweek " + gw + ".") +
+        '</div></div>';
+    } else {
+      h += '<div class="callout">No Game On transfers ' + (M.open ? "logged yet for this gameweek." : "this gameweek.") + '</div>';
+    }
+    if (g.best.length) {
+      h += '<div class="card"><div class="bd hcols">' +
+        hlist("Best moves", g.best, function (x) {
+          return { id: x.id, name: x.name, tag: elName(x.in) + " for " + elName(x.out), val: signedPts(x.gain) }; }) +
+        hlist("Worst moves", g.worst, function (x) {
+          return { id: x.id, name: x.name, tag: elName(x.in) + " for " + elName(x.out), val: signedPts(x.gain) }; },
+          "One transfer\u2019s points against the player it replaced, in gameweek " + gw + ".") +
+        '</div></div>';
+    }
+    if (f.in && f.out) {
+      h += '<div class="card"><div class="bd hcols">' +
+        hlist("Most bought across FPL", f.in.slice(0, 8), function (x) { return { name: x.name, tag: bigCount(x.n), val: pt(x) }; }) +
+        hlist("Most sold across FPL", f.out.slice(0, 8), function (x) { return { name: x.name, tag: bigCount(x.n), val: pt(x) }; },
+          f.at ? "As FPL had them at " + new Date(f.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + "." : "") +
+        '</div></div>';
+    } else if (!M.open) {
+      var mk = ds.market || {};
+      var first = Object.keys(mk.gws || {}).map(Number).concat(mk.open ? [+mk.open.gw] : []).sort(function (a, b) { return a - b; })[0];
+      h += '<div class="note" style="margin:8px 2px">FPL shows how many bought and sold each player only while a gameweek\u2019s ' +
+        'transfers are open, so these are kept from ' + (first ? "gameweek " + first : "the next deadline") + ' on.</div>';
+    }
+    host.innerHTML = h;
+    $("#mkGwSel", host).addEventListener("change", function () { state.marketGw = +this.value; renderMarket(host, ds); });
   }
 
   function statsValue(H, ds) {

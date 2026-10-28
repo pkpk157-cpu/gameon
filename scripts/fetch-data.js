@@ -210,7 +210,63 @@ function purchasePrices(transfers, squad, gw, freeHit, startOf) {
   });
   return map;
 }
-module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices };
+/* The transfer market across all of FPL. FPL gives each player's transfers
+   in the window now open (transfers_in_event) and in the season so far
+   (transfers_in), and resets the window's count at every deadline. The
+   season's less the window's is therefore his total at the last deadline,
+   exactly, whenever it is read; and the totals at two deadlines apart are
+   that gameweek's own transfers. The totals at the last two deadlines are
+   kept so the gameweek between them can be read; a gameweek locked before the
+   first deadline this saw has no per-player figures, and none are made up.
+   Read every run while the next window is open, so a moment's lag at a
+   deadline (FPL still resetting its counts) is put right on the next run.
+   The open window is kept as it stands, with when it was read. */
+const MARKET_TOP = 15;
+function marketOf(elements, events, prev, stamp, nowMs) {
+  prev = prev || {};
+  const top = (o) => Object.keys(o).filter((k) => o[k] > 0).sort((a, b) => (o[b] - o[a]) || (a - b))
+    .slice(0, MARKET_TOP).map((k) => [+k, o[k]]);
+  const sum = (o) => Object.keys(o).reduce((s, k) => s + o[k], 0);
+  const locked = events.filter((e) => e.deadline_time && Date.parse(e.deadline_time) <= nowMs)
+    .reduce((m, e) => Math.max(m, e.id), 0);
+  const out = { locked: locked, base: {}, gws: Object.assign({}, prev.gws || {}), open: null };
+  const cumIn = {}, cumOut = {}, winIn = {}, winOut = {};
+  let sane = elements.length > 0;
+  elements.forEach((el) => {
+    const a = (el.transfers_in || 0) - (el.transfers_in_event || 0);
+    const b = (el.transfers_out || 0) - (el.transfers_out_event || 0);
+    if (a < 0 || b < 0) sane = false;
+    if (a) cumIn[el.id] = a;
+    if (b) cumOut[el.id] = b;
+    if (el.transfers_in_event) winIn[el.id] = el.transfers_in_event;
+    if (el.transfers_out_event) winOut[el.id] = el.transfers_out_event;
+  });
+  const pb = prev.base || {};
+  if (locked) {
+    if (sane) out.base[locked] = { in: cumIn, out: cumOut };
+    else if (pb[locked]) out.base[locked] = pb[locked];
+    if (pb[locked - 1]) out.base[locked - 1] = pb[locked - 1];
+    const was = out.base[locked - 1], now = out.base[locked];
+    if (was && now) {
+      const dIn = {}, dOut = {};
+      let bad = false;
+      const ids = new Set(Object.keys(now.in).concat(Object.keys(now.out), Object.keys(was.in), Object.keys(was.out)));
+      ids.forEach((id) => {
+        const x = (now.in[id] || 0) - (was.in[id] || 0), y = (now.out[id] || 0) - (was.out[id] || 0);
+        if (x < 0 || y < 0) bad = true;
+        if (x) dIn[id] = x;
+        if (y) dOut[id] = y;
+      });
+      if (!bad) out.gws[locked] = { in: top(dIn), out: top(dOut), total: sum(dIn) };
+    }
+  }
+  const next = events.find((e) => e.id === locked + 1);
+  if (next && next.deadline_time && Date.parse(next.deadline_time) > nowMs && sane) {
+    out.open = { gw: next.id, at: stamp, in: top(winIn), out: top(winOut), total: sum(winIn) };
+  }
+  return out;
+}
+module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf };
 
 if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
@@ -222,7 +278,9 @@ if (require.main === module) (async () => {
     average: e.average_entry_score,
     // FPL's best score of the week and whose it was, beside its average on
     // the FPL team page; like the average, 0 or null until the week is done
-    highest: e.highest_score, highestEntry: e.highest_scoring_entry
+    highest: e.highest_score, highestEntry: e.highest_scoring_entry,
+    // every transfer made across FPL for the gameweek, for the transfer market
+    transfers: e.transfers_made != null ? e.transfers_made : null
   }));
 
   // What we published last time: the h2h schedule and the price record are both
@@ -706,6 +764,9 @@ if (require.main === module) (async () => {
                    tIn, tOut, netSince, exact, total,
                    fpl: { pct: fplPct, proj: fplProj, lock: fplLock, cal: fplCal } };
 
+  const market = marketOf(bs.elements || [], events, prev.market, stamp, Date.now());
+  if (market.gws[market.locked]) console.log("transfer market: GW " + market.locked + " read across FPL");
+
   // A finished gameweek's deadline is history. FPL does move deadlines when
   // fixtures are rescheduled around European and cup weeks, and the app reads
   // the deadline's month to decide which month a gameweek belongs to — so a
@@ -1177,7 +1238,7 @@ if (require.main === module) (async () => {
     historyCarried: carried.length ? { ids: carried, from: prev.updatedAt || null } : null,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, buysV: BUYS_V, moves: moves || {},
-    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps, gwEvents, flags,
+    liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, market, breakdown, gwStamps, gwEvents, flags,
     faceHide, pending
   };
   // Refuse to publish something clearly worse than what is already live: a
