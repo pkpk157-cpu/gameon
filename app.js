@@ -4985,8 +4985,19 @@
       // league. Comparing the two without this line has already confused one
       // reader, and 245 will read it.
       (metric === "eo" ? '<div class="note" style="margin:2px 2px 8px">Ownership here is within ' +
-        'Game On\u2019s 245 managers. FPL-wide ownership is in Price changes.</div>' : '');
+        'Game On\u2019s 245 managers. FPL-wide ownership is in Price changes.</div>' : '') +
+      // what the fifteen cost, against what they would fetch: the squad's
+      // profit, on the one view that is about money
+      (metric === "val" && pit.paidValue != null && pit.sellValue != null
+        ? '<div class="note" style="margin:2px 2px 8px">Bought for ' + mval(pit.paidValue) + ' \u00b7 ' +
+          profitWords(pit.sellValue - pit.paidValue) + ' if sold today</div>' : '');
   }
+  // A squad's profit in words: "+£1.2m profit", "£0.4m loss", "no profit yet".
+  function profitWords(t) {
+    return t > 0 ? "+" + mval(t) + " profit" : t < 0 ? mval(-t) + " loss" : "no profit yet";
+  }
+  // A signed money change, "+£0.8m" or "−£0.3m".
+  function mdiff(t) { return (t > 0 ? "+" : t < 0 ? "\u2212" : "") + mval(Math.abs(t)); }
 
   /* The squad a manager will own next gameweek, rebuilt from the transfers he
      has logged. Shown as a list rather than a pitch on purpose: the transfer
@@ -5298,6 +5309,38 @@
       };
     } else {
       h2hSync = null;
+    }
+
+    // Transfers this season, newest week first, each with what it returned.
+    var TL = K.transferLog(ds, id);
+    if (TL && TL.weeks.length) {
+      var elName = function (el) { return ((ds.elements || {})[el] || [])[0] || "?"; };
+      var signed = function (v) {
+        if (v == null) return '<span class="trg">\u2013</span>';
+        return '<span class="trg' + (v > 0 ? ' up' : v < 0 ? ' dn' : '') + '">' + (v > 0 ? "+" : v < 0 ? "\u2212" : "") + num(Math.abs(v)) + '</span>';
+      };
+      var weekRows = function (w) {
+        var gwCell = '<td class="trw">GW' + w.gw + '</td>';
+        if (w.chip) {
+          return '<tr>' + gwCell + '<td colspan="2">' + esc(CHIP_NAME[w.chip] || w.chip) + ' \u00b7 ' +
+            num(Math.max(w.ins, w.outs)) + ' changed</td><td class="num">' + signed(w.gain) + '</td></tr>';
+        }
+        var out = w.rows.map(function (x, i) {
+          return '<tr>' + (i === 0 ? gwCell : '<td></td>') + '<td>' + esc(elName(x.in)) + '</td><td class="trout">' +
+            esc(elName(x.out)) + '</td><td class="num">' + signed(x.gain) + '</td></tr>';
+        }).join("");
+        if (w.hit) out += '<tr class="trhit"><td></td><td colspan="2">\u2212' + num(w.hit) + ' hit \u00b7 net</td><td class="num">' + signed(w.net) + '</td></tr>';
+        return out;
+      };
+      var trTable = function (weeks) {
+        return '<div class="card"><div class="tablewrap"><table class="t trlog"><thead><tr><th>GW</th><th>In</th><th>Out</th>' +
+          '<th class="num">Pts</th></tr></thead><tbody>' + weeks.map(weekRows).join("") + '</tbody></table></div></div>';
+      };
+      var newest = TL.weeks.slice().reverse();
+      h += pfold("transfers", "Transfers", "net " + (TL.net > 0 ? "+" : TL.net < 0 ? "\u2212" : "") + num(Math.abs(TL.net)) + " pts",
+        trTable(newest) + '<div class="note" style="margin:6px 2px 0">Pts: what the player brought in scored against the one sold, ' +
+          'over the weeks he stayed. Captaincy and the bench are not counted; hits are taken off in the week they were paid.</div>',
+        trTable(newest.slice(0, 1)));
     }
 
     var past, pastPeek = "";
@@ -6904,7 +6947,7 @@
     return h;
   }
 
-  function statsValue(H) {
+  function statsValue(H, ds) {
     var v = H.value, sq = H.squads;
     var h = '<div class="statlead">' + esc(H.gwName) + '</div>';
     // Which prices these are, once: the newest squads today, older ones as
@@ -6939,6 +6982,19 @@
       h += hlist("Most valuable teams", v.top, function (x) {
         return { id: x.id, name: x.name, tag: "", val: mval(x.value) };
       }, v.richest.value === v.poorest.value ? "Every squad is still at its starting value." : "");
+      h += '</div></div>';
+    }
+    // Profit only exists for the squads as they stand: purchase prices are
+    // read for the newest gameweek.
+    var PB = ds ? K.profitBoard(ds) : null;
+    if (PB && +H.gw === +PB.gw) {
+      h += '<div class="card"><div class="bd hcols">';
+      h += hlist("Biggest profit", PB.squads.slice(0, 5), function (x) {
+        return { id: x.id, name: x.name, tag: "", val: mdiff(x.profit) };
+      }, "What the fifteen would fetch today over what they cost.");
+      h += hlist("Best buys", PB.bestBuys.slice(0, 5), function (x) {
+        return { name: x.name, tag: num(x.n) + (x.n === 1 ? " squad" : " squads"), val: mdiff(x.rise) };
+      }, "The biggest rises since a Game On manager bought him.");
       h += '</div></div>';
     }
     if (sq && sq.bestValue.length) {

@@ -1437,6 +1437,123 @@
     return { paid: buy, now: meta[3], sell: sellFor(buy, meta[3]), gw: +ds.buysGw };
   };
 
+  /* A squad's profit as it stands: what its fifteen cost, what FPL would
+     hand back for them today, and the difference. In tenths of a million,
+     and only when every one of the fifteen has a known purchase price (see
+     ownedPrice), so it never quietly leaves a player out. */
+  C.squadProfit = function (ds, entryId) {
+    var sq = ds && ds.buysGw ? (picksAt(ds, +ds.buysGw) || {})[+entryId] : null;
+    if (!sq || !sq.p || !sq.p.length) return null;
+    var paid = 0, sell = 0, now = 0;
+    for (var i = 0; i < sq.p.length; i++) {
+      var o = C.ownedPrice(ds, entryId, sq.p[i][0]);
+      if (!o) return null;
+      paid += o.paid; sell += o.sell; now += o.now;
+    }
+    return { paid: paid, sell: sell, now: now, profit: sell - paid, gw: +ds.buysGw };
+  };
+  /* The league's squads by profit, and its best buys: the players who have
+     risen most since a Game On manager bought them, one line per player with
+     how many squads hold him at that rise. Read off the same figures as the
+     player page and the pitch. */
+  C.profitBoard = function (ds) {
+    if (!ds || !ds.buys || !ds.buysGw || !ds.managers) return null;
+    var squads = [], buys = {};
+    ds.managers.forEach(function (m) {
+      var p = C.squadProfit(ds, m.id);
+      if (!p) return;
+      squads.push({ id: m.id, name: m.entryName, profit: p.profit, sell: p.sell });
+      var sq = picksAt(ds, +ds.buysGw)[+m.id];
+      sq.p.forEach(function (pk) {
+        var o = C.ownedPrice(ds, m.id, pk[0]), rise = o.now - o.paid;
+        if (rise <= 0) return;
+        var b = buys[pk[0]];
+        if (!b || rise > b.rise) buys[pk[0]] = { el: pk[0], rise: rise, paid: o.paid, now: o.now, n: 1 };
+        else if (rise === b.rise) b.n++;
+      });
+    });
+    if (!squads.length) return null;
+    squads.sort(function (a, b) { return (b.profit - a.profit) || (b.sell - a.sell); });
+    var els = ds.elements || {};
+    var best = Object.keys(buys).map(function (k) { var b = buys[k]; b.name = (els[k] || [])[0] || "?"; return b; })
+      .sort(function (a, b) { return (b.rise - a.rise) || (b.n - a.n) || (b.now - a.now); });
+    return { gw: +ds.buysGw, squads: squads, bestBuys: best };
+  };
+
+  /* A manager's transfers this season, gameweek by gameweek, and what each
+     returned: the points of the player brought in against the player sold,
+     over the gameweeks the new man stayed (to the week he was sold on, or to
+     now). Player points as FPL scores the player: captaincy and the bench
+     are the manager's choices, not the transfer's. Only gameweeks whose
+     points stand count, so a figure never moves while a match is on.
+
+     What changed is read off the squads themselves, the one before the
+     deadline against the one after, rather than off FPL's transfer log
+     alone: a wildcard logs every change of mind on the way to the final
+     fifteen (one GW3 wildcard here logged 31 moves, Raya for Palmer and back
+     again). The log still says who replaced whom, and in a normal week it
+     agrees with the squads (760 of 761 so far); where it does not, players
+     are paired within their position. A wildcard or Free Hit is one line,
+     its changes counted and their points summed rather than paired off. A
+     Free Hit squad is handed back after its week, so it counts that week. */
+  C.transferLog = function (ds, entryId) {
+    if (!ds || !ds.moves || !ds.picks) return null;
+    var id = +entryId, done = C.scoredGws(ds), lp = ds.livePoints || {}, els = ds.elements || {};
+    var chipAt = {};
+    ((ds.chips || {})[id] || []).forEach(function (c) { chipAt[c.gw] = c.n; });
+    var squad = function (g) { var sq = (picksAt(ds, g) || {})[id]; return sq && sq.p ? sq.p.map(function (x) { return +x[0]; }) : null; };
+    // the squad a deadline started from: the last one not borrowed for a Free Hit
+    var before = function (g) { for (var b = g - 1; b >= 1; b--) if (chipAt[b] !== "freehit") return squad(b); return null; };
+    // a man bought in week g is owned until the first later squad, not a Free
+    // Hit's, that is without him
+    var stay = function (el, g) {
+      if (chipAt[g] === "freehit") return [g];
+      var end = null;
+      for (var k = g + 1; k <= +ds.pitchGw; k++) {
+        if (chipAt[k] === "freehit") continue;
+        var sk = squad(k);
+        if (sk && sk.indexOf(el) === -1) { end = k; break; }
+      }
+      return done.filter(function (w) { return w >= g && (end == null || w < end); });
+    };
+    var pts = function (el, span) { return span.reduce(function (s, w) { return s + (((lp[w] || {})[el]) || 0); }, 0); };
+    var gws = Object.keys(ds.picks).map(Number).filter(function (g) { return g > 1 && g <= +ds.pitchGw; }).sort(function (a, b) { return a - b; });
+    var weeks = [], count = 0, hits = 0, net = 0;
+    gws.forEach(function (g) {
+      var pre = before(g), post = squad(g);
+      if (!pre || !post) return;
+      var ins = post.filter(function (el) { return pre.indexOf(el) === -1; });
+      var outs = pre.filter(function (el) { return post.indexOf(el) === -1; });
+      var hit = (((ds.history || {})[id] || {})[g] || {}).h || 0;
+      if (!ins.length && !outs.length) return;
+      // who replaced whom: the log first, then position by position
+      var pairs = [], freeIn = ins.slice(), freeOut = outs.slice();
+      (((ds.moves || {})[g] || {})[id] || []).forEach(function (m) {
+        var i = freeIn.indexOf(+m[0]), o = freeOut.indexOf(+m[1]);
+        if (i === -1 || o === -1) return;
+        pairs.push([+m[0], +m[1]]); freeIn.splice(i, 1); freeOut.splice(o, 1);
+      });
+      freeIn.slice().forEach(function (el) {
+        var pos = (els[el] || [])[1];
+        var o = freeOut.filter(function (x) { return (els[x] || [])[1] === pos; })[0];
+        if (o == null) return;
+        pairs.push([el, o]); freeIn.splice(freeIn.indexOf(el), 1); freeOut.splice(freeOut.indexOf(o), 1);
+      });
+      var rows = pairs.map(function (p) {
+        var span = stay(p[0], g);
+        return { in: p[0], out: p[1], gain: span.length ? pts(p[0], span) - pts(p[1], span) : null, weeks: span.length };
+      });
+      var played = rows.filter(function (x) { return x.gain !== null; });
+      var sum = played.reduce(function (s, x) { return s + x.gain; }, 0);
+      var chip = chipAt[g] === "wildcard" || chipAt[g] === "freehit" ? chipAt[g] : "";
+      weeks.push({ gw: g, chip: chip, hit: hit, rows: rows, ins: ins.length, outs: outs.length,
+                   gain: played.length ? sum : null, net: played.length ? sum - hit : null });
+      count += Math.max(ins.length, outs.length); hits += hit;
+      if (played.length) net += sum - hit;
+    });
+    return { weeks: weeks, count: count, hits: hits, net: net };
+  };
+
   C.managerPitch = function (ds, id, gw) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;
@@ -1591,18 +1708,18 @@
     // has a known purchase price. A Free Hit squad is skipped outright: it is
     // borrowed for the week, so nothing in it was bought at all.
     var bank = hrow && hrow.bk != null ? hrow.bk : null;
-    var sellValue = null;
+    var sellValue = null, paidValue = null;
     var buyMap = (ds.buys && +ds.buysGw === +gw && (sq.c || "") !== "freehit")
       ? ds.buys[id] : null;
     if (buyMap) {
-      var sellSum = 0, complete = everyone.length > 0;
+      var sellSum = 0, paidSum = 0, complete = everyone.length > 0;
       everyone.forEach(function (p) {
         var buy = buyMap[p.el];
         if (buy == null) { complete = false; return; }
         p.sell = sellFor(buy, p.price);
-        sellSum += p.sell;
+        sellSum += p.sell; paidSum += buy;
       });
-      if (complete) sellValue = sellSum;
+      if (complete) { sellValue = sellSum; paidValue = paidSum; }
       else everyone.forEach(function (p) { delete p.sell; });
     }
 
@@ -1616,7 +1733,7 @@
              average: n ? Math.round(sum / n) : null, highest: top,
              avgEo: scoring.length ? Math.round((eoSum / scoring.length) * 10) / 10 : 0,
              topEo: topEo || 0, squadValue: worth ? worth.value : valSum, topPrice: topPrice || 0,
-             bank: bank, sellValue: sellValue, swaps: swaps.length,
+             bank: bank, sellValue: sellValue, paidValue: paidValue, swaps: swaps.length,
              leagueAvgEo: eot ? eot.leagueAvgEo : 0,
              leagueAvgValue: lw ? lw.average : 0 };
   };

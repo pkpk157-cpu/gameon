@@ -1467,6 +1467,15 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   background:var(--head-solid); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
   border-bottom:1px solid var(--glass-border); }
 .pchipsbar .tabrow { margin-bottom:0; }
+/* A manager's transfers: the week once, in and out, and what it returned.
+   Who left is the quieter name; a gain is green, a loss red, a week still
+   to be played a dash. A hit sits under its week in small type. */
+.trlog td, .trlog th { white-space:nowrap; }
+.trlog .trw { color:var(--ink-faint); font-weight:700; font-size:12px; }
+.trlog .trout { color:var(--ink-soft); }
+.trlog .trg { font-weight:800; font-variant-numeric:tabular-nums; }
+.trlog .trg.up { color:var(--good); } .trlog .trg.dn { color:var(--bad); }
+.trlog tr.trhit td { font-size:12px; color:var(--ink-faint); padding-top:0; }
 details.pfold summary { list-style:none; cursor:pointer; }
 details.pfold summary::-webkit-details-marker { display:none; }
 details.pfold summary .caret { flex:none; display:inline-flex; align-items:center; width:14px; height:14px;
