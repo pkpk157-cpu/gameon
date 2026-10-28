@@ -29,13 +29,12 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     await p.waitForSelector(".fplcard", { timeout: 20000 }); await p.waitForTimeout(2500);
     const c1 = await p.evaluate(() => { const card = document.querySelector(".fplcard"); const n = [...card.querySelectorAll(".fcn b")].map((x) => x.textContent);
       const first = document.querySelector("section.view.active").firstElementChild;
-      return { who: card.querySelector(".fcwho b").textContent, mgr: card.querySelector(".fcwho span").textContent, badge: card.querySelector(".fcbadge").textContent,
+      return { who: card.querySelector(".fcwho b").textContent, mgr: card.querySelector(".fcwho span").textContent, badge: !!card.querySelector(".fcbadge"),
         gw: card.querySelector(".fcgw").textContent, n, next: (card.querySelector(".fcnext") || {}).textContent || "", first: first === card,
         leagues: document.querySelectorAll(".flrow").length, wide: card.scrollWidth > card.clientWidth + 1,
         oneLine: card.querySelector(".fcnext b") ? card.querySelector(".fcnext b").getClientRects().length === 1 && card.querySelector(".fcnext b").getBoundingClientRect().height < 30 : true }; });
     const pts = K.gwScore(ds, me.id, gw);
-    const initials = me.playerName.replace(/['’]/g, "").split(/\s+/).slice(0, 2).map((x) => x[0].toUpperCase()).join("");
-    chk(c1.first && c1.who === me.entryName && c1.mgr === "\u{1F1EE}\u{1F1F3}" + me.playerName && c1.badge === initials, w + "px: the card leads the page: team, flag and manager, his initials", JSON.stringify({ who: c1.who, mgr: c1.mgr, badge: c1.badge }));
+    chk(c1.first && c1.who === me.entryName && c1.mgr === "\u{1F1EE}\u{1F1F3}" + me.playerName && !c1.badge, w + "px: the card leads the page: team, flag and manager, no badge", JSON.stringify({ who: c1.who, mgr: c1.mgr }));
     const fig = (v) => (v ? Number(v).toLocaleString("en-US") : "–");
     chk(c1.gw.startsWith(ev.name) && c1.n[0] === fig(ev.average) && c1.n[1] === String(pts) && c1.n[2] === fig(ev.highest),
         w + "px: average and highest are FPL's, the points the app's own", JSON.stringify({ gw: c1.gw, n: c1.n, want: [ev.average, pts, ev.highest] }));

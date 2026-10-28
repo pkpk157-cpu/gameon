@@ -4188,9 +4188,6 @@
     var ev = evs.filter(function (e) { return +e.id === gw; })[0] || {};
     var live = K.liveGwId(ds) === gw, pts = K.gwScore(ds, me, gw);
     var now = Date.now(), next = evs.filter(function (e) { return e.deadline_time && Date.parse(e.deadline_time) > now; })[0];
-    // the manager's initials, as FPL's own badge has them
-    var initials = String(m.playerName || m.entryName || "").replace(/['\u2019]/g, "").replace(/[^\p{L}\p{N} ]/gu, " ").trim().split(/\s+/)
-      .filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join("") || "FPL";
     var flag = fplFlag(rec && rec.region);
     var arrow = function (n) { return '<svg viewBox="0 0 24 24" width="' + n + '" height="' + n + '" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; };
     var fig = function (v) { return v ? num(v) : "\u2013"; };
@@ -4202,7 +4199,6 @@
     }
     return '<div class="fplcard">' +
       '<div class="fchead" data-entry="' + (+me) + '" role="button" tabindex="0">' +
-        '<span class="fcbadge" aria-hidden="true">' + esc(initials) + '</span>' +
         '<span class="fcwho"><b>' + esc(m.entryName) + '</b><span>' + (flag ? '<i aria-hidden="true">' + flag + '</i>' : "") + esc(m.playerName || "") + '</span></span>' +
         '<span class="fcgo">' + arrow(26) + '</span></div>' +
       '<div class="fcrule"></div>' +
