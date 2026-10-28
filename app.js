@@ -388,7 +388,11 @@
       ["Owned by FPL", "The share of every squad in the game that holds him, as it stands " +
         "today. FPL publishes no history of it, so it cannot be shown week by week."],
       ["Game On", "How many of this league's squads hold him now \u2014 the one figure the " +
-        "official app cannot show you."]
+        "official app cannot show you."],
+      ["Paid \u00b7 Now \u00b7 Sells", "Shown when he is opened from a Game On squad that owns him. What " +
+        "that manager paid for him, what he costs today, and what FPL would give back for him: the price " +
+        "paid plus half of any rise, rounded down to the tenth, or today\u2019s price if he has fallen. " +
+        "Worked out from the manager\u2019s public transfers, as FPL shows its own figure only to the manager."]
     ]);
     h += helpList("What he has done, and what is ahead", [
       ["Result", "His club's score, his side first."],
@@ -1681,6 +1685,17 @@
           : num(Math.round((P.goOwned / 100) * P.managers)) + " of " + num(P.managers)) +
       '</div></div>';
 
+    // 3 — opened from a Game On squad that owns him now: what that manager
+    // paid, his price today and what FPL would hand back, on one line. Not
+    // shown from anywhere else, where there is nobody's price to give.
+    var own = state.playerOwner ? K.ownedPrice(ds, state.playerOwner, el) : null;
+    if (own) {
+      h += '<div class="card ppbuy" id="ppBuy"><span class="ppbw">Pricing</span>' +
+        '<span class="ppbv"><i>Paid</i>' + psMoney(own.paid / 10) + '</span>' +
+        '<span class="ppbv"><i>Now</i>' + psMoney(own.now / 10) + '</span>' +
+        '<span class="ppbv"><i>Sells</i>' + psMoney(own.sell / 10) + '</span></div>';
+    }
+
     // 4 — recent form and what is coming
     h += profStrip(hist, P.ahead);
 
@@ -2431,7 +2446,8 @@
       if (!card) return;
       var host = card.closest("[data-bgw]");
       if (!host) return;
-      location.hash = "player/" + card.getAttribute("data-el") + "/" + host.getAttribute("data-bgw");
+      var owner = +host.getAttribute("data-bentry");
+      location.hash = "player/" + card.getAttribute("data-el") + "/" + host.getAttribute("data-bgw") + (owner ? "/" + owner : "");
     });
     $("#modalClose").addEventListener("click", function () { closeModal(); });
     window.addEventListener("popstate", function () {
@@ -2633,8 +2649,10 @@
     if (view === "vol" && parts[1]) state.volKey = parts[1];
     if (view === "player") {
       // A tap on a card adds the gameweek it came from (player/<id>/<gw>); the
-      // page no longer opens that row, so only the id is read.
+      // page no longer opens that row, so only the id is read. A card on a
+      // Game On squad adds whose squad it was (player/<id>/<gw>/<entry>).
       state.playerId = +parts[1] || null;
+      state.playerOwner = +parts[3] || null;
     }
     if (view === "fpl") {
       state.fplLeague = (parts[1] === "c" || parts[1] === "h") && +parts[2] ? { kind: parts[1], id: +parts[2] } : null;
@@ -5032,6 +5050,7 @@
     if (pd && state.pitchPending) {
       if (h2hSync) h2hSync(pd.gw);
       box.removeAttribute("data-bgw");
+      box.removeAttribute("data-bentry");
       box.innerHTML = whenSwitch(pd, true) + pendingHtml(pd);
       wireWhen(box, ds, id, gw, metric, swapped, pd);
       return;
@@ -5084,6 +5103,9 @@
     }
 
     box.setAttribute("data-bgw", gw);
+    // whose squad this is, so a player opened from it can say what this
+    // manager paid for him
+    box.setAttribute("data-bentry", id);
     h += pitchHtml(pit, metric, swapped);
     box.innerHTML = (pd ? whenSwitch(pd, false) : "") + h;
     if (pd) wireWhen(box, ds, id, gw, metric, swapped, pd);

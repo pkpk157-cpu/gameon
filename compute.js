@@ -1418,6 +1418,25 @@
   // in the stored shape, hist: the week's history row }. The squad is drawn by
   // exactly the rules a Game On squad is; nothing of it is kept in ds, so the
   // league's own figures (ownership, averages, values) are untouched by it.
+  // What FPL hands back for a player: his purchase price plus half of any
+  // rise, rounded down per tenth; a fall is borne in full. All in tenths.
+  function sellFor(buy, now) { return now > buy ? buy + Math.floor((now - buy) / 2) : now; }
+  C.sellFor = sellFor;
+  // A player in a Game On squad as it stands: what the manager paid for him,
+  // his price today and what he would sell for, in tenths of a million. Only
+  // for the squad the purchase prices were read for, so never a past
+  // gameweek's, and never a Free Hit squad, which was borrowed rather than
+  // bought. Null whenever any of it is not known for certain.
+  C.ownedPrice = function (ds, entryId, el) {
+    if (!ds || !ds.buys || !ds.elements || !ds.buysGw) return null;
+    var sq = (picksAt(ds, +ds.buysGw) || {})[+entryId];
+    if (!sq || !sq.p || (sq.c || "") === "freehit") return null;
+    if (!sq.p.some(function (p) { return +p[0] === +el; })) return null;
+    var buy = (ds.buys[+entryId] || {})[el], meta = ds.elements[el];
+    if (buy == null || !meta || meta[3] == null) return null;
+    return { paid: buy, now: meta[3], sell: sellFor(buy, meta[3]), gw: +ds.buysGw };
+  };
+
   C.managerPitch = function (ds, id, gw) {
     id = +id;
     if (!ds || !ds.picks || !ds.elements) return null;
@@ -1580,7 +1599,7 @@
       everyone.forEach(function (p) {
         var buy = buyMap[p.el];
         if (buy == null) { complete = false; return; }
-        p.sell = p.price > buy ? buy + Math.floor((p.price - buy) / 2) : p.price;
+        p.sell = sellFor(buy, p.price);
         sellSum += p.sell;
       });
       if (complete) sellValue = sellSum;

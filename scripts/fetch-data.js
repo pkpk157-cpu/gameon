@@ -192,7 +192,25 @@ function subsShown(stored, pk) {
   ((stored && stored.p) || []).forEach((p) => { was[p[0]] = p[1]; });
   return (pk.picks || []).some((p) => p.element in was && was[p.element] !== p.multiplier);
 }
-module.exports = { squadPlan, subsCandidates, subsShown };
+// What a manager paid for each player in the squad being priced: the newest
+// transfer-in of him up to that gameweek, or his season-start price for an
+// original pick. A Free Hit week's buys are left out unless that week is the
+// one being priced: FPL hands the old squad back after it, so a player owned
+// since before it was not bought at that week's price.
+function purchasePrices(transfers, squad, gw, freeHit, startOf) {
+  const latest = {}; // element -> [time, cost] of the newest transfer in
+  (transfers || []).forEach((t) => {
+    if (t.event > gw || (+t.event !== +gw && freeHit(t.event))) return;
+    const at = Date.parse(t.time) || 0;
+    if (!latest[t.element_in] || at > latest[t.element_in][0]) latest[t.element_in] = [at, t.element_in_cost];
+  });
+  const map = {};
+  ((squad && squad.p) || []).forEach((pk) => {
+    map[pk[0]] = latest[pk[0]] ? latest[pk[0]][1] : ((startOf || {})[pk[0]] || 0);
+  });
+  return map;
+}
+module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices };
 
 if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
@@ -828,7 +846,14 @@ if (require.main === module) (async () => {
   const prevHadBoth = prev.buys && prev.moves &&
     Object.keys(prev.buys).length >= Math.floor(managers.length * 0.9) &&
     Object.keys(prev.moves).length > 0;
-  let buys = (canReuse && prev.buysGw === pitchGw && prevHadBoth) ? prev.buys : null;
+  // A Free Hit squad is borrowed for one week and FPL puts the old one back,
+  // yet its transfers sit in the log like any other. Taking the newest buy
+  // blindly priced a player owned since before the Free Hit at what it cost
+  // in that week (twelve players across ten squads, GW8). So a Free Hit
+  // week's buys are left out, unless that week is the squad being priced.
+  // BUYS_V marks reads made under this rule; an older read is not reused.
+  const BUYS_V = 2;
+  let buys = (canReuse && prev.buysGw === pitchGw && prev.buysV === BUYS_V && prevHadBoth) ? prev.buys : null;
   let moves = buys ? prev.moves : null;
   if (pitchGw && picks[pitchGw] && !buys) {
     buys = {};
@@ -842,19 +867,8 @@ if (require.main === module) (async () => {
       if (!squad) return;
       try {
         const tr = await getJSON("/entry/" + m.id + "/transfers/");
-        const latest = {}; // element -> [time, cost] of the newest transfer in
-        (tr || []).forEach((t) => {
-          if (t.event > pitchGw) return;
-          const at = Date.parse(t.time) || 0;
-          if (!latest[t.element_in] || at > latest[t.element_in][0]) {
-            latest[t.element_in] = [at, t.element_in_cost];
-          }
-        });
-        const map = {};
-        (squad.p || []).forEach((pk) => {
-          map[pk[0]] = latest[pk[0]] ? latest[pk[0]][1] : (startOf[pk[0]] || 0);
-        });
-        buys[m.id] = map;
+        const freeHit = (g) => !!(picks[g] && picks[g][m.id] && picks[g][m.id].c === "freehit");
+        buys[m.id] = purchasePrices(tr, squad, pitchGw, freeHit, startOf);
         // [in, out] per gameweek, so a squad can show what each new player
         // replaced. Free Hit swaps are logged like any other and are left in:
         // they were real moves for that week.
@@ -1162,7 +1176,7 @@ if (require.main === module) (async () => {
     // the verifier can shout about it rather than it passing unnoticed.
     historyCarried: carried.length ? { ids: carried, from: prev.updatedAt || null } : null,
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
-    buys: buys || {}, buysGw: pitchGw, moves: moves || {},
+    buys: buys || {}, buysGw: pitchGw, buysV: BUYS_V, moves: moves || {},
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, breakdown, gwStamps, gwEvents, flags,
     faceHide, pending
   };

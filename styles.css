@@ -921,6 +921,14 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pprs b { font-weight:800; font-variant-numeric:tabular-nums; }
 .pprs b.up { color:var(--good); }
 .pprs b.down { color:var(--bad); }
+/* One line under the rail when he is opened from a Game On squad that owns
+   him: a short label, then paid, now and sells, never wrapped or crushed. */
+.ppbuy { display:flex; align-items:baseline; gap:10px; padding:9px 12px; }
+@media (min-width:380px) { .ppbuy { gap:14px; } }
+.ppbw { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:12px; font-weight:700; color:var(--ink-soft); }
+.ppbv { flex:none; font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ppbv i { font-style:normal; font-size:10.5px; font-weight:600; color:var(--ink-faint); margin-right:4px; }
 @media (min-width:430px) {
   .pprbox { padding:13px 12px 14px; min-width:96px; }
   .pprl { font-size:11.5px; }
