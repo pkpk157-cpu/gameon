@@ -19,8 +19,10 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     const chips = await p.evaluate(() => [...document.querySelectorAll("#profChips .tabbtn")].map(b => b.textContent));
     const secs = await p.evaluate(() => [...document.querySelectorAll("[data-ps]")].map(e => e.getAttribute("data-ps")));
     chk(chips.length === secs.length && chips.length >= 6, w + ": one chip per section", chips.join(" | "));
-    chk(JSON.stringify(secs) === JSON.stringify(["XP", "Chips", "Form", "Squad", "Manager of the Month", "Head-to-head", "Past seasons (FPL)"]), w + ": sections in order, no Rivals without a pin", secs.join(" | "));
-    chk(await p.evaluate(() => [...document.querySelectorAll("details.pfold")].map(d => d.open)).then(a => a.length === 3 && a.every(x => !x)), w + ": the three reference tables are folded closed");
+    // Transfers sits between Head-to-head and Past seasons for a manager who has made any
+    const want = ["XP", "Chips", "Form", "Squad", "Manager of the Month", "Head-to-head"].concat(secs.indexOf("Transfers") !== -1 ? ["Transfers"] : [], ["Past seasons (FPL)"]);
+    chk(JSON.stringify(secs) === JSON.stringify(want), w + ": sections in order, no Rivals without a pin", secs.join(" | "));
+    chk(await p.evaluate(() => [...document.querySelectorAll("details.pfold")].map(d => d.open)).then(a => a.length === want.length - 4 && a.every(x => !x)), w + ": the reference tables are folded closed");
     chk(await p.evaluate(() => document.querySelector("#profChips .tabbtn.on") && document.querySelector("#profChips .tabbtn.on").textContent) === "XP", w + ": at the top the XP chip is lit");
     const fits = await p.evaluate(() => { const r = document.querySelector("#profChips"); return r.getBoundingClientRect().width <= window.innerWidth && r.scrollWidth <= window.innerWidth + 1; });
     chk(fits, w + ": the chip bar does not widen the page");
