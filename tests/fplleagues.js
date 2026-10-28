@@ -441,7 +441,12 @@ const ENTRY = { id: ME, name: meName, leagues: {
         return x ? { v: x.querySelector(".v").textContent, l: x.querySelector(".l").textContent, team: x.getAttribute("data-team"), entry: x.getAttribute("data-entry") } : null; });
     };
     let x = await hi(null);
-    chk(x && x.v === "—" && !x.team && !x.entry, "a week still being played shows no FPL highest, and links nowhere", JSON.stringify(x));
+    // the week the page opens on: one still being played has no highest yet;
+    // between a finalised week and the next deadline it is that finished week
+    if (!(H.ds.bootstrap.events.find((e) => e.id === H.ds.pitchGw) || {}).finished)
+      chk(x && x.v === "—" && !x.team && !x.entry, "a week still being played shows no FPL highest, and links nowhere", JSON.stringify(x));
+    else
+      chk(x && x.v === "131" && x.team === "9000005" && !x.entry, "the latest week, finalised, shows FPL's highest and opens that team", JSON.stringify(x));
     x = await hi(gA);
     chk(x && x.v === "131" && x.team === "9000005" && /›/.test(x.l), "a finished week: FPL's highest, linked to that team", JSON.stringify(x));
     await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="fpl"] .pstats .pstat')][2].click());
