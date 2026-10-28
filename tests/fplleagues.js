@@ -314,7 +314,7 @@ const ENTRY = { id: ME, name: meName, leagues: {
     // Ownership and Value, as on a profile
     await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="fpl"] .pseg button')].find((x) => x.getAttribute("data-metric") === "eo").click());
     tm = await readTeam();
-    chk(tm.metric === "Ownership" && tm.st[0].l === "Game On avg" && tm.st[0].v === pit.leagueAvgEo + "%" && tm.st[1].v === pit.avgEo + "%", "Ownership: Game On's, and labelled so", JSON.stringify(tm.st));
+    chk(tm.metric === "Ownership" && tm.st[0].l === "GO avg" && tm.st[0].v === pit.leagueAvgEo + "%" && tm.st[1].v === pit.avgEo + "%", "Ownership: Game On's, and labelled so", JSON.stringify(tm.st));
     await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="fpl"] .pseg button')].find((x) => x.getAttribute("data-metric") === "pts").click());
     // an earlier week: one more request, and its own squad
     const gPrev = hrows.length > 1 ? hrows[hrows.length - 2] : null;

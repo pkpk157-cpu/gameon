@@ -86,7 +86,7 @@ const expect = (p, id) => p.evaluate((id) => {
     chk(got.total === num(exp.total), who + ": total points", got.total + " vs " + exp.total);
     chk(got.gw === num(exp.ev) && got.gwl === "GW" + exp.gw + " · avg " + num(exp.avg), who + ": this gameweek and the league average", got.gw + " " + got.gwl);
     chk(exp.evNet, who + ": the gameweek figure is net of hits (" + exp.hit + " off)", got.gw);
-    chk(got.pills.length === 2 && got.pills[0].k === "FPL" && got.pills[1].k === "GO", who + ": FPL first, then GO", JSON.stringify(got.pills.map((x) => x.k)));
+    chk(got.pills.length === 2 && got.pills[0].k === "Overall" && got.pills[1].k === "GO", who + ": Overall first, then GO", JSON.stringify(got.pills.map((x) => x.k)));
     chk(got.pills[1].n === ord(exp.rank) && got.pills[1].text.indexOf("=") < 0, who + ": GO rank in words, never with an =", got.pills[1].text);
     chk(got.pills[1].up === exp.move > 0 && got.pills[1].down === exp.move < 0, who + ": GO movement direction", JSON.stringify(got.pills[1]) + " move " + exp.move);
     chk(got.pills[0].n === num(exp.overall) && got.pills[0].up === exp.omove > 0 && got.pills[0].down === exp.omove < 0 &&

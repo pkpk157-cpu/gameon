@@ -3985,10 +3985,10 @@
   C.SERIES = {
     top:       { label: "Top score",            unit: "pts" },
     low:       { label: "Lowest score",         unit: "pts" },
-    average:   { label: "League average",       unit: "pts" },
+    average:   { label: "GO avg",               unit: "pts" },
     topQuarter:{ label: "A good week was",      unit: "pts", note: "the top quarter started here" },
-    aboveAvg:  { label: "Beat the average",     unit: "managers" },
-    beatFpl:   { label: "Beat FPL\u2019s average", unit: "managers" },
+    aboveAvg:  { label: "Beat the GO avg",      unit: "managers" },
+    beatFpl:   { label: "Beat the average",     unit: "managers" },
     mostBench: { label: "Most benched",         unit: "pts" },
     benchTotal:{ label: "Benched across the league", unit: "pts" },
     climb:     { label: "Biggest climb",        unit: "places" },
@@ -4019,7 +4019,7 @@
         pt("average", s.average, s.count + " managers");
         pt("topQuarter", s.topQuarter, "bottom quarter " + s.bottomQuarter + " or less");
         pt("aboveAvg", s.aboveAvg, "of " + s.count);
-        pt("beatFpl", s.fplAverage === null ? null : s.beatFpl, s.fplAverage === null ? "" : "FPL average " + s.fplAverage);
+        pt("beatFpl", s.fplAverage === null ? null : s.beatFpl, s.fplAverage === null ? "" : "Average " + s.fplAverage);
         pt("mostBench", s.mostBench && s.mostBench.bench, s.mostBench && s.mostBench.name, s.mostBench && s.mostBench.id);
         pt("benchTotal", s.benchTotal, s.benchAvg + " each on average");
         pt("climb", s.biggestClimb ? s.biggestClimb.move : null, s.biggestClimb && s.biggestClimb.name, s.biggestClimb && s.biggestClimb.id);
