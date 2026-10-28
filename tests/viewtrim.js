@@ -5,7 +5,7 @@ const GOENV = require("./lib/env.js");
    profile) keep their page. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
-const APP = GOENV.APP, PORT = 8761;
+const APP = GOENV.APP, PORT = 8763;
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
   fs.readFile(path.join(APP, u), (e, b) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { "content-type": T[path.extname(u)] || "application/octet-stream" }); r.end(b); }); });
