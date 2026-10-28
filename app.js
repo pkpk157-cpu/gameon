@@ -4985,16 +4985,7 @@
       // league. Comparing the two without this line has already confused one
       // reader, and 245 will read it.
       (metric === "eo" ? '<div class="note" style="margin:2px 2px 8px">Ownership here is within ' +
-        'Game On\u2019s 245 managers. FPL-wide ownership is in Price changes.</div>' : '') +
-      // what the fifteen cost, against what they would fetch: the squad's
-      // profit, on the one view that is about money
-      (metric === "val" && pit.paidValue != null && pit.sellValue != null
-        ? '<div class="note" style="margin:2px 2px 8px">Bought for ' + mval(pit.paidValue) + ' \u00b7 ' +
-          profitWords(pit.sellValue - pit.paidValue) + ' if sold today</div>' : '');
-  }
-  // A squad's profit in words: "+£1.2m profit", "£0.4m loss", "no profit yet".
-  function profitWords(t) {
-    return t > 0 ? "+" + mval(t) + " profit" : t < 0 ? mval(-t) + " loss" : "no profit yet";
+        'Game On\u2019s 245 managers. FPL-wide ownership is in Price changes.</div>' : '');
   }
   // A signed money change, "+£0.8m" or "−£0.3m".
   function mdiff(t) { return (t > 0 ? "+" : t < 0 ? "\u2212" : "") + mval(Math.abs(t)); }
@@ -5338,9 +5329,7 @@
       };
       var newest = TL.weeks.slice().reverse();
       h += pfold("transfers", "Transfers", "net " + (TL.net > 0 ? "+" : TL.net < 0 ? "\u2212" : "") + num(Math.abs(TL.net)) + " pts",
-        trTable(newest) + '<div class="note" style="margin:6px 2px 0">Pts: what the player brought in scored against the one sold, ' +
-          'over the weeks he stayed. Captaincy and the bench are not counted; hits are taken off in the week they were paid.</div>',
-        trTable(newest.slice(0, 1)));
+        trTable(newest), trTable(newest.slice(0, 1)));
     }
 
     var past, pastPeek = "";

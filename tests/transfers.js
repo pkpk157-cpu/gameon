@@ -93,11 +93,11 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     chk(!f.open && f.chip === "net " + sign(L.net) + " pts" && f.peekGw === "GW" + newest.gw,
         w + "px: Transfers is folded, its net on the chip and its newest week showing", JSON.stringify({ chip: f.chip, peek: f.peekGw }));
     chk(f.rows === wantRows && f.fits, w + "px: opened, every week is there and the table fits", f.rows + " rows (want " + wantRows + ")");
+    const note = await p.evaluate(() => !!document.querySelector("#ps-transfers .note"));
+    chk(!note, w + "px: the transfers table stands on its own, no note under it");
     await p.locator('[data-metric="val"]').first().click(); await p.waitForTimeout(400);
-    const note = await p.evaluate(() => { const n = [...document.querySelectorAll(".note")].find((x) => /^Bought for/.test(x.textContent)); return n ? n.textContent : null; });
-    const mv = (t) => "£" + (t / 10).toFixed(1) + "m";
-    chk(note === "Bought for " + mv(P.paid) + " · " + (P.profit > 0 ? "+" + mv(P.profit) + " profit" : P.profit < 0 ? mv(-P.profit) + " loss" : "no profit yet") + " if sold today",
-        w + "px: the value view says what the squad cost and its profit", note);
+    chk(await p.evaluate(() => !!document.querySelector(".pstats.money") && ![...document.querySelectorAll(".note")].some((x) => /^Bought for/.test(x.textContent))),
+        w + "px: the value view keeps to its three figures, no profit line");
     await p.evaluate(() => { location.hash = "stats/value"; }); await p.waitForTimeout(1200);
     const sv = await p.evaluate(() => [...document.querySelectorAll(".lab-sm")].map((x) => x.textContent));
     chk(sv.indexOf("Biggest profit") !== -1 && sv.indexOf("Best buys") !== -1, w + "px: squad values lists the biggest profits and the best buys", sv.join(" | "));
