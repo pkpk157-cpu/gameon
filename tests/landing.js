@@ -37,7 +37,7 @@ const ENTRY = { id: me, player_region_iso_code_short: "GB", leagues: { classic: 
   // its card opens your team, and back returns to FPL
   await p.click(".fcn.main"); await p.waitForTimeout(700);
   w = await where(p);
-  chk(w.hash === "#profile/" + me && w.back, "your points open your team, with a back arrow", JSON.stringify(w));
+  chk(w.hash === "#profile/" + me + "/squad" && w.back, "your points open your squad, with a back arrow", JSON.stringify(w));
   await p.click("#barBack"); await p.waitForTimeout(700);
   w = await where(p);
   chk(w.hash === "#fpl" && w.card && !w.back, "and back returns to FPL", JSON.stringify(w));

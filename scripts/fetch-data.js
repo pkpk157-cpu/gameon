@@ -266,7 +266,19 @@ function marketOf(elements, events, prev, stamp, nowMs) {
   }
   return out;
 }
-module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf };
+// One gameweek of a manager's FPL history: p points, h transfer cost, b
+// bench, t total, v squad value + bank (tenths of a million), bk bank, tr
+// transfers, r overall rank; gr the gameweek's own rank and pc FPL's
+// percentage rank, for the gameweek history table, kept only when FPL gives
+// them so a row never claims a rank it was not sent.
+function histRow(c) {
+  const row = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points,
+                v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
+  if (c.rank) row.gr = c.rank;
+  if (c.percentile_rank != null && c.percentile_rank !== "") row.pc = Number(c.percentile_rank);
+  return row;
+}
+module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf, histRow };
 
 if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
@@ -313,15 +325,21 @@ if (require.main === module) (async () => {
 
   console.log("Fetching manager histories…");
   const history = {};
+  let histFieldsSaid = false;
   const pastSeasons = {};
   const chips = {};
   const hist = await pool(managers, async (m) => {
     const h = await getJSON("/entry/" + m.id + "/history/");
     const gw = {};
+    if (!histFieldsSaid && (h.current || [])[0]) {
+      histFieldsSaid = true;
+      const READ = ["event", "points", "total_points", "rank", "overall_rank", "percentile_rank", "bank", "value",
+                    "event_transfers", "event_transfers_cost", "points_on_bench"];
+      console.log("history fields we do not read: " + (Object.keys(h.current[0]).filter((k) => READ.indexOf(k) === -1).join(", ") || "none") +
+                  (h.current[0].percentile_rank == null ? " · no percentile_rank from FPL" : ""));
+    }
     (h.current || []).forEach((c) => {
-      // v = squad value + bank (tenths of a million), tr = transfers, r = overall rank
-      gw[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points,
-                      v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
+      gw[c.event] = histRow(c);
     });
     history[m.id] = gw;
     if (h.chips && h.chips.length) {
@@ -444,8 +462,7 @@ if (require.main === module) (async () => {
       const h = await getJSON("/entry/" + id + "/history/");
       const gw = {};
       (h.current || []).forEach((c) => {
-        gw[c.event] = { p: c.points, h: c.event_transfers_cost || 0, b: c.points_on_bench || 0, t: c.total_points,
-                        v: c.value || 0, bk: c.bank || 0, tr: c.event_transfers || 0, r: c.overall_rank || 0 };
+        gw[c.event] = histRow(c);
       });
       history[id] = gw;
     }, 4);

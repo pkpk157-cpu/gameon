@@ -46,7 +46,27 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     }
     chk(c1.leagues > 0 && !c1.wide, w + "px: the leagues follow it, nothing wider than the card", c1.leagues + " league rows");
     await p.click(".fcn.main"); await p.waitForTimeout(600);
-    chk(await p.evaluate((id) => location.hash === "#profile/" + id, me.id), w + "px: your points open your team", await p.evaluate(() => location.hash));
+    const sq = await p.evaluate(() => { const s = document.querySelector("#ps-squad"); const bar = document.querySelector("header.topbar").getBoundingClientRect().height + ((document.querySelector("#profChips") || { getBoundingClientRect: () => ({ height: 0 }) }).getBoundingClientRect().height);
+      return { hash: location.hash, top: s ? Math.round(s.getBoundingClientRect().top - bar) : null }; });
+    chk(sq.hash === "#profile/" + me.id + "/squad" && sq.top != null && sq.top >= -2 && sq.top <= 24, w + "px: your points open your profile at your squad, just under the bar", JSON.stringify(sq));
+    // the arrow by your name opens your gameweek history: FPL's table, FPL's figures
+    await p.goBack(); await p.waitForSelector(".fplcard", { timeout: 10000 }); await p.waitForTimeout(500);
+    await p.click(".fchead"); await p.waitForSelector(".ghist", { timeout: 10000 }); await p.waitForTimeout(300);
+    const gh = await p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent, back: getComputedStyle(document.querySelector("#barBack")).display !== "none",
+      head: [...document.querySelectorAll(".ghist thead th")].map((x) => x.textContent), rows: [...document.querySelectorAll(".ghist tbody tr")].map((r) => [...r.cells].map((c) => c.textContent.trim())),
+      stick: getComputedStyle(document.querySelector(".ghist tbody td")).position }));
+    const hist = ds.history[me.id], gws = Object.keys(hist).map(Number).sort((a, b) => a - b);
+    const want = gws.map((g) => { const x = hist[g]; return [String(g), x.r ? x.r.toLocaleString("en-US") : "\u2013", x.pc != null ? Number(x.pc).toFixed(1) + "%" : "\u2013", "",
+      x.t.toLocaleString("en-US"), x.gr ? x.gr.toLocaleString("en-US") : "\u2013", String(K.gwScore(ds, me.id, g)), String(K.gwBench(ds, me.id, g)), String(x.tr || 0), String(x.h || 0), (x.v / 10).toFixed(1)]; });
+    chk(gh.hash === "#fpl/history" && gh.title === me.entryName && gh.back && gh.head.join(",") === "GW,OR,%,#,OP,GWR,GWP,PB,TM,TC,\u00a3" && gh.stick === "sticky",
+        w + "px: the arrow opens your gameweek history, FPL's columns, the gameweek held at the left", JSON.stringify({ hash: gh.hash, head: gh.head.join(",") }));
+    chk(JSON.stringify(gh.rows) === JSON.stringify(want), w + "px: every gameweek's row is the stored figures, points and bench as the app counts them", JSON.stringify(gh.rows[gh.rows.length - 1]));
+    await p.click("#ghKey"); await p.waitForTimeout(300);
+    chk(await p.evaluate(() => /Table key/.test(document.querySelector("#modalBack").textContent) && document.querySelectorAll("#modalBack dt").length === 11), w + "px: the table key explains all eleven columns");
+    await p.evaluate(() => document.querySelector("#modalClose").click()); await p.waitForTimeout(300);
+    await p.click("#barBack"); await p.waitForTimeout(500);
+    chk(await p.evaluate(() => location.hash === "#fpl" && !!document.querySelector(".fplcard")), w + "px: back returns to FPL");
+    await p.click(".fcn.main"); await p.waitForTimeout(500);
     if (ev.highestEntry) {
       await p.goBack(); await p.waitForSelector(".fplcard", { timeout: 10000 }); await p.waitForTimeout(500);
       await p.click(".fcn:last-child"); await p.waitForTimeout(600);

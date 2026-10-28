@@ -2653,7 +2653,7 @@
     state.view = view;
     if (view === "monthly" && parts[1]) state.monthKey = parts[1];
     if (view === "pyramid" && parts[1]) state.seasonKey = parts[1];
-    if (view === "profile") state.profileId = parts[1] || null;
+    if (view === "profile") { state.profileId = parts[1] || null; state.profileJump = parts[2] || null; }
     if (view === "chips") { state.chipsGw = +parts[1] || null; state.chipsKey = parts[2] || null; }
     if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
     if (view === "stats" && parts[1]) state.statsTab = parts[1];
@@ -2668,6 +2668,7 @@
     if (view === "fpl") {
       state.fplLeague = (parts[1] === "c" || parts[1] === "h") && +parts[2] ? { kind: parts[1], id: +parts[2] } : null;
       state.fplTeam = parts[1] === "team" && +parts[2] ? +parts[2] : null;
+      state.fplHistory = parts[1] === "history";
     }
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
@@ -2779,6 +2780,12 @@
       title = state.fplLeagueBar.name || "League";
       sub = state.fplLeagueBar.sub ? esc(state.fplLeagueBar.sub) : "";
     } else
+    // Your gameweek history carries your team's name, as FPL's does
+    if (state.view === "fpl" && state.fplHistory && state.me) {
+      var hds = S.dataset(), hme = hds && K.managerMap(hds)[+state.me];
+      title = hme ? hme.entryName : "Gameweek history";
+      sub = "Gameweek history";
+    } else
     // FPL carries the team whose leagues are shown, as a profile does
     if (state.view === "fpl" && state.me) {
       var fds = S.dataset(), fme = fds && K.managerMap(fds)[+state.me];
@@ -2844,7 +2851,7 @@
     // FPL's own page is the app's landing, so it has nowhere to go back to;
     // a league or a team opened from it does
     var back = $("#barBack");
-    var landing = state.view === "fpl" && !state.fplTeam && !state.fplLeague;
+    var landing = state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory;
     back.style.display = SUB_VIEWS.indexOf(state.view) === -1 || landing ? "none" : "";
 
     var info = $("#barInfo");
@@ -2883,6 +2890,7 @@
     if (state.view === "fpl" && state.fplTeam) { location.hash = state.fplTeamFrom || "fpl"; return; }
     // A league was opened from the list of them; back is that list.
     if (state.view === "fpl" && state.fplLeague) { location.hash = "fpl"; return; }
+    if (state.view === "fpl" && state.fplHistory) { location.hash = "fpl"; return; }
     if (state.view === "compare" && state.cmpFrom) { location.hash = state.cmpFrom; return; }
     // And a player was opened from wherever he was tapped.
     if (state.view === "player" && state.playerFrom) {
@@ -4187,6 +4195,55 @@
      hits like every score here, and live while the week is; the average and
      the highest are FPL's, a dash until FPL publishes them. Your points open
      your team; the highest opens his. */
+  /* Your gameweek history, the table FPL's own app keeps: every gameweek
+     with its overall rank, FPL's percentage rank, the move, total points,
+     the gameweek's rank and points, the bench, transfers, their cost and
+     the squad's value. FPL's figures as it sent them; the gameweek's
+     points and bench are the app's own, the same as every table here (net
+     of the transfer cost, and live while the week is). */
+  var GH_KEY = [["GW", "Gameweek"], ["OR", "Overall Rank"], ["%", "Percentage Rank"], ["#", "Movement"],
+    ["OP", "Overall Points"], ["GWR", "Gameweek Rank"], ["GWP", "Gameweek Points, the transfer cost taken off as everywhere in this app"],
+    ["PB", "Points on Bench"], ["TM", "Transfers Made"], ["TC", "Transfers Cost"], ["\u00a3", "Squad Value"]];
+  function renderFplHistory(host, ds) {
+    var me = state.me ? +state.me : null, m = me && ds && K.managerMap(ds)[me];
+    if (!m) {
+      host.innerHTML = '<div class="callout">Choose your team in your profile to see its gameweek history.</div>';
+      return;
+    }
+    var hist = (ds.history || {})[me] || {};
+    var gws = Object.keys(hist).map(Number).filter(function (g) { return hist[g] && typeof hist[g].p === "number"; })
+      .sort(function (a, b) { return a - b; });
+    var dash = "\u2013", prevR = null;
+    var rows = gws.map(function (g) {
+      var x = hist[g], move = "same";
+      if (prevR && x.r) move = x.r < prevR ? "up" : x.r > prevR ? "down" : "same";
+      if (x.r) prevR = x.r;
+      var gwp = K.gwScore(ds, me, g), pb = K.gwBench(ds, me, g);
+      return '<tr><td class="ghgw">' + g + '</td>' +
+        '<td class="num">' + (x.r ? num(x.r) : dash) + '</td>' +
+        '<td class="num">' + (x.pc != null ? Number(x.pc).toFixed(1) + "%" : dash) + '</td>' +
+        '<td class="ghmv">' + FPL_MOVE[move] + '</td>' +
+        '<td class="num">' + num(x.t) + '</td>' +
+        '<td class="num">' + (x.gr ? num(x.gr) : dash) + '</td>' +
+        '<td class="num">' + (gwp == null ? dash : num(gwp)) + '</td>' +
+        '<td class="num">' + num(pb) + '</td>' +
+        '<td class="num">' + num(x.tr || 0) + '</td>' +
+        '<td class="num">' + num(x.h || 0) + '</td>' +
+        '<td class="num">' + (x.v ? (x.v / 10).toFixed(1) : dash) + '</td></tr>';
+    });
+    // the bar names the page; here only the key, as FPL keeps it
+    var h = '<div class="ghhead"><button type="button" class="btn sm ghkey" id="ghKey">' + svg("info", 15) + 'Table key</button></div>';
+    h += rows.length
+      ? '<div class="card"><div class="tablewrap"><table class="t ghist"><thead><tr>' +
+          GH_KEY.map(function (k, i) { return '<th' + (i === 0 ? ' class="ghgw"' : i === 3 ? "" : ' class="num"') + ' title="' + esc(k[1].split(",")[0]) + '">' + esc(k[0]) + '</th>'; }).join("") +
+          '</tr></thead><tbody>' + rows.join("") + '</tbody></table></div></div>'
+      : '<div class="callout">No gameweeks played yet.</div>';
+    host.innerHTML = h;
+    $("#ghKey", host).addEventListener("click", function () {
+      modal("Table key", '<dl class="gwdl">' + GH_KEY.map(function (k) {
+        return '<dt>' + esc(k[0]) + '</dt><dd>' + esc(k[1]) + '</dd>'; }).join("") + '</dl>');
+    });
+  }
   function fplFlag(code) {
     if (!/^[A-Z]{2}$/.test(code || "")) return "";
     // only a real country, which FPL's home-nation codes (England, Wales...) are not
@@ -4210,14 +4267,14 @@
         " at " + pad(d.getHours()) + ":" + pad(d.getMinutes());
     }
     return '<div class="fplcard">' +
-      '<div class="fchead" data-entry="' + (+me) + '" role="button" tabindex="0">' +
+      '<a class="fchead" href="#fpl/history" aria-label="Your gameweek history">' +
         '<span class="fcwho"><b>' + esc(m.entryName) + '</b><span>' + (flag ? '<i aria-hidden="true">' + flag + '</i>' : "") + esc(m.playerName || "") + '</span></span>' +
-        '<span class="fcgo">' + arrow(26) + '</span></div>' +
+        '<span class="fcgo">' + arrow(26) + '</span></a>' +
       '<div class="fcrule"></div>' +
       '<div class="fcgw">' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</div>' +
       '<div class="fcnums">' +
         '<div class="fcn"><b>' + fig(ev.average) + '</b><span>Average</span></div>' +
-        '<div class="fcn main" data-entry="' + (+me) + '" role="button" tabindex="0"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></div>' +
+        '<a class="fcn main" href="#profile/' + (+me) + '/squad" aria-label="Your squad"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></a>' +
         '<div class="fcn"' + (ev.highestEntry ? teamLink(ev.highestEntry) + ' role="button" tabindex="0"' : "") + '><b>' + fig(ev.highest) + '</b><span>Highest' +
           (ev.highestEntry ? " " + arrow(16) : "") + '</span></div>' +
       '</div>' +
@@ -4637,6 +4694,7 @@
   }
 
   function renderFpl(host, ds) {
+    if (state.fplHistory) return renderFplHistory(host, ds);
     if (state.fplTeam) return renderFplTeam(host, ds, state.fplTeam);
     state.fplTeamBar = null;
     if (state.fplLeague) return renderFplLeague(host, ds, state.fplLeague.kind, state.fplLeague.id);
@@ -5411,6 +5469,15 @@
 
     host.innerHTML = h;
     mountProfileChips(host);
+    // opened at a section (profile/<id>/squad): there, once, under the bar
+    // and the chip row, as a tap on its chip would have it
+    if (state.profileJump) {
+      var jump = $("#ps-" + state.profileJump, host);
+      state.profileJump = null;
+      if (jump) requestAnimationFrame(function () {
+        window.scrollTo(0, Math.max(0, jump.getBoundingClientRect().top + (window.scrollY || 0) - chipOffset() - 6));
+      });
+    }
     // The row a closed section shows is a doorway to the rest of it — except
     // where it carries something of its own, like an opponent's name.
     host.addEventListener("click", function (e) {
