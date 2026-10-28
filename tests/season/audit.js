@@ -359,7 +359,6 @@ function audit(app, st) {
     call(label, "managerProfile " + id, () => C.managerProfile(ds, id));
     call(label, "managerPitch " + id, () => C.managerPitch(ds, id, cur));
     call(label, "winnings " + id, () => C.winnings(ds, id));
-    call(label, "prizeGap " + id, () => C.prizeGap(ds, id));
     call(label, "managerChips " + id, () => C.managerChips(ds, id));
     call(label, "mySquadIds " + id, () => C.mySquadIds(ds, id));
     call(label, "pendingSquad " + id, () => C.pendingSquad(ds, id));

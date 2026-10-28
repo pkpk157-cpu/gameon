@@ -140,7 +140,6 @@
     if (!total) return stored || { played: null, total: 12 };
     return { played: played, total: total };
   }
-  C.playedCount = playedCount;
 
   function gwScore(ds, entryId, gw) {
     var h = ds.history[entryId];
@@ -164,7 +163,6 @@
     if (!row || hitsAlreadyOff(ds)) return ev;
     return ev - (row.h || 0);
   }
-  C.netEvent = netEvent;
   function gwBench(ds, entryId, gw) {
     var h = ds.history[entryId];
     if (!h || !h[gw]) return 0;
@@ -495,9 +493,9 @@
       // Rule 7: a tie in the month is settled by the Last Manager tie-breakers,
       // over the gameweeks that belong to the month. Best first here, so the
       // arguments go the other way round from the elimination sort.
+      var tb = tieBreaker(ds, playedGws);
       rows.sort(function (a, b) {
-        return (b.score - a.score) || (b.bench - a.bench) ||
-               lmsTieBreak(ds, b.id, a.id, playedGws);
+        return (b.score - a.score) || (b.bench - a.bench) || tb(b.id, a.id);
       });
       applyOverrideOrder(rows, ov().monthlyOrder && ov().monthlyOrder[month.key]);
       rows.forEach(function (r, i) {
@@ -550,9 +548,9 @@
       // across the playing XI — more of any of them keeps you up. The week's
       // table is shown in this same order, so what the page shows is the order
       // the eliminations were read off, not an approximation of it.
+      var tb = tieBreaker(ds, [gw]);
       var order = function (a, b) {
-        return (a.score - b.score) || (a.bench - b.bench) ||
-               lmsTieBreak(ds, a.id, b.id, [gw]);
+        return (a.score - b.score) || (a.bench - b.bench) || tb(a.id, b.id);
       };
       contenders.sort(order);
 
@@ -742,10 +740,11 @@
         // Rule 6: season score, then the last gameweek of the mini-season, then
         // the Last Manager tie-breakers for that gameweek — bench points there,
         // not across the whole season, then goals, clean sheets and assists.
+        var tb = lastGw ? tieBreaker(ds, [lastGw]) : null;
         rows.sort(function (a, b) {
           return (b.score - a.score) || (b.last - a.last) ||
                  (b.lastBench - a.lastBench) ||
-                 (lastGw ? lmsTieBreak(ds, b.id, a.id, [lastGw]) : 0);
+                 (tb ? tb(b.id, a.id) : 0);
         });
         // A mini-season nobody has played yet awards nothing. Everyone sits
         // level on nothing, so the order is the roster's and means nothing —
@@ -1157,8 +1156,17 @@
   // deciding who goes out. Returns 0 when every tie-breaker is exhausted, which
   // the rules then carry forward to the next gameweek.
   function lmsTieBreak(ds, a, b, gws) {
-    var sa = xiStats(ds, a, gws), sb = xiStats(ds, b, gws);
-    return (sa.goals - sb.goals) || (sa.cs - sb.cs) || (sa.assists - sb.assists);
+    return tieBreaker(ds, gws)(a, b);
+  }
+  // The same comparison for a whole sort: a sort compares a tied manager many
+  // times over, so each one's XI is counted once and the count reused.
+  function tieBreaker(ds, gws) {
+    var seen = {};
+    var st = function (id) { return seen[id] || (seen[id] = xiStats(ds, id, gws)); };
+    return function (a, b) {
+      var sa = st(a), sb = st(b);
+      return (sa.goals - sb.goals) || (sa.cs - sb.cs) || (sa.assists - sb.assists);
+    };
   }
   C.lmsTieBreak = lmsTieBreak;
 
@@ -2589,30 +2597,6 @@
     return w || { items: [], settled: 0, onTrack: 0, total: 0 };
   };
 
-  // Where a manager sits against the paid places in the Classic league.
-  C.prizeGap = function (ds, id) {
-    if (!ds || !id) return null;
-    id = +id;
-    var rows = C.classic(ds);
-    var me = rows.filter(function (r) { return +r.id === id; })[0];
-    if (!me) return null;
-    // the lowest rank that still earns something
-    var lastPaid = 0;
-    for (var r = rows.length; r >= 1; r--) { if (C.classicPrize(r)) { lastPaid = r; break; } }
-    if (!lastPaid) return null;
-    if (me.computedRank <= lastPaid) {
-      // how much cushion above the cut
-      var cutRow = rows[lastPaid - 1];
-      return { inMoney: true, rank: me.computedRank, prize: me.prize, lastPaid: lastPaid,
-               cushion: cutRow ? (me.total - cutRow.total) : null };
-    }
-    var target = rows[lastPaid - 1];
-    return { inMoney: false, rank: me.computedRank, lastPaid: lastPaid,
-             behind: target ? (target.total - me.total) : null,
-             prizeThere: C.classicPrize(lastPaid) };
-  };
-
-  // Recent gameweek scores, oldest first — the shape of someone's season.
   // Where every manager stood in the classic league at the end of each
   // gameweek. FPL's own history carries an overall rank — that is the world's
   // table, not this one — so the league's positions are rebuilt from the

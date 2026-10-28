@@ -255,7 +255,6 @@
     var v = lsGet(FAVS_KEY);
     return Array.isArray(v) ? v.map(Number).filter(function (x) { return x > 0; }) : [];
   }
-  function isFav(el) { return favs().indexOf(+el) !== -1; }
   // Returns "added" or "removed".
   function toggleFav(el) {
     el = +el;
