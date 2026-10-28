@@ -4153,7 +4153,8 @@
       .then(function (e) {
         var lg = e && e.leagues;
         if (!lg || !(lg.classic || lg.h2h) || (e.id != null && +e.id !== +id)) throw new Error("no leagues in FPL's answer");
-        var keep = { id: +id, at: Date.now(), leagues: { classic: fplSlim(lg.classic), h2h: fplSlim(lg.h2h) } };
+        var keep = { id: +id, at: Date.now(), leagues: { classic: fplSlim(lg.classic), h2h: fplSlim(lg.h2h) },
+                     region: e.player_region_iso_code_short || null };
         lsSet(FPL_LEAGUES_KEY, keep);
         fplErr = null;
         return keep;
@@ -4168,6 +4169,53 @@
     same: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--ink-faint)"/><path d="M6.5 10h7" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>'
   };
   var FPL_MOVE_SAYS = { up: "up since last gameweek", down: "down since last gameweek", same: "no change" };
+  /* Your team at the top of FPL, the way FPL's own app opens: the team and
+     its manager, the latest gameweek's average, your points and the
+     highest, and the next deadline. The points are the app's own, net of
+     hits like every score here, and live while the week is; the average and
+     the highest are FPL's, a dash until FPL publishes them. Your points open
+     your team; the highest opens his. */
+  function fplFlag(code) {
+    if (!/^[A-Z]{2}$/.test(code || "")) return "";
+    // only a real country, which FPL's home-nation codes (England, Wales...) are not
+    try { if (new Intl.DisplayNames(["en"], { type: "region" }).of(code) === code) return ""; } catch (e) { return ""; }
+    return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65, 0x1F1E6 + code.charCodeAt(1) - 65);
+  }
+  function fplHomeCard(ds, me, rec) {
+    var m = ds && K.managerMap(ds)[+me];
+    if (!m || !ds.pitchGw) return "";
+    var evs = (ds.bootstrap && ds.bootstrap.events) || [], gw = +ds.pitchGw;
+    var ev = evs.filter(function (e) { return +e.id === gw; })[0] || {};
+    var live = K.liveGwId(ds) === gw, pts = K.gwScore(ds, me, gw);
+    var now = Date.now(), next = evs.filter(function (e) { return e.deadline_time && Date.parse(e.deadline_time) > now; })[0];
+    // the manager's initials, as FPL's own badge has them
+    var initials = String(m.playerName || m.entryName || "").replace(/['\u2019]/g, "").replace(/[^\p{L}\p{N} ]/gu, " ").trim().split(/\s+/)
+      .filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join("") || "FPL";
+    var flag = fplFlag(rec && rec.region);
+    var arrow = function (n) { return '<svg viewBox="0 0 24 24" width="' + n + '" height="' + n + '" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; };
+    var fig = function (v) { return v ? num(v) : "\u2013"; };
+    var when = "";
+    if (next) {
+      var d = new Date(next.deadline_time), pad = function (x) { return (x < 10 ? "0" : "") + x; };
+      when = d.toLocaleDateString("en-GB", { weekday: "long" }) + " " + d.getDate() + " " + d.toLocaleDateString("en-GB", { month: "short" }) +
+        " at " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+    return '<div class="fplcard">' +
+      '<div class="fchead" data-entry="' + (+me) + '" role="button" tabindex="0">' +
+        '<span class="fcbadge" aria-hidden="true">' + esc(initials) + '</span>' +
+        '<span class="fcwho"><b>' + esc(m.entryName) + '</b><span>' + (flag ? '<i aria-hidden="true">' + flag + '</i>' : "") + esc(m.playerName || "") + '</span></span>' +
+        '<span class="fcgo">' + arrow(26) + '</span></div>' +
+      '<div class="fcrule"></div>' +
+      '<div class="fcgw">' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</div>' +
+      '<div class="fcnums">' +
+        '<div class="fcn"><b>' + fig(ev.average) + '</b><span>Average</span></div>' +
+        '<div class="fcn main" data-entry="' + (+me) + '" role="button" tabindex="0"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></div>' +
+        '<div class="fcn"' + (ev.highestEntry ? teamLink(ev.highestEntry) + ' role="button" tabindex="0"' : "") + '><b>' + fig(ev.highest) + '</b><span>Highest' +
+          (ev.highestEntry ? " " + arrow(16) : "") + '</span></div>' +
+      '</div>' +
+      (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
+      '</div>';
+  }
   function fplRows(rec) {
     var gameOn = +(S.config().classicLeagueId || 0);
     return K.fplLeagues(rec.leagues).map(function (g) {
@@ -4594,7 +4642,7 @@
     }
     var paint = function (rec, state2) {
       if (!host.isConnected || window.location.hash.replace("#", "").split("/")[0] !== "fpl") return;
-      var h = "";
+      var h = fplHomeCard(ds, me, rec);
       if (rec) {
         h += fplRows(rec);
         h += '<div class="note" style="margin:14px 2px 0">From FPL \u00b7 updated ' +
