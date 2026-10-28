@@ -248,7 +248,8 @@ async function open(b, hash, w, waitFor) {
       expanded: document.querySelectorAll(".ppexp").length,
       y: window.scrollY
     }));
-    chk(where.page && where.hash === "#player/" + tapped.el + "/" + tapped.gw,
+    // a Game On squad's card adds whose squad it was, for the Pricing line
+    chk(where.page && new RegExp("^#player/" + tapped.el + "/" + tapped.gw + "(/\\d+)?$").test(where.hash),
       "a tap on a card opens his page, carrying the gameweek it came from", where.hash);
     chk(!where.sheet, "and no sheet is left over the top of it");
     chk(where.openRows === 0 && where.expanded === 0,
