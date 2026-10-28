@@ -6970,10 +6970,24 @@
     if (g.freehits) chips.push(num(g.freehits) + (g.freehits === 1 ? " Free Hit" : " Free Hits"));
     h += '<div class="hgrid">' +
       hcard("Transfers", num(g.transfers), g.managers ? num(g.managers) + " managers" : "nobody yet", null, chips.join(" \u00b7 "), "swap") +
-      (M.open ? "" : hcard("Hits taken", g.hits ? "\u2212" + num(g.hits) : "0", g.hitters ? num(g.hitters) + " managers" : "no hits", null, "", "down")) +
-      (g.ret != null ? hcard("Returned", signedPts(g.ret) + " pts", "brought in against sold", null, M.live ? "so far" : "in gameweek " + gw, "chart") : "") +
-      (f.total != null ? hcard("Across FPL", bigCount(f.total), M.open ? "transfers so far" : "transfers made", null, "", "globe") : "") +
-      '</div>';
+      (M.open ? "" : hcard("Hits taken", g.hits ? "\u2212" + num(g.hits) : "0", g.hitters ? num(g.hitters) + " managers" : "no hits", null, "", "down"));
+    // the two that answer whether it worked: transfers that beat the player
+    // they replaced, and hits whose moves won back what they cost
+    var P = g.paid, HP = g.hitsPaid;
+    if (P && P.of) {
+      h += hcard("Transfers paid", Math.round(P.won / P.of * 100) + "%", num(P.won) + " of " + num(P.of) + " won", null,
+        num(P.lost) + " lost \u00b7 " + num(P.level) + " level", "check");
+    }
+    if (HP && HP.of) {
+      h += hcard("Hits that paid", num(HP.won) + " of " + num(HP.of), "won back the hit", null,
+        "net " + signedPts(HP.net) + " pts across them", "target");
+    } else if (HP) {
+      h += hcard("Hits that paid", "\u2013", "nobody took a hit", null, "", "target");
+    }
+    if (M.open && f.in && f.in.length) {
+      h += hcard("FPL\u2019s most bought", f.in[0].name, bigCount(f.in[0].n) + " so far", null, f.total ? bigCount(f.total) + " transfers across FPL" : "", "globe");
+    }
+    h += '</div>';
 
     var pt = function (x) { return x.pts == null ? "" : signedPts(x.pts).replace(/^\+/, "") + (Math.abs(x.pts) === 1 ? " pt" : " pts"); };
     if (g.bought.length || g.sold.length) {
@@ -6992,7 +7006,7 @@
           return { id: x.id, name: x.name, tag: elName(x.in) + " for " + elName(x.out), val: signedPts(x.gain) }; }) +
         hlist("Worst moves", g.worst, function (x) {
           return { id: x.id, name: x.name, tag: elName(x.in) + " for " + elName(x.out), val: signedPts(x.gain) }; },
-          "One transfer\u2019s points against the player it replaced, in gameweek " + gw + ".") +
+          "Each transfer\u2019s points against the player it replaced, in gameweek " + gw + (g.wildcards || g.freehits ? "; wildcards and Free Hits are not counted" : "") + ". Transfers paid counts the same.") +
         '</div></div>';
     }
     if (f.in && f.out) {

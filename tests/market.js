@@ -44,23 +44,31 @@ const gws = K.marketGws(ds);
 let badWeeks = [];
 gws.filter((g) => g <= +ds.pitchGw).forEach((g) => {
   const M = K.market(ds, g);
-  let transfers = 0, managers = 0, ins = 0, outs = 0, ret = 0;
+  let transfers = 0, managers = 0, ins = 0, outs = 0;
+  const gains = [], hitNets = [];
+  const lp0 = ds.livePoints[g] || {};
   ds.managers.forEach((mg) => {
     const w = K.transferLog(ds, mg.id).weeks.find((x) => x.gw === g);
     if (!w) return;
     managers++; transfers += Math.max(w.ins, w.outs); ins += w.ins; outs += w.outs;
+    if (w.chip) return;
+    const gs = w.rows.map((r) => (lp0[r.in] || 0) - (lp0[r.out] || 0));
+    gains.push(...gs);
+    if (w.hit) hitNets.push(gs.reduce((a, b) => a + b, 0) - w.hit);
   });
   const sumB = M.go.bought.reduce((s, x) => s + x.n, 0), sumS = M.go.sold.reduce((s, x) => s + x.n, 0);
   const lp = ds.livePoints[g] || {};
   const bOk = M.go.bought.every((x) => x.pts === (lp[x.el] || 0)) && M.go.sold.every((x) => x.pts === (lp[x.el] || 0));
-  const r = M.go.bought.reduce((s, x) => s + x.n * x.pts, 0) - M.go.sold.reduce((s, x) => s + x.n * x.pts, 0);
+  const P = M.go.paid, HP = M.go.hitsPaid;
+  const paidOk = P && P.of === gains.length && P.won === gains.filter((x) => x > 0).length && P.lost === gains.filter((x) => x < 0).length && P.level === gains.filter((x) => x === 0).length;
+  const hitsOk = HP && HP.of === hitNets.length && HP.won === hitNets.filter((x) => x > 0).length && HP.net === hitNets.reduce((a, b) => a + b, 0);
   const hits = ds.managers.reduce((s, mg) => s + ((((ds.history[mg.id] || {})[g]) || {}).h || 0), 0);
-  if (M.go.transfers !== transfers || M.go.managers !== managers || sumB !== ins || sumS !== outs || !bOk || M.go.ret !== r || M.go.hits !== hits)
+  if (M.go.transfers !== transfers || M.go.managers !== managers || sumB !== ins || sumS !== outs || !bOk || !paidOk || !hitsOk || M.go.hits !== hits)
     badWeeks.push("GW" + g);
   const sorted = (l, f) => l.every((x, i) => !i || f(l[i - 1]) >= f(x));
   if (!sorted(M.go.bought, (x) => x.n) || !sorted(M.go.best, (x) => x.gain) || !M.go.worst.every((x) => x.gain < 0)) badWeeks.push("GW" + g + " order");
 });
-chk(gws.length && !badWeeks.length, "every gameweek: transfers, managers, hits, who was bought and sold, and the return agree with the squads", badWeeks.join(", ") || gws.join(","));
+chk(gws.length && !badWeeks.length, "every gameweek: transfers, managers, hits, who was bought and sold, and which transfers and hits paid agree with the squads", badWeeks.join(", ") || gws.join(","));
 
 // 3. on the page
 const raw = JSON.parse(fs.readFileSync(path.join(APP, "data.json"), "utf8"));
@@ -76,7 +84,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
 (async () => {
   await new Promise(r => srv.listen(PORT, r));
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
-  for (const w of [320, 390]) {
+  for (const w of [320, 360, 390]) {
     const c = await b.newContext({ viewport: { width: w, height: 800 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     const p = await c.newPage(); const er = []; p.on("pageerror", (e) => er.push(e.message));
     await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
@@ -92,12 +100,12 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     chk(a.hash === "#market" && +a.gw === lockedGw, w + "px: it opens on the last locked gameweek", JSON.stringify({ hash: a.hash, gw: a.gw }));
     chk(["Bought by Game On", "Sold by Game On", "Best moves", "Worst moves", "Most bought across FPL", "Most sold across FPL"].every((x) => a.labs.indexOf(x) !== -1),
         w + "px: Game On's buys and sales, the best and worst moves, and FPL's beside them", a.labs.join(" | "));
-    chk(a.cards.join(",") === "Transfers,Hits taken,Returned,Across FPL" && !a.cut && !a.wide, w + "px: four headline figures, none cut, nothing wider than the phone", a.cards.join(","));
+    chk(a.cards.join(",") === "Transfers,Hits taken,Transfers paid,Hits that paid" && !a.cut && !a.wide, w + "px: four headline figures, none cut, nothing wider than the phone", a.cards.join(","));
     await p.selectOption("#mkGwSel", String(lockedGw + 1)); await p.waitForTimeout(500);
     const o = await p.evaluate(() => ({ lead: document.querySelector("section.view.active .statlead").textContent,
       cards: [...document.querySelectorAll("section.view.active .hcard .hl span")].map((x) => x.textContent),
       labs: [...document.querySelectorAll("section.view.active .lab-sm")].map((x) => x.textContent), text: document.querySelector("section.view.active").textContent }));
-    chk(/so far/.test(o.lead) && o.cards.indexOf("Hits taken") === -1 && o.cards.indexOf("Returned") === -1 && o.labs.indexOf("Most bought across FPL") !== -1 && /As FPL had them at/.test(o.text),
+    chk(/so far/.test(o.lead) && o.cards.join(",") === "Transfers,FPL\u2019s most bought" && o.labs.indexOf("Most bought across FPL") !== -1 && /As FPL had them at/.test(o.text),
         w + "px: the open week is what has been logged so far, no return yet, FPL as of when it was read", JSON.stringify({ lead: o.lead, cards: o.cards }));
     chk(!er.length, w + "px: no JS errors", er.join(" | "));
     await c.close();

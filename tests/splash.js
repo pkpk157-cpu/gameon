@@ -111,13 +111,23 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
     await pg.waitForTimeout(800);
     stamp = new Date().toISOString(); delay = 600;
     await pg.goto("about:blank");
+    // when the download landed, in the page's own time: the app waits for it until a second after opening
+    await pg.addInitScript(() => { const f0 = window.fetch; window.fetch = function (u) { const p = f0.apply(this, arguments);
+      if (!/data\.json/.test(String(u))) return p;
+      return p.then((r) => { const j0 = r.json.bind(r); r.json = () => j0().then((v) => { window.__landed = performance.now(); return v; }); return r; }); }; });
     await pg.addInitScript(() => { window.__drawn = []; const tick = () => { const ds = window.GO_STORE && window.GO_STORE.dataset && window.GO_STORE.dataset();
-      if (ds && document.querySelector("section.view.active table.t tbody tr")) { const u = ds.updatedAt; if (window.__drawn[window.__drawn.length - 1] !== u) window.__drawn.push(u); }
+      if (ds && document.querySelector("section.view.active table.t tbody tr")) { const u = ds.updatedAt; const l = window.__drawn[window.__drawn.length - 1]; if (!l || l.u !== u) window.__drawn.push({ u: u, t: performance.now() }); }
       if (performance.now() < 3000) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
     await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
     await pg.waitForTimeout(3200);
-    const drawn = await pg.evaluate(() => window.__drawn);
-    chk(drawn.length === 1 && drawn[0] === stamp, "an older stored copy waits for a quick download behind the opening screen: the newest is drawn first, nothing swapped after", JSON.stringify(drawn));
+    const drawn = await pg.evaluate(() => window.__drawn), landed = await pg.evaluate(() => window.__landed);
+    // What the reader meets is what is drawn when the opening screen lifts, at two seconds. A download
+    // landing inside the wait is the only thing drawn; one landing later still replaces the stored copy
+    // behind the screen, so long as it lands with time to draw; one later than that is the slow case.
+    const atLift = drawn.filter((x) => x.t <= 1990).pop(), seq = JSON.stringify(drawn.map((x) => x.u.slice(11, 19) + "@" + Math.round(x.t))) + " landed " + Math.round(landed) + "ms";
+    if (landed < 900) chk(drawn.length === 1 && drawn[0].u === stamp, "an older stored copy waits for a quick download behind the opening screen: the newest is drawn first, nothing swapped after", seq);
+    else if (landed < 1500) chk(atLift && atLift.u === stamp, "a download landing a little after the wait still replaces the stored copy before the opening screen lifts", seq);
+    else chk(drawn[drawn.length - 1].u === stamp, "a slow download: the stored copy shows, and the newest replaces it when it lands", seq);
     chk(!er.length, "no JS errors", er.join(" | "));
     stamp = null; delay = 0;
     await c.close();

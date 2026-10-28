@@ -1596,7 +1596,7 @@
     gw = +gw;
     var lp = (ds.livePoints || {})[gw] || null, els = ds.elements;
     var open = gw > +ds.pitchGw;
-    var bought = {}, sold = {}, moves = [], managers = 0, transfers = 0, hits = 0, hitters = 0, wc = 0, fh = 0, ret = 0;
+    var bought = {}, sold = {}, moves = [], hitWeeks = [], managers = 0, transfers = 0, hits = 0, hitters = 0, wc = 0, fh = 0;
     ds.managers.forEach(function (m) {
       var ins = [], outs = [], pairs = [];
       if (open) {
@@ -1616,15 +1616,17 @@
         if (chipAt[gw] === "wildcard" && ins.length) wc++;
         if (chipAt[gw] === "freehit" && ins.length) fh++;
         var h = (((ds.history || {})[m.id] || {})[gw] || {}).h || 0;
-        if (h) { hits += h; hitters++; }
+        if (h) {
+          hits += h; hitters++;
+          // whether the moves a hit paid for won it back that gameweek
+          if (lp) hitWeeks.push(pairs.reduce(function (s, p) { return s + (lp[p[0]] || 0) - (lp[p[1]] || 0); }, 0) - h);
+        }
       }
       if (!ins.length && !outs.length) return;
       managers++; transfers += Math.max(ins.length, outs.length);
       ins.forEach(function (el) { bought[el] = (bought[el] || 0) + 1; });
       outs.forEach(function (el) { sold[el] = (sold[el] || 0) + 1; });
       if (lp) {
-        ins.forEach(function (el) { ret += lp[el] || 0; });
-        outs.forEach(function (el) { ret -= lp[el] || 0; });
         pairs.forEach(function (p) { moves.push({ id: m.id, name: m.entryName, in: p[0], out: p[1], gain: (lp[p[0]] || 0) - (lp[p[1]] || 0) }); });
       }
     });
@@ -1634,19 +1636,23 @@
         .sort(function (a, b) { return (b.n - a.n) || ((b.pts || 0) - (a.pts || 0)); });
     };
     moves.sort(function (a, b) { return b.gain - a.gain; });
-    var ev = ((ds.bootstrap || {}).events || []).filter(function (e) { return +e.id === gw; })[0] || {};
     var mk = ds.market || {}, f = open ? (mk.open && +mk.open.gw === gw ? mk.open : null) : ((mk.gws || {})[gw] || null);
     var fplList = function (list) {
       return (list || []).map(function (x) { return { el: +x[0], name: (els[x[0]] || [])[0] || "?", n: x[1], pts: pts(x[0]) }; });
     };
-    // FPL's own count for a locked week; the open one's so far is summed
-    var fplTotal = !open && ev.transfers ? ev.transfers : (f && f.total != null ? f.total : null);
     return {
       gw: gw, open: open, live: !open && C.scoredGws(ds).indexOf(gw) === -1,
       go: { managers: managers, transfers: transfers, hits: hits, hitters: hitters, wildcards: wc, freehits: fh,
-            ret: lp && !open ? ret : null, bought: rank(bought), sold: rank(sold),
+            bought: rank(bought), sold: rank(sold),
+            // did they work: each transfer against the player it replaced, and
+            // each hit against what its moves won back, that gameweek
+            paid: lp && !open ? { won: moves.filter(function (x) { return x.gain > 0; }).length,
+                                  level: moves.filter(function (x) { return x.gain === 0; }).length,
+                                  lost: moves.filter(function (x) { return x.gain < 0; }).length, of: moves.length } : null,
+            hitsPaid: lp && !open ? { won: hitWeeks.filter(function (x) { return x > 0; }).length, of: hitWeeks.length,
+                                      net: hitWeeks.reduce(function (s, x) { return s + x; }, 0) } : null,
             best: moves.slice(0, 5), worst: moves.slice().reverse().filter(function (x) { return x.gain < 0; }).slice(0, 5) },
-      fpl: { total: fplTotal, in: f ? fplList(f.in) : null, out: f ? fplList(f.out) : null, at: f && open ? f.at : null }
+      fpl: { total: f && open && f.total != null ? f.total : null, in: f ? fplList(f.in) : null, out: f ? fplList(f.out) : null, at: f && open ? f.at : null }
     };
   };
 
