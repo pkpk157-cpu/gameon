@@ -1753,15 +1753,7 @@
     var hits = hrow ? (hrow.h || 0) : 0;
     var scored = gwScore(ds, id, gw);
     var net = scored === null ? (total - hits) : scored;
-    var sum = 0, n = 0, top = null;
-    (ds.managers || []).forEach(function (m) {
-      // live-aware, like the total above these tiles — the raw history row
-      // lags all afternoon
-      var sc = gwScore(ds, m.id, gw);
-      if (sc === null) return;
-      sum += sc; n++;
-      if (!top || sc > top.pts) top = { id: m.id, name: m.entryName, pts: sc };
-    });
+    var league = C.goGwFigures(ds, gw);
 
     // Ownership and price for the squad as a whole. Effective ownership is
     // averaged over the XI (the bench cannot score), while squad value counts
@@ -1832,7 +1824,7 @@
     return { gw: gw, gwName: gwEv ? gwEv.name : ("GW " + gw), live: live, provisional: provTotal,
              chip: sq.c || "", lines: lines, bench: bench,
              total: total, hits: hits, net: net,
-             average: n ? Math.round(sum / n) : null, highest: top,
+             average: league.average, highest: league.highest,
              avgEo: scoring.length ? Math.round((eoSum / scoring.length) * 10) / 10 : 0,
              topEo: topEo || 0, squadValue: worth ? worth.value : valSum, topPrice: topPrice || 0,
              bank: bank, sellValue: sellValue, paidValue: paidValue, swaps: swaps.length,
@@ -1882,6 +1874,20 @@
      played FPL refreshes them now and then, and in between they can sit at
      a figure from hours earlier (an average of 1 on a Saturday evening).
      0 means "not yet". Read by the FPL team page and the league insights. */
+  /* Game On's own figures for a gameweek: the average over its managers and
+     the best score with whose it was. Live-aware, like the totals — the raw
+     history row lags all afternoon. Read by your squad and the FPL card, so
+     the two cannot disagree. */
+  C.goGwFigures = function (ds, gw) {
+    var sum = 0, n = 0, top = null;
+    ((ds && ds.managers) || []).forEach(function (m) {
+      var sc = gwScore(ds, m.id, gw);
+      if (sc === null) return;
+      sum += sc; n++;
+      if (!top || sc > top.pts) top = { id: m.id, name: m.entryName, pts: sc };
+    });
+    return { average: n ? Math.round(sum / n) : null, highest: top };
+  };
   C.fplGwFigures = function (ds, gw) {
     var ev = ((ds && ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === +gw; })[0] || {};
     if (!ev.finished) return { average: null, highest: null, highestEntry: null };

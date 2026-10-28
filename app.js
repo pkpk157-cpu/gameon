@@ -4262,7 +4262,14 @@
     var now = Date.now(), next = evs.filter(function (e) { return e.deadline_time && Date.parse(e.deadline_time) > now; })[0];
     var flag = fplFlag(rec && rec.region);
     var arrow = function (n) { return '<svg viewBox="0 0 24 24" width="' + n + '" height="' + n + '" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; };
-    var fig = function (v) { return v ? num(v) : "\u2013"; };
+    var fig = function (v) { return v == null ? "\u2013" : num(v); };
+    // FPL's figures by default, Game On's on the switch; FPL's are only read
+    // once it has finished the week, the rule every page keeps
+    var src = lsGet("go12.src.card") === "go" ? "go" : "fpl";
+    var fx = K.fplGwFigures(ds, gw), gx = K.goGwFigures(ds, gw);
+    var avg = src === "fpl" ? fx.average : gx.average;
+    var hi = src === "fpl" ? fx.highest : (gx.highest ? gx.highest.pts : null);
+    var hiAttr = src === "fpl" ? (fx.highestEntry ? teamLink(fx.highestEntry) : "") : (gx.highest ? ' data-entry="' + (+gx.highest.id) + '"' : "");
     var when = "";
     if (next) {
       var d = new Date(next.deadline_time), pad = function (x) { return (x < 10 ? "0" : "") + x; };
@@ -4274,15 +4281,29 @@
         '<span class="fcwho"><b>' + esc(m.entryName) + '</b><span>' + (flag ? '<i aria-hidden="true">' + flag + '</i>' : "") + esc(m.playerName || "") + '</span></span>' +
         '<span class="fcgo">' + arrow(26) + '</span></a>' +
       '<div class="fcrule"></div>' +
-      '<div class="fcgw">' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</div>' +
+      '<div class="fcgw"><span></span><span>' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</span>' + srcPill(src) + '</div>' +
       '<div class="fcnums">' +
-        '<div class="fcn"><b>' + fig(ev.average) + '</b><span>Average</span></div>' +
+        '<div class="fcn"><b>' + fig(avg) + '</b><span>Average</span></div>' +
         '<a class="fcn main" href="#profile/' + (+me) + '/squad" aria-label="Your squad"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></a>' +
-        '<div class="fcn"' + (ev.highestEntry ? teamLink(ev.highestEntry) + ' role="button" tabindex="0"' : "") + '><b>' + fig(ev.highest) + '</b><span>Highest' +
-          (ev.highestEntry ? " " + arrow(16) : "") + '</span></div>' +
+        '<div class="fcn"' + (hiAttr ? hiAttr + ' role="button" tabindex="0"' : "") + '><b>' + fig(hi) + '</b><span>Highest' +
+          (hiAttr ? " " + arrow(16) : "") + '</span></div>' +
       '</div>' +
       (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
       '</div>';
+  }
+  // The card's GO | FPL switch redraws the card alone, and remembers.
+  function wireCardSrc(host, ds, me, rec) {
+    var sp = $(".fplcard .srcpill", host);
+    if (!sp) return;
+    sp.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-src]");
+      if (!b || b.classList.contains("on")) return;
+      lsSet("go12.src.card", b.getAttribute("data-src"));
+      var card = $(".fplcard", host), t = document.createElement("div");
+      t.innerHTML = fplHomeCard(ds, me, rec);
+      if (card && t.firstElementChild) card.replaceWith(t.firstElementChild);
+      wireCardSrc(host, ds, me, rec);
+    });
   }
   function fplRows(rec) {
     var gameOn = +(S.config().classicLeagueId || 0);
@@ -4723,6 +4744,7 @@
         h += '<div class="callout">Fetching your leagues from FPL\u2026</div>';
       }
       host.innerHTML = h;
+      wireCardSrc(host, ds, me, rec);
       var rb = $("#flRetry", host);
       if (rb) rb.addEventListener("click", function () { paint(null, "loading"); fplFetch(me, true).then(after); });
     };
@@ -5061,6 +5083,15 @@
   // A team from FPL (opts.fpl) sets its week beside FPL's own average and
   // highest, as FPL's points page does; the league figures under the other
   // two metrics are Game On's, and say so.
+  // GO | FPL: whose average and highest a card shows. Only on the FPL card
+  // and your own squad; everywhere else the label says whose they are.
+  function srcPill(src) {
+    return '<div class="srcpill" role="group" aria-label="Whose average and highest">' +
+      ['go', 'fpl'].map(function (s) {
+        return '<button type="button" data-src="' + s + '"' + (s === src ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
+          (s === 'go' ? 'GO' : 'FPL') + '</button>';
+      }).join('') + '</div>';
+  }
   function pitchStats(pit, metric, opts) {
     var fpl = opts && opts.fpl;
     var left, mid, right, midLabel, leftLabel, rightLabel, hiId = null, midSub = "", hiAttr = "";
@@ -5091,6 +5122,10 @@
         right = fpl.highest === null ? "—" : num(fpl.highest);
         hiId = fpl.highestEntry;
         hiAttr = hiId ? teamLink(hiId) : "";
+      } else if (opts && opts.src) {
+        // your own squad, with GO | FPL above it saying whose these are
+        leftLabel = "Average";
+        rightLabel = "Highest" + (hiId ? ' <span class="arw">›</span>' : '');
       }
     }
     var rightOpen = hiId
@@ -5203,7 +5238,14 @@
       (pit.chip ? ' <span class="pill gold">' + esc(CHIP_NAME[pit.chip] || pit.chip) + '</span>' : '');
     h += '</div>';
 
-    h += pitchStats(pit, metric);
+    var src = null;
+    if (metric === "pts" && isMe(id)) {
+      src = lsGet("go12.src.squad") === "fpl" ? "fpl" : "go";
+      h += '<div class="srcrow">' + srcPill(src) + '</div>';
+      h += pitchStats(pit, metric, src === "fpl" ? { src: src, fpl: K.fplGwFigures(ds, gw) } : { src: src });
+    } else {
+      h += pitchStats(pit, metric);
+    }
     // Bonus is not confirmed until a fixture is finalised, and a clean sheet
     // held at 60 minutes can still be lost — say so rather than letting a
     // score quietly move.
@@ -5244,6 +5286,13 @@
     var swapBtn = $("#pitchSwap", box);
     if (swapBtn) swapBtn.addEventListener("click", function () {
       mountPitch(box, ds, id, gw, metric, !swapped);
+    });
+    var sp = $(".srcrow .srcpill", box);
+    if (sp) sp.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-src]");
+      if (!b || b.getAttribute("data-src") === src) return;
+      lsSet("go12.src.squad", b.getAttribute("data-src"));
+      mountPitch(box, ds, id, gw, metric, swapped);
     });
   }
 

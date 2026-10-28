@@ -12,7 +12,7 @@
    checked by scripts/check-sources.js on every push: it changes when, and
    only when, the app does, so a worker is reinstalled for a new release and
    not for the data the updater publishes every five minutes. */
-const BUILD = "bfe574b5bfb6";
+const BUILD = "9b2a70dacb8d";
 const CACHE = "gameon-" + BUILD;
 // Player and club pictures, kept across releases: they do not change with one.
 const PHOTOS = "gameon-photos";

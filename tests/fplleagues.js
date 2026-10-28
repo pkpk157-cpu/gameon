@@ -304,9 +304,9 @@ const ENTRY = { id: ME, name: meName, leagues: {
     let ov = ovOf([gwNow]);
     const pit = H.C.managerPitch(ov, 9000004, gwNow), sum = H.C.extSummary(ov, 9000004), fg = H.C.fplGwFigures(H.ds, gwNow);
     const nf = (v) => v == null ? "—" : v.toLocaleString("en-GB");
-    chk(tm.st.length === 3 && tm.st[0].l === "FPL average" && tm.st[0].v === nf(fg.average), "beside the points: FPL's average for the week", JSON.stringify(tm.st[0]) + " vs " + fg.average);
+    chk(tm.st.length === 3 && tm.st[0].l === "Average" && tm.st[0].v === nf(fg.average), "beside the points: FPL's average for the week, plain", JSON.stringify(tm.st[0]) + " vs " + fg.average);
     chk(tm.st[1].v === nf(pit.net) && /^Total Pts\s*−4$/.test(tm.st[1].l), "the week's points net of the hit, the hit shown", JSON.stringify(tm.st[1]) + " vs " + pit.net);
-    chk(/^FPL highest/.test(tm.st[2].l) && tm.st[2].v === nf(fg.highest), "and FPL's highest", JSON.stringify(tm.st[2]));
+    chk(/^Highest/.test(tm.st[2].l) && tm.st[2].v === nf(fg.highest), "and FPL's highest, plain", JSON.stringify(tm.st[2]));
     chk((tm.tiles.Total || {}).v === nf(sum.total), "the season total, by the rule Compare uses", JSON.stringify(tm.tiles.Total) + " vs " + sum.total);
     chk((tm.tiles["Overall rank"] || {}).v === "123,456" && (tm.tiles["Overall rank"] || {}).s === "after GW" + gwNow && !tm.wide, "overall rank, and it fits the phone", JSON.stringify(tm.tiles["Overall rank"]));
     chk(tm.cmp && !tm.rival, "the bar offers Compare, as a profile does", tm.cmp + "/" + tm.rival);

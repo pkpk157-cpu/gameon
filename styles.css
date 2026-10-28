@@ -799,6 +799,12 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pseg button { appearance:none; border:0; background:transparent; cursor:pointer; font:inherit;
   font-size:12.5px; font-weight:700; color:var(--ink-soft); padding:6px 22px; border-radius:999px; }
 .pseg button.on { background:var(--glass-hi); color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.14); }
+/* GO | FPL: whose average and highest the card shows, in its corner */
+.srcpill { display:inline-flex; gap:1px; padding:2px; border-radius:999px; background:var(--chip); border:1px solid var(--line); }
+.srcpill button { appearance:none; border:0; background:transparent; cursor:pointer; font:inherit; font-size:11px; font-weight:800;
+  line-height:1.2; letter-spacing:.02em; color:var(--ink-soft); padding:3px 8px; border-radius:999px; }
+.srcpill button.on { background:var(--glass-hi); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.16); }
+.srcrow { display:flex; justify-content:flex-end; margin:-4px 0 6px; }
 
 /* the pitch itself */
 /* Sized to the official app's pitch: the keeper's card straddles the goal
@@ -2608,7 +2614,11 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 .fcwho i { font-style:normal; margin-right:7px; }
 .fcgo { flex:none; display:inline-flex; }
 .fcrule { height:1px; background:rgba(255,255,255,.55); margin:14px 16%; }
-.fcgw { text-align:center; font-size:14px; opacity:.95; }
+.fcgw { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:6px; text-align:center; font-size:14px; }
+.fcgw > span:nth-child(2) { opacity:.95; white-space:nowrap; }
+.fplcard .srcpill { justify-self:end; background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.55); }
+.fplcard .srcpill button { color:#fff; }
+.fplcard .srcpill button.on { background:#fff; color:#37003c; }
 .fclive { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; background:#00ff87; color:#37003c;
   font-size:11px; font-weight:800; vertical-align:2px; }
 .fcnums { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); align-items:center; margin-top:6px; text-align:center; }
