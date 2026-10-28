@@ -99,6 +99,29 @@ const pngSize = f => { const b = fs.readFileSync(f); return b.readUInt32BE(16) +
     stamp = null; delay = 0;
     await c.close();
   }
+  // An older stored copy and a download that lands within the opening
+  // screen: the newest data is what is drawn first, behind it, so nothing is
+  // swapped in front of the reader once it lifts.
+  {
+    const c = await b.newContext({ ...devices["Pixel 7"], serviceWorkers: "block" }); const pg = await c.newPage(); const er = [];
+    pg.on("pageerror", (e) => er.push(e.message));
+    delay = 0; stamp = new Date(Date.now() - 20 * 60000).toISOString();
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    await pg.waitForSelector("section.view.active table.t tbody tr", { timeout: 15000 });
+    await pg.waitForTimeout(800);
+    stamp = new Date().toISOString(); delay = 600;
+    await pg.goto("about:blank");
+    await pg.addInitScript(() => { window.__drawn = []; const tick = () => { const ds = window.GO_STORE && window.GO_STORE.dataset && window.GO_STORE.dataset();
+      if (ds && document.querySelector("section.view.active table.t tbody tr")) { const u = ds.updatedAt; if (window.__drawn[window.__drawn.length - 1] !== u) window.__drawn.push(u); }
+      if (performance.now() < 3000) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
+    await pg.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" });
+    await pg.waitForTimeout(3200);
+    const drawn = await pg.evaluate(() => window.__drawn);
+    chk(drawn.length === 1 && drawn[0] === stamp, "an older stored copy waits for a quick download behind the opening screen: the newest is drawn first, nothing swapped after", JSON.stringify(drawn));
+    chk(!er.length, "no JS errors", er.join(" | "));
+    stamp = null; delay = 0;
+    await c.close();
+  }
   // a small phone: the crest and its line both fit
   {
     const c = await b.newContext({ viewport: { width: 320, height: 568 }, isMobile: true, serviceWorkers: "block" }); const pg = await c.newPage();

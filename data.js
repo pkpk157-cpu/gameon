@@ -160,14 +160,17 @@
           .then(function (r) { return r.ok ? r.json() : null; })
           .catch(function () { return null; });
         if (!stored) return net; // nothing to show yet, so wait for the network
-        // A device that already holds a dataset does not sit on the opening
-        // screen while the whole file comes down again. A copy published
-        // within the updater's own cycle is as new as the server's, so it
-        // paints at once; an older one waits for the network a moment
-        // (FIRST_PAINT_MS, half a second), then paints, its age in the bar. Whatever the
-        // fetch brings after that is taken in and shown (STORE.onLate).
+        // A device that already holds a dataset does not wait on the whole
+        // file coming down again. A copy published within the updater's own
+        // cycle is as new as the server's, so it paints at once; an older one
+        // waits for the network until PAINT_BY_MS after the app was opened —
+        // the opening screen is up for two seconds, so the newest data can
+        // come down behind it and still leave a second to draw — then paints,
+        // its age in the bar. Whatever the fetch brings after that is taken
+        // in and shown (STORE.onLate).
         var age = Date.now() - Date.parse(stored.updatedAt || 0);
-        var wait = (age >= 0 && age < FRESH_STORED_MS) ? 0 : FIRST_PAINT_MS;
+        var opened = (window.performance && performance.now) ? performance.now() : 0;
+        var wait = (age >= 0 && age < FRESH_STORED_MS) ? 0 : Math.max(0, PAINT_BY_MS - opened);
         var slow = new Promise(function (res) { setTimeout(function () { res(SLOW); }, wait); });
         return Promise.race([net, slow]).then(function (w) {
           if (w !== SLOW) return w;
@@ -193,8 +196,9 @@
   };
   var SLOW = { slow: true };
   // The updater publishes every five minutes: a stored copy younger than that
-  // is the newest there is. An older one waits this long for the network.
-  var FRESH_STORED_MS = 5 * 60 * 1000, FIRST_PAINT_MS = 500;
+  // is the newest there is. An older one waits for the network until this
+  // long after the app was opened.
+  var FRESH_STORED_MS = 5 * 60 * 1000, PAINT_BY_MS = 1000;
   // Told when a newer dataset arrives after the stored one has painted.
   var _onLate = null;
   STORE.onLate = function (fn) { _onLate = fn; };
