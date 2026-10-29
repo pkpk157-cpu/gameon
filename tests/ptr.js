@@ -31,6 +31,14 @@ async function pull(cdp, x, from, to, steps, release) {
   chk(s.show && !s.armed && s.label === "Pull to refresh", "a short pull shows 'Pull to refresh' and is not armed", JSON.stringify(s));
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); await p.waitForTimeout(200); s = await state();
   chk(!s.show, "letting go before the threshold hides it, nothing runs");
+  // the element under the finger redrawn mid-pull (the opening screen lifting,
+  // a live update redrawing the table): the release goes to a node no longer
+  // in the page, and must still put the pill away
+  await p.evaluate(() => document.addEventListener("touchstart", (e) => { window.__touched = e.target; }, { capture: true, once: true }));
+  await pull(cdp, 195, 200, 260, 6, false);
+  const gone = await p.evaluate(() => { const t = window.__touched; if (!t || !t.parentNode) return false; t.parentNode.removeChild(t); return !t.isConnected; });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }); await p.waitForTimeout(200); s = await state();
+  chk(gone && !s.show && !s.busy, "the touched element redrawn mid-pull: letting go still hides it", JSON.stringify({ gone, show: s.show }));
   // a long pull arms; releasing runs the refresh; the publish is unchanged -> up to date
   delay = 600; // a slow network, so the spinner can be seen
   await pull(cdp, 195, 200, 420, 10, false); s = await state();

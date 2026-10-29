@@ -2344,9 +2344,23 @@
       el.classList.remove("show", "armed", "busy");
       el.style.transform = ""; el.style.opacity = ""; icon.style.transform = "";
     }
+    // A release goes to the element the finger first touched. When that
+    // element is redrawn mid-pull (the opening screen lifting, a live update
+    // redrawing the table) it is no longer in the page, the release never
+    // reaches the document, and the pill would stay down. So the release is
+    // heard on that element too, and a new touch clears any pill left showing.
+    var tgt = null;
+    function unhook() {
+      if (!tgt) return;
+      tgt.removeEventListener("touchend", done); tgt.removeEventListener("touchcancel", done); tgt = null;
+    }
     document.addEventListener("touchstart", function (e) {
+      unhook();
+      if (!busy && el.classList.contains("show")) { pulling = false; reset(); }
       if (busy || e.touches.length !== 1 || sheetOpen() || busyReading() || !atTop(e.target)) { startY = null; return; }
       startY = e.touches[0].clientY; dist = 0; pulling = false;
+      tgt = e.target && e.target.addEventListener ? e.target : null;
+      if (tgt) { tgt.addEventListener("touchend", done, { passive: true }); tgt.addEventListener("touchcancel", done, { passive: true }); }
     }, { passive: true });
     document.addEventListener("touchmove", function (e) {
       if (startY === null) return;
@@ -2359,6 +2373,7 @@
       draw();
     }, { passive: true });
     function done() {
+      unhook();
       if (!pulling) { startY = null; return; }
       var go = dist >= THRESH;
       startY = null; pulling = false;
