@@ -2595,6 +2595,11 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 /* Your gameweek history: FPL's table, the gameweek held at the left while
    the rest scrolls under it. */
 .ghhead { display:flex; justify-content:flex-end; margin:0 2px 10px; }
+/* the way in from your profile's Form, at the end of its title line */
+.ghbtn { flex:none; display:inline-flex; align-items:center; gap:4px; padding:5px 11px; border-radius:999px;
+  border:1px solid var(--line); background:var(--chip); color:var(--ink); font-size:12.5px; font-weight:700;
+  text-decoration:none; white-space:nowrap; }
+.ghbtn .arw { font-size:15px; line-height:1; }
 .ghist th, .ghist td { white-space:nowrap; }
 .ghist .ghgw { position:sticky; left:0; z-index:1; background:var(--head-solid); font-weight:800; }
 .ghist .ghmv svg { display:block; }

@@ -129,11 +129,20 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     await p.goto("http://localhost:" + PORT + "/index.html#fpl"); await p.waitForSelector(".fplcard", { timeout: 10000 }); await p.waitForTimeout(800);
     k = await card();
     chk(k.on === "GO" && k.n[0] === fig(gx.average), "the card remembers GO", JSON.stringify(k));
+    // your profile's Form leads to your gameweek history, and back to Form
+    await p.goto("http://localhost:" + PORT + "/index.html#profile/" + me.id + "/form"); await p.waitForTimeout(1800);
+    const gb = await p.evaluate(() => { const b = document.querySelector("#ps-form .ghbtn"); return b ? { t: b.textContent.trim(), right: b.getBoundingClientRect().right <= window.innerWidth } : null; });
+    chk(gb && /^Gameweek history/.test(gb.t) && gb.right, "your Form has a Gameweek history button, on screen", JSON.stringify(gb));
+    await p.click("#ps-form .ghbtn"); await p.waitForSelector(".ghist", { timeout: 10000 }); await p.waitForTimeout(300);
+    chk(await p.evaluate(() => location.hash) === "#fpl/history", "it opens your gameweek history");
+    await p.click("#barBack"); await p.waitForTimeout(1200);
+    chk(await p.evaluate(() => location.hash) === "#profile/" + me.id + "/form", "back returns to your Form", await p.evaluate(() => location.hash));
     // someone else's squad: no switch, Game On's figures labelled GO
     const other = ds.managers.find((m) => +m.id !== +me.id && K.managerPitch(ds, m.id, gw));
     await p.goto("http://localhost:" + PORT + "/index.html#profile/" + other.id + "/squad"); await p.waitForTimeout(1800);
     s = await squad();
     chk(!s.pill && s.st[0][1] === "GO avg" && /^GO highest/.test(s.st[2][1]), "another manager's squad: no switch, labels say GO", JSON.stringify(s));
+    chk(await p.evaluate(() => !document.querySelector(".ghbtn")), "another manager's Form has no history button");
     chk(!er.length, "switching: no JS errors", er.join(" | "));
     await c.close();
   }

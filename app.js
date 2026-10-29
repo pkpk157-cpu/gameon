@@ -2669,6 +2669,12 @@
       state.fplLeague = (parts[1] === "c" || parts[1] === "h") && +parts[2] ? { kind: parts[1], id: +parts[2] } : null;
       state.fplTeam = parts[1] === "team" && +parts[2] ? +parts[2] : null;
       state.fplHistory = parts[1] === "history";
+      // back from your history is where it was opened: FPL's card, or the
+      // Form section of your profile
+      if (state.fplHistory && h !== lastHash) {
+        var hp = /^profile\/(\d+)/.exec(lastHash || "");
+        state.fplHistoryFrom = hp ? "profile/" + hp[1] + "/form" : "fpl";
+      }
     }
     if (view === "pl") {
       state.plTab = parts[1] === "table" ? "table" : "fixtures";
@@ -2892,7 +2898,7 @@
     if (state.view === "fpl" && state.fplTeam) { location.hash = state.fplTeamFrom || "fpl"; return; }
     // A league was opened from the list of them; back is that list.
     if (state.view === "fpl" && state.fplLeague) { location.hash = "fpl"; return; }
-    if (state.view === "fpl" && state.fplHistory) { location.hash = "fpl"; return; }
+    if (state.view === "fpl" && state.fplHistory) { location.hash = state.fplHistoryFrom || "fpl"; return; }
     if (state.view === "compare" && state.cmpFrom) { location.hash = state.cmpFrom; return; }
     // And a player was opened from wherever he was tapped.
     if (state.view === "player" && state.playerFrom) {
@@ -5390,7 +5396,8 @@
     // Form — the shape of their season.
     var fm = K.form(ds, id);
     if (fm.length) {
-      h += psect("form", "Form");
+      // your own Form leads on to your gameweek history, FPL's table
+      h += psect("form", "Form", isMe(id) ? '<a class="ghbtn" href="#fpl/history">Gameweek history <span class="arw">\u203a</span></a>' : '');
       h += '<div class="card"><div class="bd" id="formBox">' + formChart(fm) + '</div></div>';
     }
 
@@ -5664,9 +5671,9 @@
   }
 
   // A profile section: a title the chip row can find and jump to.
-  function psect(key, label) {
+  function psect(key, label, after) {
     return '<div class="section-title" id="ps-' + key + '" data-ps="' + esc(label) + '">' +
-      '<h2>' + esc(label) + '</h2><div class="rule"></div></div>';
+      '<h2>' + esc(label) + '</h2><div class="rule"></div>' + (after || '') + '</div>';
   }
   // A folded section: the same title as a summary, closed until tapped, with
   // a short hint of what is inside.
