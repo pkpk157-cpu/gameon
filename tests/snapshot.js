@@ -84,7 +84,7 @@ const expect = (p, id) => p.evaluate((id) => {
     console.log("-- " + who + " " + ids[who]);
     chk(got && got.first, who + ": the card is the first thing on the page", got && JSON.stringify(got.order));
     chk(got.total === num(exp.total), who + ": total points", got.total + " vs " + exp.total);
-    chk(got.gw === num(exp.ev) && got.gwl === "GW" + exp.gw + " · avg " + num(exp.avg), who + ": this gameweek and the league average", got.gw + " " + got.gwl);
+    chk(got.gw === num(exp.ev) && got.gwl === "GW" + exp.gw + " · GO avg " + num(exp.avg), who + ": this gameweek and Game On's average, labelled GO", got.gw + " " + got.gwl);
     chk(exp.evNet, who + ": the gameweek figure is net of hits (" + exp.hit + " off)", got.gw);
     chk(got.pills.length === 2 && got.pills[0].k === "Overall" && got.pills[1].k === "GO", who + ": Overall first, then GO", JSON.stringify(got.pills.map((x) => x.k)));
     chk(got.pills[1].n === ord(exp.rank) && got.pills[1].text.indexOf("=") < 0, who + ": GO rank in words, never with an =", got.pills[1].text);
@@ -114,6 +114,13 @@ const expect = (p, id) => p.evaluate((id) => {
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);
   let own = await read(p);
   chk(own.first && own.order.indexOf("section#ps-rivals") < 0, "own page, no rivals pinned: card first, no rivals block", JSON.stringify(own.order));
+  // your own card wears FPL's colours, white on the gradient; nobody else's does
+  const look = await p.evaluate(() => { const s = document.querySelector(".card.snap"), cs = getComputedStyle(s);
+    return { mine: s.classList.contains("mine"), grad: /linear-gradient/.test(cs.backgroundImage), ink: cs.color, wide: s.scrollWidth > s.clientWidth + 1 }; });
+  chk(look.mine && look.grad && look.ink === "rgb(255, 255, 255)" && !look.wide, "own page: the card in FPL's colours, white on the gradient", JSON.stringify(look));
+  await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.leader); await p.waitForTimeout(700);
+  chk(await p.evaluate(() => !document.querySelector(".card.snap").classList.contains("mine")), "someone else's card keeps the app's own look");
+  await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);
   await p.evaluate((id) => { localStorage.setItem("go12.rivals", JSON.stringify([id])); }, ids.leader);
   await p.evaluate(() => { location.hash = "#classic"; }); await p.waitForTimeout(300);
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);

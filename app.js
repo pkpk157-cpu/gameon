@@ -5618,12 +5618,13 @@
     var mv = function (d) {
       return d > 0 ? ' <b class="move up">' + num(d) + '</b>' : d < 0 ? ' <b class="move down">' + num(-d) + '</b>' : '';
     };
-    var h = '<div class="card snap">';
+    // yours wears FPL's colours, the same as your card on FPL
+    var h = '<div class="card snap' + (isMe(id) ? ' mine' : '') + '">';
     h += '<div class="snaphead">' +
       '<div class="snapstat"><div class="v">' + num(S.total) + '</div><div class="l">Total points</div></div>' +
       '<div class="snapstat"><div class="v">' + (S.gwPoints == null ? "\u2013" : num(S.gwPoints)) + '</div>' +
         '<div class="l">' + (S.gw ? "GW" + S.gw : "This week") +
-        (S.leagueAvg == null ? '' : ' \u00b7 avg ' + num(S.leagueAvg)) + '</div></div>' +
+        (S.leagueAvg == null ? '' : ' \u00b7 GO avg ' + num(S.leagueAvg)) + '</div></div>' +
       '</div>';
     // Two lines, FPL's rank first: the label, the number, and how it moved
     // since last gameweek. No arrow when it did not move.
