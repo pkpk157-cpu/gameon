@@ -2669,8 +2669,10 @@
       state.fplLeague = (parts[1] === "c" || parts[1] === "h") && +parts[2] ? { kind: parts[1], id: +parts[2] } : null;
       state.fplTeam = parts[1] === "team" && +parts[2] ? +parts[2] : null;
       state.fplHistory = parts[1] === "history";
-      // back from your history is where it was opened: FPL's card, or the
-      // Form section of your profile
+      // whose: a manager named in the address (fpl/history/<id>), else you
+      state.fplHistoryId = state.fplHistory && +parts[2] ? +parts[2] : null;
+      // back from a history is where it was opened: FPL's card, or the
+      // Form section of the profile it was opened from
       if (state.fplHistory && h !== lastHash) {
         var hp = /^profile\/(\d+)/.exec(lastHash || "");
         state.fplHistoryFrom = hp ? "profile/" + hp[1] + "/form" : "fpl";
@@ -2786,9 +2788,9 @@
       title = state.fplLeagueBar.name || "League";
       sub = state.fplLeagueBar.sub ? esc(state.fplLeagueBar.sub) : "";
     } else
-    // Your gameweek history carries your team's name, as FPL's does
-    if (state.view === "fpl" && state.fplHistory && state.me) {
-      var hds = S.dataset(), hme = hds && K.managerMap(hds)[+state.me];
+    // A gameweek history carries its team's name, as FPL's does
+    if (state.view === "fpl" && state.fplHistory && (state.fplHistoryId || state.me)) {
+      var hds = S.dataset(), hme = hds && K.managerMap(hds)[+(state.fplHistoryId || state.me)];
       title = hme ? hme.entryName : "Gameweek history";
       sub = "Gameweek history";
     } else
@@ -4213,9 +4215,11 @@
     ["OP", "Overall Points"], ["GWR", "Gameweek Rank"], ["GWP", "Gameweek Points, the transfer cost taken off as everywhere in this app"],
     ["PB", "Points on Bench"], ["TM", "Transfers Made"], ["TC", "Transfers Cost"], ["\u00a3", "Squad Value"]];
   function renderFplHistory(host, ds) {
-    var me = state.me ? +state.me : null, m = me && ds && K.managerMap(ds)[me];
+    // a manager's history, or yours when the address names nobody
+    var me = state.fplHistoryId || (state.me ? +state.me : null), m = me && ds && K.managerMap(ds)[me];
     if (!m) {
-      host.innerHTML = '<div class="callout">Choose your team in your profile to see its gameweek history.</div>';
+      host.innerHTML = '<div class="callout">' + (state.fplHistoryId ? 'This manager is not in Game On.'
+        : 'Choose your team in your profile to see its gameweek history.') + '</div>';
       return;
     }
     var hist = (ds.history || {})[me] || {};
@@ -5396,8 +5400,9 @@
     // Form — the shape of their season.
     var fm = K.form(ds, id);
     if (fm.length) {
-      // your own Form leads on to your gameweek history, FPL's table
-      h += psect("form", "Form", isMe(id) ? '<a class="ghbtn" href="#fpl/history">Gameweek history <span class="arw">\u203a</span></a>' : '');
+      // every Form leads on to that manager's gameweek history, FPL's table
+      h += psect("form", "Form", '<a class="ghbtn" href="#fpl/history' + (isMe(id) ? '' : '/' + (+id)) +
+        '">Gameweek history <span class="arw">\u203a</span></a>');
       h += '<div class="card"><div class="bd" id="formBox">' + formChart(fm) + '</div></div>';
     }
 

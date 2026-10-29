@@ -142,7 +142,21 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     await p.goto("http://localhost:" + PORT + "/index.html#profile/" + other.id + "/squad"); await p.waitForTimeout(1800);
     s = await squad();
     chk(!s.pill && s.st[0][1] === "GO avg" && /^GO highest/.test(s.st[2][1]), "another manager's squad: no switch, labels say GO", JSON.stringify(s));
-    chk(await p.evaluate(() => !document.querySelector(".ghbtn")), "another manager's Form has no history button");
+    // and so does every other manager's: their history, their stored figures, back to their Form
+    await p.goto("http://localhost:" + PORT + "/index.html#profile/" + other.id + "/form"); await p.waitForTimeout(1800);
+    await p.click("#ps-form .ghbtn"); await p.waitForSelector(".ghist", { timeout: 10000 }); await p.waitForTimeout(300);
+    const oh = await p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent,
+      rows: [...document.querySelectorAll(".ghist tbody tr")].map((r) => [...r.cells].map((c) => c.textContent.trim())) }));
+    const hO = ds.history[other.id], gO = Object.keys(hO).map(Number).filter((g) => typeof hO[g].p === "number").sort((a, b) => a - b);
+    const wantO = gO.map((g) => { const x = hO[g]; return [String(g), x.r ? x.r.toLocaleString("en-US") : "\u2013", x.pc != null ? Number(x.pc).toFixed(1) + "%" : "\u2013",
+      x.t.toLocaleString("en-US"), x.gr ? x.gr.toLocaleString("en-US") : "\u2013", String(K.gwScore(ds, other.id, g)), String(K.gwBench(ds, other.id, g)), String(x.tr || 0), String(x.h || 0), (x.v / 10).toFixed(1)]; });
+    const gotO = oh.rows.map((r) => r.filter((_, i) => i !== 3));
+    chk(oh.hash === "#fpl/history/" + other.id && oh.title === other.entryName, "another manager's Form opens their gameweek history, their name in the bar", JSON.stringify({ hash: oh.hash, title: oh.title }));
+    chk(gotO.length > 0 && JSON.stringify(gotO) === JSON.stringify(wantO), "every row is their stored figures", JSON.stringify(gotO[gotO.length - 1]) + " vs " + JSON.stringify(wantO[wantO.length - 1]));
+    await p.click("#barBack"); await p.waitForTimeout(1200);
+    chk(await p.evaluate(() => location.hash) === "#profile/" + other.id + "/form", "back returns to their Form", await p.evaluate(() => location.hash));
+    await p.goto("http://localhost:" + PORT + "/index.html#fpl/history/999999999"); await p.waitForTimeout(1200);
+    chk(await p.evaluate(() => /not in Game On/.test(document.querySelector("section.view.active").textContent)), "a history for someone not in Game On says so");
     chk(!er.length, "switching: no JS errors", er.join(" | "));
     await c.close();
   }
