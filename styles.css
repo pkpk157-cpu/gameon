@@ -2426,6 +2426,11 @@ table.t.psbtbl tbody tr { cursor:pointer; }
 table.t.psbtbl td.psnone { text-align:center; color:var(--ink-faint); font-size:12.5px; padding:14px 12px; }
 /* the caption under each board, off the card wall like the bucket table's */
 .psnote { margin:8px 14px 12px; }
+/* suspensions: one booking away reads first, FPL's own note in its words */
+table.t.bntbl tr.bn1 td.name .who { color:var(--bad); }
+table.t.bntbl .bnone { color:var(--bad); }
+table.t.bntbl td.bnnews { text-align:right; font-size:12px; font-weight:700; color:var(--bad); white-space:nowrap; padding-right:12px; }
+table.t.bntbl .bnout { color:var(--bad); font-weight:700; }
 
 /* ---- player faces -------------------------------------------------------
    Our own copies of the league's cut-out portraits, 110x140 with a

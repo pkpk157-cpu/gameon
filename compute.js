@@ -4536,9 +4536,69 @@
     return res;
   };
 
-    // Changes we have actually recorded, newest first. FPL publishes no history,
-
-
+  /* ---- who is near a ban --------------------------------------------------
+     Premier League bookings add up through the season, and a ban falls due at
+     three marks, each counted on the player's own club's league matches, not
+     on gameweeks: five by the club's 19th match (one match out), ten by its
+     32nd (two), fifteen in the season (three). The count never resets. A
+     second booking in one match is a sending-off and does not count towards
+     these, and FPL records that match as a red card alone, so FPL's bookings
+     are the count. A mark a player can no longer reach before its cut-off
+     (three bookings with one match of the window left: one booking a match
+     is the most that counts) is passed over for the next. A ban for a red
+     card is FPL's to state, and its suspended flag states it. Each club's
+     matches are the ones started, so a booking in a match being played is
+     counted with the match it came in. */
+  var BAN_MARKS = [[5, 19, 1], [10, 32, 2], [15, 38, 3]];
+  C.banMark = function (y, played) {
+    for (var i = 0; i < BAN_MARKS.length; i++) {
+      var away = BAN_MARKS[i][0] - y, left = BAN_MARKS[i][1] - played;
+      if (away > 0 && away <= left) {
+        return { at: BAN_MARKS[i][0], by: BAN_MARKS[i][1], ban: BAN_MARKS[i][2], away: away, left: left };
+      }
+    }
+    return null;
+  };
+  C.suspensions = function (ds) {
+    if (!ds || !ds.elements) return null;
+    if (ds._susp) return ds._susp;
+    var played = {}, yc = {}, rc = {};
+    var fx = ds.gwFixtures || {}, evs = ds.gwEvents || {};
+    Object.keys(fx).forEach(function (gw) {
+      (fx[gw] || []).forEach(function (f, i) {
+        if (!f || !f[2]) return;
+        played[f[0]] = (played[f[0]] || 0) + 1;
+        played[f[1]] = (played[f[1]] || 0) + 1;
+        ((evs[gw] && evs[gw][i]) || []).forEach(function (e) {
+          if (e[1] === "y") yc[e[2]] = (yc[e[2]] || 0) + e[3];
+          else if (e[1] === "r") rc[e[2]] = (rc[e[2]] || 0) + e[3];
+        });
+      });
+    });
+    var flags = ds.flags || {};
+    var rows = Object.keys(ds.elements).map(function (id) {
+      var m = ds.elements[id], fl = flags[id], y = yc[id] || 0, n = m[2] ? (played[m[2]] || 0) : null;
+      return { id: +id, name: m[0], type: m[1] || 0, pos: PPOS[m[1]] || "", team: m[2] || "",
+               y: y, r: rc[id] || 0, played: n,
+               // a man no longer at a Premier League club has no club matches to count
+               next: n == null ? null : C.banMark(y, n),
+               banned: fl && fl[0] === "s" ? (fl[3] || "Suspended") : null };
+    });
+    var byId = {};
+    rows.forEach(function (r) { byId[r.id] = r; });
+    var closer = function (a, b) {
+      var aa = a.next ? a.next.away : 99, bb = b.next ? b.next.away : 99;
+      return (aa - bb) || (b.y - a.y) || String(a.name).localeCompare(String(b.name));
+    };
+    var res = {
+      rows: rows, byId: byId, closer: closer,
+      suspended: rows.filter(function (r) { return r.banned; })
+        .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }),
+      close: rows.filter(function (r) { return !r.banned && r.next && r.next.away <= 2; }).sort(closer)
+    };
+    try { Object.defineProperty(ds, "_susp", { value: res, enumerable: false }); } catch (e) {}
+    return res;
+  };
 
   window.GO_COMPUTE = C;
 })();

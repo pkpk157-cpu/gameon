@@ -58,6 +58,7 @@
     tag: '<path d="M10.3 3H3.1v7.2l10.4 10.4a1.5 1.5 0 0 0 2.1 0l4.9-4.9a1.5 1.5 0 0 0 0-2.1Z"/><circle cx="6.8" cy="6.7" r="1.3"/>',
     bank: '<path d="M3 9.6 12 4.2l9 5.4"/><path d="M5.5 11v7.5M10 11v7.5M14 11v7.5M18.5 11v7.5"/><path d="M3 20.4h18"/>',
     steady: '<path d="M4 12h16"/><path d="M7.5 9.4v5.2M12 8.6v6.8M16.5 9.4v5.2"/>',
+    card: '<path d="M8.3 3.5h7.4a1.8 1.8 0 0 1 1.8 1.8v13.4a1.8 1.8 0 0 1-1.8 1.8H8.3a1.8 1.8 0 0 1-1.8-1.8V5.3a1.8 1.8 0 0 1 1.8-1.8Z"/>',
     shield: '<path d="M12 3.4 5.2 6.2v5.6c0 4 2.7 7.2 6.8 8.6 4.1-1.4 6.8-4.6 6.8-8.6V6.2Z"/>',
     // The winners' marks used to be emoji, which every phone draws from its
     // own emoji font, so the same card wore Apple's trophy on one phone and
@@ -492,6 +493,7 @@
       menuItem("pfMarket", "swap", "Transfer market") +
       menuItem("pfPrices", "tag", "Price changes") +
       menuItem("pfPlayers", "chart", "Player stats") +
+      menuItem("pfBans", "card", "Suspensions") +
       '</div>';
 
     // 5 — admin, for whoever runs the league
@@ -549,6 +551,7 @@
     $("#pfMarket").addEventListener("click", function () { go("market"); });
     $("#pfPrices").addEventListener("click", function () { go("prices"); });
     $("#pfPlayers").addEventListener("click", function () { go("prices/stats"); });
+    $("#pfBans").addEventListener("click", function () { go("bans"); });
     if (me) {
       $("#pfMine").addEventListener("click", function () { go("profile/" + state.me); });
       $("#pfEdit").addEventListener("click", function () { openProfile({ edit: !editing }); });
@@ -946,6 +949,98 @@
       if (tr) location.hash = "player/" + tr.getAttribute("data-el") + "/" + ds.pitchGw;
     });
     draw();
+  }
+
+  /* ---- suspensions ----------------------------------------------------------
+     Who is banned now, in FPL's own words; who is a booking or two from a
+     ban; then your squad, every man and how far he is from one. The marks and
+     the counting are compute's (suspensions): five bookings by a club's 19th
+     league match, ten by its 32nd, fifteen in the season. */
+  // When the bookings must come by: the club match each mark runs to, and how
+  // many most clubs have left before it. A club with a match postponed has
+  // one more, which is why this says most.
+  function bansWindow(rows) {
+    var by = {};
+    rows.forEach(function (r) {
+      if (!r.next) return;
+      var k = r.next.by, b = by[k] = by[k] || { n: 0, left: {} };
+      b.n++; b.left[r.next.left] = (b.left[r.next.left] || 0) + 1;
+    });
+    return Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (k) {
+      var lefts = Object.keys(by[k].left).map(Number);
+      var common = lefts.sort(function (a, b) { return by[k].left[b] - by[k].left[a] || a - b; })[0];
+      return 'The ' + (k === 19 ? 'five' : k === 32 ? 'ten' : 'fifteen') + '-booking mark runs to each club\u2019s ' +
+        (k === 38 ? 'last match' : ordinal(k) + ' league match') + ': ' + (lefts.length > 1 ? 'most have ' : '') +
+        num(common) + ' left.';
+    }).join(" ");
+  }
+  function renderBans(host, ds) {
+    var S = ds ? K.suspensions(ds) : null;
+    if (!S || !S.rows.length) {
+      host.innerHTML = '<div class="callout">No player list in this data yet.</div>';
+      return;
+    }
+    var gw = K.currentGw(ds);
+    var ban = function (r) { return r.next ? r.next.ban + (r.next.ban === 1 ? " match" : " matches") : "\u2013"; };
+    var row = function (r, i, sub) {
+      return '<tr data-el="' + r.id + '"' + (r.next && r.next.away === 1 ? ' class="bn1"' : '') + '>' +
+        (i == null ? '' : '<td class="pos">' + (i + 1) + '</td>') +
+        '<td class="name"><span class="nwrap">' + faceBox(r.id, r.name, "sm") +
+        '<span class="ntxt"><span class="who">' + esc(r.name) + '</span>' +
+        '<span class="mgr">' + esc(r.pos) + ' \u00b7 ' + esc(r.team) + (sub ? ' \u00b7 ' + sub : '') + '</span></span></span></td>';
+    };
+    var nums = function (r) {
+      return '<td class="num"><b>' + num(r.y) + '</b></td>' +
+        '<td class="num">' + (r.next ? (r.next.away === 1 ? '<b class="bnone">1</b>' : num(r.next.away)) : "\u2013") + '</td>' +
+        '<td class="num">' + ban(r) + '</td></tr>';
+    };
+    var head = function (first) {
+      return '<thead><tr>' + (first ? '<th class="pos" aria-label="Position in this list">#</th>' : '') +
+        '<th class="name">Player</th><th class="num" aria-label="Yellow cards">YC</th>' +
+        '<th class="num" aria-label="Bookings from a ban">Away</th><th class="num">Ban</th></tr></thead>';
+    };
+    var h = '<div class="statlead">' + (gw ? 'GW' + gw + ' \u00b7 ' : '') +
+      'Premier League bookings, counted on each club\u2019s own matches</div>';
+
+    h += '<div class="section-title"><h2>Suspended now</h2><div class="rule"></div></div>' +
+      '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl"><tbody>' +
+      (S.suspended.length ? S.suspended.map(function (r) {
+        return row(r, null, '') +
+          '<td class="bnnews">' + esc(r.banned) + '</td></tr>';
+      }).join("") : '<tr><td class="psnone">Nobody is suspended.</td></tr>') +
+      '</tbody></table></div><div class="note psnote">As FPL reports it, red cards included.</div></div>';
+
+    h += '<div class="section-title"><h2>Close to a ban</h2><div class="rule"></div></div>' +
+      '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl">' + head(true) + '<tbody>' +
+      (S.close.length ? S.close.map(function (r, i) { return row(r, i, '') + nums(r); }).join("")
+        : '<tr><td class="psnone" colspan="5">Nobody is within two bookings of a ban.</td></tr>') +
+      '</tbody></table></div><div class="note psnote">Everyone one or two bookings from a ban. ' + bansWindow(S.close) + '</div></div>';
+
+    h += '<div class="section-title"><h2>Your squad</h2><div class="rule"></div></div>';
+    var mine = state.me ? K.mySquadIds(ds, state.me) : null;
+    if (!state.me) {
+      h += '<div class="callout">Choose your team in your profile to see how close your players are to a ban.</div>' +
+        '<button type="button" class="btn" id="bnPick" style="margin-top:12px">Choose your team</button>';
+    } else if (!mine || !mine.length) {
+      h += '<div class="callout">Your squad arrives with the next data sync.</div>';
+    } else {
+      var rs = mine.map(function (id) { return S.byId[id]; }).filter(Boolean).sort(S.closer);
+      h += '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl">' + head(false) + '<tbody>' +
+        rs.map(function (r) {
+          return row(r, null, r.banned ? '<span class="bnout">' + esc(r.banned) + '</span>' : '') + nums(r);
+        }).join("") + '</tbody></table></div></div>';
+    }
+    h += '<div class="note" style="margin:14px 2px 0">Five bookings by a club\u2019s 19th league match is a one-match ban, ' +
+      'ten by its 32nd two matches, fifteen in the season three. The count does not reset. A second booking in one match ' +
+      'is a sending-off and does not count towards these. Cup bookings are separate.</div>';
+    host.innerHTML = h;
+    var pick = $("#bnPick", host);
+    if (pick) pick.addEventListener("click", function () { openProfile({ edit: true }); });
+    // tap a player for his own page, as everywhere else
+    host.onclick = function (e) {
+      var tr = e.target.closest && e.target.closest("tr[data-el]");
+      if (tr) location.hash = "player/" + tr.getAttribute("data-el") + "/" + ds.pitchGw;
+    };
   }
 
   // Prices and the season's leaderboards used to share a toggle here, from the
@@ -2629,7 +2724,7 @@
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
       .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
-               "winnings", "gwstatus", "vol", "player", "fpl", "market"]);
+               "winnings", "gwstatus", "vol", "player", "fpl", "market", "bans"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -2740,7 +2835,7 @@
   // idle; coming back draws it afresh, as it always did. Measured with the
   // CPU slowed to a mid-range phone's: a return to Classic 0.67s to 0.30s.
   var LIGHT_VIEWS = { classic: 1, monthly: 1, lms: 1, pyramid: 1, h2h: 1, stats: 1, prices: 1,
-                      pl: 1, gwstatus: 1, winnings: 1, chips: 1, rules: 1, market: 1 };
+                      pl: 1, gwstatus: 1, winnings: 1, chips: 1, rules: 1, market: 1, bans: 1 };
   var trimDue = false;
   function trimLater() {
     if (trimDue) return;
@@ -2777,12 +2872,13 @@
     vol:     { t: "Game On Voluntary", topic: "voluntary" },
     // the bar carries his name, so the page body never repeats it
     player:  { t: "Player" },
-    market:  { t: "Transfer market" }
+    market:  { t: "Transfer market" },
+    bans:    { t: "Suspensions" }
   };
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
   var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
-                   "winnings", "gwstatus", "vol", "player", "fpl", "market"];
+                   "winnings", "gwstatus", "vol", "player", "fpl", "market", "bans"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -2958,6 +3054,7 @@
     if (state.view === "winnings") return renderWinnings(host, S.dataset());
     if (state.view === "gwstatus") return renderGwStatus(host, S.dataset());
     if (state.view === "market") return renderMarket(host, S.dataset());
+    if (state.view === "bans") return renderBans(host, S.dataset());
     if (state.view === "vol") return renderVoluntary(host, S.dataset());
     if (state.view === "player") return renderPlayer(host, S.dataset());
 

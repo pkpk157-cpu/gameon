@@ -129,8 +129,8 @@ function recount() {
         .find((m) => (m.querySelector(".lab-sm") || {}).textContent === "Players");
       return grp ? [...grp.querySelectorAll("button")].map((x) => x.textContent.trim()) : [];
     });
-    chk("the profile sheet offers Transfer market, Price changes and Player stats",
-        you.join("|") === "Transfer market|Price changes|Player stats", you.join(","));
+    chk("the profile sheet offers Transfer market, Price changes, Player stats and Suspensions",
+        you.join("|") === "Transfer market|Price changes|Player stats|Suspensions", you.join(","));
     await page.evaluate(() => {
       const h = window.innerHeight;
       document.elementFromPoint(6, h / 2).click();

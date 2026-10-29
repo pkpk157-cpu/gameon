@@ -40,8 +40,8 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
       return { labs, btns };
     });
     chk(you.labs.includes("Players"), w + ": the profile sheet has a Players group", you.labs.join(" | "));
-    chk(you.btns.length === 3 && you.btns[0].t === "Transfer market" && you.btns[1].t === "Price changes" && you.btns[2].t === "Player stats",
-      w + ": it lists Transfer market, Price changes, then Player stats", JSON.stringify(you.btns.map(x => x.t)));
+    chk(you.btns.length === 4 && you.btns[0].t === "Transfer market" && you.btns[1].t === "Price changes" && you.btns[2].t === "Player stats" && you.btns[3].t === "Suspensions",
+      w + ": it lists Transfer market, Price changes, Player stats, then Suspensions", JSON.stringify(you.btns.map(x => x.t)));
     chk(you.btns.every(x => x.svg), w + ": each has an icon that actually drew", JSON.stringify(you.btns.map(x => x.svg)));
 
     // Price changes

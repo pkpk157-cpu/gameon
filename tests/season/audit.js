@@ -251,6 +251,10 @@ function audit(app, st) {
 
   /* groups and knockouts */
   const h2h = call(label, "h2h", () => C.h2h(ds));
+  // who is near a ban: every mark reachable, none past its cut-off
+  const sus = call(label, "suspensions", () => C.suspensions(ds));
+  if (sus) chk(label, sus.rows.every((r) => !r.next || (r.next.away > 0 && r.next.away <= r.next.left && r.y + r.next.away === r.next.at)),
+    "every next ban mark is still reachable before its cut-off");
   if (h2h) {
     chk(label, h2h.groups.length === 16, "sixteen groups");
     const gsScored = cfg.h2h.groupStageGws.filter((g) => scored.indexOf(g) !== -1).length;
