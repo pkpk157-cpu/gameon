@@ -5,8 +5,9 @@ const GOENV = require("./lib/env.js");
    (three). A mark that can no longer be reached before its cut-off, one
    booking a match being the most that counts, gives way to the next. The
    bookings are recounted here from the fixtures' own events; who is banned
-   now is FPL's flag, in its words. Then the page: the banned, everyone a
-   booking or two away, and your squad, every man ordered by how close. */
+   now is FPL's flag, in its words. Then the page, under the same All players
+   and My team pill as Price changes: the banned and everyone a booking or two
+   away; then your squad, every man ordered by how close. */
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8782;
@@ -70,25 +71,34 @@ const me = ds.managers[5].id;
       return g ? [...g.querySelectorAll("button")].map((x) => x.textContent.trim() + (x.querySelector("svg rect,svg path") ? "" : " (no icon)")) : []; });
     chk(menu.join("|") === "Transfer market|Price changes|Player stats|Suspensions", w + "px: Suspensions sits under Player stats, with its icon", menu.join(" | "));
     await p.click("#pfBans"); await p.waitForTimeout(900);
-    const pg = await p.evaluate(() => {
+    const read = () => p.evaluate(() => {
       const v = document.querySelector("section.view.active"), tb = [...v.querySelectorAll("table")];
       const rows = (t) => [...t.querySelectorAll("tbody tr[data-el]")].map((tr) => ({ id: +tr.getAttribute("data-el"), cells: [...tr.cells].map((c) => c.innerText.replace(/\s+/g, " ").trim()) }));
       return { hash: location.hash, title: document.querySelector("#barTitle").textContent, back: getComputedStyle(document.querySelector("#barBack")).display !== "none",
+        pill: [...v.querySelectorAll("#bnWho button")].map((x) => x.textContent + (x.classList.contains("on") ? "*" : "")).join("|"),
+        pillTop: v.querySelector("#bnWho") === v.firstElementChild,
         secs: [...v.querySelectorAll(".section-title h2")].map((x) => x.textContent), t: tb.map(rows),
         notes: [...v.querySelectorAll(".psnote")].map((x) => x.textContent), wide: document.documentElement.scrollWidth > innerWidth + 1 };
     });
-    chk(pg.hash === "#bans" && pg.title === "Suspensions" && pg.back && pg.secs.join("|") === "Suspended now|Close to a ban|Your squad",
-        w + "px: its own page, named in the bar, back arrow, three sections in order", J({ hash: pg.hash, title: pg.title, secs: pg.secs }));
+    const pg = await read();
+    chk(pg.hash === "#bans" && pg.title === "Suspensions" && pg.back && pg.pillTop && pg.pill === "All players*|My team" && pg.secs.join("|") === "Suspended now|Close to a ban",
+        w + "px: its own page, named in the bar, back arrow; the pill on top, on All players: the banned, then the close", J({ hash: pg.hash, title: pg.title, pill: pg.pill, secs: pg.secs }));
     chk(J(pg.t[0].map((r) => r.id)) === J(S.suspended.map((r) => r.id)) && pg.t[0].every((r, i) => r.cells[1] === S.suspended[i].banned),
         w + "px: suspended now, each with FPL's note", J(pg.t[0].map((r) => r.cells[1])));
     const cell = (r) => [String(r.y), r.next ? String(r.next.away) : "–", r.next ? r.next.ban + (r.next.ban === 1 ? " match" : " matches") : "–"];
     chk(J(pg.t[1].map((r) => r.id)) === J(S.close.map((r) => r.id)) && pg.t[1].every((r, i) => J(r.cells.slice(2)) === J(cell(S.close[i]))),
         w + "px: close to a ban, every row its bookings, how far and the ban", pg.t[1].length + " rows; first " + J(pg.t[1][0] && pg.t[1][0].cells));
-    const mine = K.mySquadIds(ds, me).map((id) => S.byId[id]).sort(S.closer);
-    chk(J(pg.t[2].map((r) => r.id)) === J(mine.map((r) => r.id)) && pg.t[2].every((r, i) => J(r.cells.slice(1)) === J(cell(mine[i]))),
-        w + "px: your squad, every player, nearest a ban first", pg.t[2].length + " players; first " + J(pg.t[2][0] && pg.t[2][0].cells));
     chk(/club’s 19th league match: (most have )?\d+ left\./.test(pg.notes[1] || "") || !S.close.length, w + "px: the note says when the bookings must come by", pg.notes[1]);
     chk(!pg.wide, w + "px: nothing wider than the screen");
+    // My team: your squad, every player, nearest a ban first
+    await p.click('#bnWho [data-bwho="mine"]'); await p.waitForTimeout(400);
+    const pm = await read();
+    const mine = K.mySquadIds(ds, me).map((id) => S.byId[id]).sort(S.closer);
+    chk(pm.pill === "All players|My team*" && pm.t.length === 1 && J(pm.t[0].map((r) => r.id)) === J(mine.map((r) => r.id)) && pm.t[0].every((r, i) => J(r.cells.slice(1)) === J(cell(mine[i]))),
+        w + "px: My team: your squad alone, every player, nearest a ban first", pm.t[0] && (pm.t[0].length + " players; first " + J(pm.t[0][0] && pm.t[0][0].cells)));
+    chk(!pm.wide, w + "px: My team: nothing wider than the screen");
+    await p.click('#bnWho [data-bwho="all"]'); await p.waitForTimeout(400);
+    chk((await read()).secs.join("|") === "Suspended now|Close to a ban", w + "px: back to All players");
     if (pg.t[1].length) {
       await p.evaluate(() => document.querySelectorAll("section.view.active .card")[1].querySelector("tbody tr[data-el]").click()); await p.waitForTimeout(700);
       chk(await p.evaluate(() => location.hash) === "#player/" + S.close[0].id + "/" + ds.pitchGw, w + "px: a row opens that player", await p.evaluate(() => location.hash));
@@ -96,10 +106,13 @@ const me = ds.managers[5].id;
     chk(!er.length, w + "px: no JS errors", er.join(" | "));
     await c.close();
   }
-  // no team chosen: the lists, and a prompt where your squad would be
+  // no team chosen: the two lists; My team asks for one, as Price changes does
   const c = await b.newContext({ viewport: { width: 390, height: 800 }, serviceWorkers: "block" }); const p = await c.newPage();
   await c.route((u) => !/localhost/.test(u.toString()), (route) => route.abort());
   await p.goto("http://localhost:" + PORT + "/index.html#bans", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(3000);
-  chk(await p.evaluate(() => !!document.querySelector("#bnPick") && document.querySelectorAll("section.view.active table").length === 2), "no team chosen: the two lists, and a prompt to choose one");
+  chk(await p.evaluate(() => document.querySelectorAll("section.view.active table").length === 2), "no team chosen: the two lists");
+  await p.click('#bnWho [data-bwho="mine"]'); await p.waitForTimeout(500);
+  const ask = await p.evaluate(() => ({ toast: document.querySelector("#toast").textContent, still: document.querySelector('#bnWho [data-bwho="all"]').classList.contains("on") }));
+  chk(ask.toast === "Pick your team first" && ask.still, "no team chosen: My team asks you to pick one and stays on All players", J(ask));
   await b.close(); srv.close(); console.log(fails ? "FAILS: " + fails : "ALL OK"); process.exit(fails ? 1 : 0);
 })();

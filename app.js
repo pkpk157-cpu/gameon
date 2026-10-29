@@ -999,43 +999,62 @@
         '<th class="name">Player</th><th class="num" aria-label="Yellow cards">YC</th>' +
         '<th class="num" aria-label="Bookings from a ban">Away</th><th class="num">Ban</th></tr></thead>';
     };
-    var h = '<div class="statlead">' + (gw ? 'GW' + gw + ' \u00b7 ' : '') +
+    // All players or My team, as Price changes has it: the same pill, the
+    // same choice kept while the app is open
+    if (state.bnWho !== "mine" || !state.me) state.bnWho = "all";
+    var h = '<div class="pseg psegwide" role="tablist" id="bnWho">' +
+      [["all", "All players"], ["mine", "My team"]].map(function (t) {
+        return '<button type="button" role="tab" data-bwho="' + t[0] + '"' +
+          (state.bnWho === t[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>' + esc(t[1]) + '</button>';
+      }).join("") + '</div>';
+    h += '<div class="statlead">' + (gw ? 'GW' + gw + ' \u00b7 ' : '') +
       'Premier League bookings, counted on each club\u2019s own matches</div>';
 
-    h += '<div class="section-title"><h2>Suspended now</h2><div class="rule"></div></div>' +
-      '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl"><tbody>' +
-      (S.suspended.length ? S.suspended.map(function (r) {
-        return row(r, null, '') +
-          '<td class="bnnews">' + esc(r.banned) + '</td></tr>';
-      }).join("") : '<tr><td class="psnone">Nobody is suspended.</td></tr>') +
-      '</tbody></table></div><div class="note psnote">As FPL reports it, red cards included.</div></div>';
+    if (state.bnWho === "all") {
+      h += '<div class="section-title"><h2>Suspended now</h2><div class="rule"></div></div>' +
+        '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl"><tbody>' +
+        (S.suspended.length ? S.suspended.map(function (r) {
+          return row(r, null, '') +
+            '<td class="bnnews">' + esc(r.banned) + '</td></tr>';
+        }).join("") : '<tr><td class="psnone">Nobody is suspended.</td></tr>') +
+        '</tbody></table></div><div class="note psnote">As FPL reports it, red cards included.</div></div>';
 
-    h += '<div class="section-title"><h2>Close to a ban</h2><div class="rule"></div></div>' +
-      '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl">' + head(true) + '<tbody>' +
-      (S.close.length ? S.close.map(function (r, i) { return row(r, i, '') + nums(r); }).join("")
-        : '<tr><td class="psnone" colspan="5">Nobody is within two bookings of a ban.</td></tr>') +
-      '</tbody></table></div><div class="note psnote">Everyone one or two bookings from a ban. ' + bansWindow(S.close) + '</div></div>';
-
-    h += '<div class="section-title"><h2>Your squad</h2><div class="rule"></div></div>';
-    var mine = state.me ? K.mySquadIds(ds, state.me) : null;
-    if (!state.me) {
-      h += '<div class="callout">Choose your team in your profile to see how close your players are to a ban.</div>' +
-        '<button type="button" class="btn" id="bnPick" style="margin-top:12px">Choose your team</button>';
-    } else if (!mine || !mine.length) {
-      h += '<div class="callout">Your squad arrives with the next data sync.</div>';
+      h += '<div class="section-title"><h2>Close to a ban</h2><div class="rule"></div></div>' +
+        '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl">' + head(true) + '<tbody>' +
+        (S.close.length ? S.close.map(function (r, i) { return row(r, i, '') + nums(r); }).join("")
+          : '<tr><td class="psnone" colspan="5">Nobody is within two bookings of a ban.</td></tr>') +
+        '</tbody></table></div><div class="note psnote">Everyone one or two bookings from a ban. ' + bansWindow(S.close) + '</div></div>';
     } else {
-      var rs = mine.map(function (id) { return S.byId[id]; }).filter(Boolean).sort(S.closer);
-      h += '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl">' + head(false) + '<tbody>' +
-        rs.map(function (r) {
-          return row(r, null, r.banned ? '<span class="bnout">' + esc(r.banned) + '</span>' : '') + nums(r);
-        }).join("") + '</tbody></table></div></div>';
+      // your squad, every man, nearest a ban first; the next one if transfers
+      // are already made for it
+      var mine = K.mySquadIds(ds, state.me);
+      if (!mine || !mine.length) {
+        h += '<div class="callout">Your squad arrives with the next data sync.</div>';
+      } else {
+        var rs = mine.map(function (id) { return S.byId[id]; }).filter(Boolean).sort(S.closer);
+        h += '<div class="card"><div class="tablewrap"><table class="t psbtbl bntbl">' + head(false) + '<tbody>' +
+          rs.map(function (r) {
+            return row(r, null, r.banned ? '<span class="bnout">' + esc(r.banned) + '</span>' : '') + nums(r);
+          }).join("") + '</tbody></table></div><div class="note psnote">' + bansWindow(rs) + '</div></div>';
+      }
     }
     h += '<div class="note" style="margin:14px 2px 0">Five bookings by a club\u2019s 19th league match is a one-match ban, ' +
       'ten by its 32nd two matches, fifteen in the season three. The count does not reset. A second booking in one match ' +
       'is a sending-off and does not count towards these. Cup bookings are separate.</div>';
     host.innerHTML = h;
-    var pick = $("#bnPick", host);
-    if (pick) pick.addEventListener("click", function () { openProfile({ edit: true }); });
+    $all("[data-bwho]", host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var want = b.getAttribute("data-bwho");
+        if (want === "mine" && !state.me) {
+          toast("Pick your team first");
+          openProfile({ edit: true });
+          return;
+        }
+        if (want === state.bnWho) return;
+        state.bnWho = want;
+        renderBans(host, ds);
+      });
+    });
     // tap a player for his own page, as everywhere else
     host.onclick = function (e) {
       var tr = e.target.closest && e.target.closest("tr[data-el]");
