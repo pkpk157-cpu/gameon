@@ -236,8 +236,18 @@ async function filled(pg) {
   const viaOthers = await orderOf();
   const dupes = viaName.filter((v, i) => i && v.split(" ")[0] === viaName[i - 1].split(" ")[0]);
   console.log("\nshared surnames on screen: " + (dupes.length ? dupes.join(", ") : "none"));
+  // Sorting by name is a total order (name, club, position), so the two can
+  // only differ if one read caught the table mid-redraw or a tap went astray.
+  // Say which, so a failure explains itself.
+  let why = "";
+  if (JSON.stringify(viaName) !== JSON.stringify(viaOthers)) {
+    const at = viaName.findIndex((v, i) => v !== viaOthers[i]);
+    why = viaName.length + " vs " + viaOthers.length + " rows; first difference at row " + at + ": " +
+      JSON.stringify(viaName.slice(Math.max(0, at - 1), at + 2)) + " vs " + JSON.stringify(viaOthers.slice(Math.max(0, at - 1), at + 2)) +
+      "; sort now " + await p.evaluate(() => { const th = document.querySelector("th.sorted"); return th ? th.getAttribute("data-sort") + " " + th.getAttribute("aria-sort") : "none"; });
+  }
   chk("the same-name order does not depend on how you got here",
-      JSON.stringify(viaName) === JSON.stringify(viaOthers));
+      JSON.stringify(viaName) === JSON.stringify(viaOthers), why);
 
   // A player past the rendered cap must still be findable, under any sort —
   // this is what filtering the rendered rows used to get wrong.
