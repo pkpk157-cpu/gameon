@@ -365,9 +365,6 @@ function audit(app, st) {
     call(label, "winnings " + id, () => C.winnings(ds, id));
     call(label, "managerChips " + id, () => C.managerChips(ds, id));
     call(label, "mySquadIds " + id, () => C.mySquadIds(ds, id));
-    // My Team: the week ahead and the season's last week, from wherever the season stands
-    call(label, "nextTeam " + id, () => C.nextTeam(ds, id));
-    call(label, "nextTeam last " + id, () => C.nextTeam(ds, id, 38));
     call(label, "pendingSquad " + id, () => C.pendingSquad(ds, id));
     call(label, "h2hRecord " + id, () => C.h2hRecord(ds, id));
   });

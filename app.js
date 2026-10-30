@@ -59,7 +59,6 @@
     bank: '<path d="M3 9.6 12 4.2l9 5.4"/><path d="M5.5 11v7.5M10 11v7.5M14 11v7.5M18.5 11v7.5"/><path d="M3 20.4h18"/>',
     steady: '<path d="M4 12h16"/><path d="M7.5 9.4v5.2M12 8.6v6.8M16.5 9.4v5.2"/>',
     card: '<path d="M8.3 3.5h7.4a1.8 1.8 0 0 1 1.8 1.8v13.4a1.8 1.8 0 0 1-1.8 1.8H8.3a1.8 1.8 0 0 1-1.8-1.8V5.3a1.8 1.8 0 0 1 1.8-1.8Z"/>',
-    shirt: '<path d="M8.6 3.8 3.6 6.6l2 3.9 2.1-1V20.2h8.6V9.5l2.1 1 2-3.9-5-2.8c-.6 1.5-1.9 2.4-3.4 2.4S9.2 5.3 8.6 3.8Z"/>',
     shield: '<path d="M12 3.4 5.2 6.2v5.6c0 4 2.7 7.2 6.8 8.6 4.1-1.4 6.8-4.6 6.8-8.6V6.2Z"/>',
     // The winners' marks used to be emoji, which every phone draws from its
     // own emoji font, so the same card wore Apple's trophy on one phone and
@@ -2799,7 +2798,6 @@
       state.fplLeague = (parts[1] === "c" || parts[1] === "h") && +parts[2] ? { kind: parts[1], id: +parts[2] } : null;
       state.fplTeam = parts[1] === "team" && +parts[2] ? +parts[2] : null;
       state.fplHistory = parts[1] === "history";
-      state.fplMyTeam = parts[1] === "myteam";
       // whose: a manager named in the address (fpl/history/<id>), else you
       state.fplHistoryId = state.fplHistory && +parts[2] ? +parts[2] : null;
       // back from a history is where it was opened: FPL's card, or the
@@ -2920,12 +2918,6 @@
       title = state.fplLeagueBar.name || "League";
       sub = state.fplLeagueBar.sub ? esc(state.fplLeagueBar.sub) : "";
     } else
-    // My Team carries your team's name, as the history does
-    if (state.view === "fpl" && state.fplMyTeam && state.me) {
-      var tds = S.dataset(), tme = tds && K.managerMap(tds)[+state.me];
-      title = tme ? tme.entryName : "My Team";
-      sub = "My Team";
-    } else
     // A gameweek history carries its team's name, as FPL's does
     if (state.view === "fpl" && state.fplHistory && (state.fplHistoryId || state.me)) {
       var hds = S.dataset(), hme = hds && K.managerMap(hds)[+(state.fplHistoryId || state.me)];
@@ -2998,7 +2990,7 @@
     // the menu, as the tournament's tabs are from the bar. A match, a league,
     // a team or a player opened inside one does.
     var back = $("#barBack");
-    var landing = (state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory && !state.fplMyTeam) ||
+    var landing = (state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory) ||
       (state.view === "pl" && !state.plMatch) || state.view === "vol";
     back.style.display = SUB_VIEWS.indexOf(state.view) === -1 || landing ? "none" : "";
 
@@ -3039,7 +3031,6 @@
     // A league was opened from the list of them; back is that list.
     if (state.view === "fpl" && state.fplLeague) { location.hash = "fpl"; return; }
     if (state.view === "fpl" && state.fplHistory) { location.hash = state.fplHistoryFrom || "fpl"; return; }
-    if (state.view === "fpl" && state.fplMyTeam) { location.hash = "fpl"; return; }
     if (state.view === "compare" && state.cmpFrom) { location.hash = state.cmpFrom; return; }
     // And a player was opened from wherever he was tapped.
     if (state.view === "player" && state.playerFrom) {
@@ -4419,7 +4410,12 @@
     var avg = src === "fpl" ? fx.average : gx.average;
     var hi = src === "fpl" ? fx.highest : (gx.highest ? gx.highest.pts : null);
     var hiAttr = src === "fpl" ? (fx.highestEntry ? teamLink(fx.highestEntry) : "") : (gx.highest ? ' data-entry="' + (+gx.highest.id) + '"' : "");
-    var when = next ? deadlineWords(Date.parse(next.deadline_time)) : "";
+    var when = "";
+    if (next) {
+      var d = new Date(next.deadline_time), pad = function (x) { return (x < 10 ? "0" : "") + x; };
+      when = d.toLocaleDateString("en-GB", { weekday: "long" }) + " " + d.getDate() + " " + d.toLocaleDateString("en-GB", { month: "short" }) +
+        " at " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
     return '<div class="fplcard">' +
       '<a class="fchead" href="#fpl/history" aria-label="Your gameweek history">' +
         '<span class="fcwho"><b>' + esc(m.entryName) + '</b><span>' + (flag ? '<i aria-hidden="true">' + flag + '</i>' : "") + esc(m.playerName || "") + '</span></span>' +
@@ -4433,105 +4429,8 @@
           (hiAttr ? " " + arrow(16) : "") + '</span></div>' +
       '</div>' +
       (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
-      // your squad for the week ahead, as FPL's Pick Team opens it; looking,
-      // not picking, since a team can only be changed in FPL
-      '<a class="fcbtn" href="#fpl/myteam">' + svg("shirt", 20) + 'My Team</a>' +
       '</div>';
   }
-  // A deadline in the phone's own time: "Saturday 31 Oct at 16:30".
-  function deadlineWords(ms) {
-    var d = new Date(ms), pad = function (x) { return (x < 10 ? "0" : "") + x; };
-    return d.toLocaleDateString("en-GB", { weekday: "long" }) + " " + d.getDate() + " " + d.toLocaleDateString("en-GB", { month: "short" }) +
-      " at " + pad(d.getHours()) + ":" + pad(d.getMinutes());
-  }
-
-  /* ---- My Team ---------------------------------------------------------------
-     Your team, every gameweek. It opens on the week ahead: your squad as it
-     stands, with the transfers you have made, each man's match that week and
-     FPL's flag on him, laid out on the pitch by position as FPL's Transfers
-     page does, since FPL publishes no eleven, captain or bench before the
-     deadline and drawing one would be guessing. Every week already played is
-     the squad pitch the profile has, points, ownership and value, from the
-     same picker. */
-  function renderMyTeam(host, ds) {
-    var me = state.me ? +state.me : null, m = me && ds && K.managerMap(ds)[me];
-    if (!m) {
-      host.innerHTML = '<div class="callout">Choose your team in your profile to see it here.</div>';
-      return;
-    }
-    // every week played, then every week still to come, in one run
-    var played = K.squadGws(ds).filter(function (g) { return ds.picks[g] && ds.picks[g][me]; });
-    var nd = K.nextDeadline(ds), nextGw = nd ? +nd.gw : null;
-    var ahead = nextGw && K.nextTeam(ds, me) ? ((ds.bootstrap && ds.bootstrap.events) || [])
-      .filter(function (e) { return +e.id >= nextGw && e.deadline_time && played.indexOf(+e.id) === -1; })
-      .map(function (e) { return +e.id; }).sort(function (x, y) { return x - y; }) : [];
-    var weeks = played.concat(ahead);
-    if (!weeks.length) {
-      host.innerHTML = '<div class="callout">Your squad arrives with the next data sync.</div>';
-      return;
-    }
-    var cur = +state.myTeamGw;
-    if (weeks.indexOf(cur) === -1) cur = ahead.length ? ahead[0] : played[played.length - 1];
-    host.innerHTML = '<div id="myTeamBox"></div>';
-    var box = $("#myTeamBox", host);
-    // Gameweek by gameweek, a step either way, as FPL's own app pages through them
-    var arrow = function (dir, to) {
-      return '<button type="button" class="mtarr" data-gw="' + (to || "") + '"' + (to ? '' : ' disabled') +
-        ' aria-label="' + (dir < 0 ? 'Previous' : 'Next') + ' gameweek"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
-        '<path d="' + (dir < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
-    };
-    var stepper = function (g) {
-      var i = weeks.indexOf(+g);
-      return '<span class="mtstep">' + arrow(-1, weeks[i - 1]) +
-        '<span class="mtlab">Gameweek ' + g + (+g === nextGw ? ' \u00b7 next' : '') + '</span>' + arrow(1, weeks[i + 1]) + '</span>';
-    };
-    var opts = {
-      picker: stepper,
-      remember: function (g, metric) { state.myTeamGw = g; state.myTeamMetric = metric; }
-    };
-    var show = function (g) {
-      state.myTeamGw = g;
-      if (ahead.indexOf(g) === -1) { mountPitch(box, ds, me, g, state.myTeamMetric || "pts", false, opts); return; }
-      var nt = K.nextTeam(ds, me, g);
-      // a card tapped opens the player as your player, as on any pitch
-      box.setAttribute("data-bgw", nt.base);
-      box.setAttribute("data-bentry", me);
-      box.innerHTML = '<div class="pgwline">' + stepper(g) + '</div>' + myNextHtml(nt);
-    };
-    box.addEventListener("click", function (e) {
-      var b = e.target.closest && e.target.closest(".mtarr[data-gw]");
-      if (b && b.getAttribute("data-gw")) show(+b.getAttribute("data-gw"));
-    });
-    show(cur);
-  }
-  // The week ahead on the pitch, as FPL's own Transfers page lays a squad
-  // out: all fifteen by position, two, five, five and three, each with his
-  // match beneath his name and FPL's colour for a knock or a ban. No armband
-  // and no bench: those are set in FPL and published only at the deadline,
-  // and the last week's would be a guess at this one.
-  function myNextHtml(nt) {
-    // FPL keeps a manager's transfers for the coming week to himself until
-    // the deadline: the public log has never once carried one, for any of
-    // the league, before it passed. So this is the last squad FPL has
-    // published, and says so, rather than claiming nothing has changed.
-    var h = '<div class="mthead"><b>Deadline: ' + esc(deadlineWords(nt.deadline)) + '</b><span>' +
-      (nt.changed ? num(nt.changed) + ' transfer' + (nt.changed === 1 ? '' : 's') + ' made for ' + esc(nt.name)
-        : 'Your Gameweek ' + nt.base + ' squad \u00b7 transfers show after the deadline') + '</span></div>';
-    var lines = [1, 2, 3, 4].map(function (t) {
-      return { players: nt.squad.filter(function (c) { return c.type === t; }).map(function (c) {
-        return { el: c.el, name: c.name, team: c.team, type: c.type, pos: c.pos, mult: 1, waiting: true, flag: c.flag,
-                 opp: c.fixtures.length ? c.fixtures.map(function (f) { return f.opp + " (" + (f.home ? "H" : "A") + ")"; }).join(" ")
-                   : "No match" };
-      }) };
-    });
-    h += pitchHtml({ lines: lines, bench: [] }, "pts", false);
-    h += '<div class="note" style="margin:12px 2px 0">The squad FPL last published for you, with each player\u2019s match ' +
-      'this week. Transfers, your eleven, captain and bench for ' + esc(nt.name) + ' are kept private by FPL until the ' +
-      'deadline; from then this week is its pitch, like every week before it.' +
-      (nt.next ? '' : ' Knocks and bans are FPL\u2019s for the coming week, so they show on that week alone.') + '</div>';
-    return h;
-  }
-
   // The card's GO | FPL switch redraws the card alone, and remembers.
   function wireCardSrc(host, ds, me, rec) {
     var sp = $(".fplcard .srcpill", host);
@@ -4960,7 +4859,6 @@
 
   function renderFpl(host, ds) {
     if (state.fplHistory) return renderFplHistory(host, ds);
-    if (state.fplMyTeam) return renderMyTeam(host, ds);
     if (state.fplTeam) return renderFplTeam(host, ds, state.fplTeam);
     state.fplTeamBar = null;
     if (state.fplLeague) return renderFplLeague(host, ds, state.fplLeague.kind, state.fplLeague.id);
@@ -5443,15 +5341,11 @@
   // The profile's head-to-head follows the squad: whichever week the squad
   // is showing, the match beside it is that week's. Set by renderProfile.
   var h2hSync = null;
-  // opts, from My Team: its own control in place of the picker (opts.picker,
-  // stepping a week either way), no Official/next switch, and the week shown
-  // is My Team's to remember (opts.remember), not the profile's.
-  function mountPitch(box, ds, id, gw, metric, swapped, opts) {
-    var again = function (g, m, s) { mountPitch(box, ds, id, g, m, s, opts); };
+  function mountPitch(box, ds, id, gw, metric, swapped) {
     // Between a gameweek settling and the next deadline a manager can already
     // own a different fifteen. The switch says which squad you are looking at,
     // and the official one is what it opens on.
-    var pd = opts ? null : K.pendingSquad(ds, id);
+    var pd = K.pendingSquad(ds, id);
     if (pd && state.pitchPending) {
       if (h2hSync) h2hSync(pd.gw);
       box.removeAttribute("data-bgw");
@@ -5473,14 +5367,11 @@
     // Turning the cards over only makes sense for the gameweek being shown,
     // so changing gameweek turns them back.
     swapped = !!swapped && !!pit.swaps;
-    if (opts) { if (opts.remember) opts.remember(+gw, metric); }
-    else {
-      state.pitchGw = +gw; state.pitchMetric = metric;
-      if (h2hSync) h2hSync(+gw);
-    }
+    state.pitchGw = +gw; state.pitchMetric = metric;
+    if (h2hSync) h2hSync(+gw);
 
     var h = '<div class="pgwline">';
-    h += opts ? opts.picker(+gw) : '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
+    h += '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
       return '<option value="' + g + '"' + (+g === +gw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
     }).join("") + '</select>';
     h += (pit.live ? ' <span class="pill live">Live</span>' : '') +
@@ -5525,22 +5416,23 @@
     box.innerHTML = (pd ? whenSwitch(pd, false) : "") + h;
     if (pd) wireWhen(box, ds, id, gw, metric, swapped, pd);
 
-    var sel = $("#pitchGwSel", box);
-    if (sel) sel.addEventListener("change", function () { again(+this.value, metric, false); });
+    $("#pitchGwSel", box).addEventListener("change", function () {
+      mountPitch(box, ds, id, +this.value, metric, false);
+    });
     $(".psegrow", box).addEventListener("click", function (e) {
       var b = e.target.closest("button[data-metric]");
-      if (b) again(gw, b.getAttribute("data-metric"), swapped);
+      if (b) mountPitch(box, ds, id, gw, b.getAttribute("data-metric"), swapped);
     });
     var swapBtn = $("#pitchSwap", box);
     if (swapBtn) swapBtn.addEventListener("click", function () {
-      again(gw, metric, !swapped);
+      mountPitch(box, ds, id, gw, metric, !swapped);
     });
     var sp = $(".srcrow .srcpill", box);
     if (sp) sp.addEventListener("click", function (e) {
       var b = e.target.closest("button[data-src]");
       if (!b || b.getAttribute("data-src") === src) return;
       lsSet("go12.src.squad", b.getAttribute("data-src"));
-      again(gw, metric, swapped);
+      mountPitch(box, ds, id, gw, metric, swapped);
     });
   }
 
