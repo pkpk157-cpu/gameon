@@ -4448,9 +4448,9 @@
   /* ---- My Team ---------------------------------------------------------------
      Your team, every gameweek. It opens on the week ahead: your squad as it
      stands, with the transfers you have made, each man's match that week and
-     how hard it is, FPL's flag on him and whether one booking would ban him.
-     A list, not a pitch: FPL publishes no eleven, captain or bench before the
-     deadline, and drawing one would be guessing. Every week already played is
+     FPL's flag on him, laid out on the pitch by position as FPL's Transfers
+     page does, since FPL publishes no eleven, captain or bench before the
+     deadline and drawing one would be guessing. Every week already played is
      the squad pitch the profile has, points, ownership and value, from the
      same picker. */
   function renderMyTeam(host, ds) {
@@ -4478,7 +4478,9 @@
       var picker = '<div class="pgwline"><select class="in gwsel" id="mtGwSel" aria-label="Gameweek">' +
         played.map(function (g) { return '<option value="' + g + '">Gameweek ' + g + '</option>'; }).join("") +
         '<option value="next" selected>' + esc(opts.next.label) + '</option></select></div>';
-      box.removeAttribute("data-bgw");
+      // a card tapped opens the player as your player, as on any pitch
+      box.setAttribute("data-bgw", nt.base);
+      box.setAttribute("data-bentry", me);
       box.innerHTML = picker + myNextHtml(nt);
       $("#mtGwSel", box).addEventListener("change", function () {
         if (this.value === "next") return;
@@ -4487,41 +4489,30 @@
     };
     if (state.myTeamGw === "next") drawNext();
     else mountPitch(box, ds, me, +state.myTeamGw, state.myTeamMetric || "pts", false, opts);
-    // a man in the week-ahead list opens his page, saying what you paid
-    box.addEventListener("click", function (e) {
-      var r = e.target.closest && e.target.closest(".mtrow[data-el]");
-      if (r) location.hash = "player/" + r.getAttribute("data-el") + "/" + nt.base + "/" + me;
-    });
   }
+  // The week ahead on the pitch, as FPL's own Transfers page lays a squad
+  // out: all fifteen by position, two, five, five and three, each with his
+  // match beneath his name and FPL's colour for a knock or a ban. No armband
+  // and no bench: those are set in FPL and published only at the deadline,
+  // and the last week's would be a guess at this one.
   function myNextHtml(nt) {
-    var GROUP = [[1, "Goalkeepers"], [2, "Defenders"], [3, "Midfielders"], [4, "Forwards"]];
     var h = '<div class="mthead"><b>Deadline: ' + esc(deadlineWords(nt.deadline)) + '</b><span>' +
       (nt.changed ? num(nt.changed) + ' transfer' + (nt.changed === 1 ? '' : 's') + ' made for ' + esc(nt.name)
         : 'No transfers made yet') + '</span></div>';
-    var row = function (c) {
-      var fx = c.fixtures.length ? c.fixtures.map(function (f) {
-        return '<span class="mtfx">' + crest(f.opp) + '<span class="mtopp">' + esc(f.opp) + ' <i>(' + (f.home ? "H" : "A") + ')</i></span>' +
-          fdrChip(f.fdr) + '</span>';
-      }).join("") : '<span class="mtfx none">No match</span>';
-      var note = c.banned ? '<span class="mtbad">' + esc(c.banned) + '</span>'
-        : c.flag ? '<span class="mtflag ' + c.flag.level + '">' + esc(c.flag.news || (c.flag.chance != null ? c.flag.chance + "% chance of playing" : "Doubtful")) + '</span>'
-        : c.ban ? '<span class="mtbad">One booking from a ' + c.ban.ban + '-match ban</span>' : '';
-      return '<div class="mtrow" data-el="' + c.el + '" role="button" tabindex="0">' +
-        '<span class="nwrap">' + faceBox(c.el, c.name, "sm") +
-        '<span class="ntxt"><span class="who">' + esc(c.name) + (c.isNew ? '<b class="pdnew">In</b>' : '') + '</span>' +
-        '<span class="mgr">' + esc(c.team) + ' \u00b7 ' + mval(c.price) + '</span>' + note + '</span></span>' +
-        '<span class="mtfxs">' + fx + '</span></div>';
-    };
-    GROUP.forEach(function (g) {
-      var men = nt.squad.filter(function (c) { return c.type === g[0]; });
-      if (!men.length) return;
-      h += '<div class="lab-sm mtgrp">' + esc(g[1]) + '</div><div class="card mtcard">' + men.map(row).join("") + '</div>';
+    var lines = [1, 2, 3, 4].map(function (t) {
+      return { players: nt.squad.filter(function (c) { return c.type === t; }).map(function (c) {
+        return { el: c.el, name: c.name, team: c.team, type: c.type, pos: c.pos, mult: 1, waiting: true, flag: c.flag,
+                 opp: c.fixtures.length ? c.fixtures.map(function (f) { return f.opp + " (" + (f.home ? "H" : "A") + ")"; }).join(" ")
+                   : "No match" };
+      }) };
     });
-    h += '<div class="note" style="margin:12px 2px 0">Your squad as it stands, the transfers you have made included. ' +
-      'Your eleven, captain and bench are set in FPL; FPL publishes them at the deadline, and from then this week is ' +
-      'its pitch, like every week before it.</div>';
+    h += pitchHtml({ lines: lines, bench: [] }, "pts", false);
+    h += '<div class="note" style="margin:12px 2px 0">Your squad as it stands, by position, with the transfers you have made ' +
+      '(read from FPL every hour). Your eleven, captain and bench are what you set in FPL; FPL publishes them at the ' +
+      'deadline, and from then this week is its pitch, like every week before it.</div>';
     return h;
   }
+
   // The card's GO | FPL switch redraws the card alone, and remembers.
   function wireCardSrc(host, ds, me, rec) {
     var sp = $(".fplcard .srcpill", host);
