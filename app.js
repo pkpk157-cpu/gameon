@@ -4476,14 +4476,14 @@
     var box = $("#myTeamBox", host);
     // Gameweek by gameweek, a step either way, as FPL's own app pages through them
     var arrow = function (dir, to) {
-      return '<button type="button" class="gwarr" data-gw="' + (to || "") + '"' + (to ? '' : ' disabled') +
+      return '<button type="button" class="mtarr" data-gw="' + (to || "") + '"' + (to ? '' : ' disabled') +
         ' aria-label="' + (dir < 0 ? 'Previous' : 'Next') + ' gameweek"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
         '<path d="' + (dir < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
     };
     var stepper = function (g) {
       var i = weeks.indexOf(+g);
-      return '<span class="gwstep">' + arrow(-1, weeks[i - 1]) +
-        '<span class="gwlab">Gameweek ' + g + (+g === nextGw ? ' \u00b7 next' : '') + '</span>' + arrow(1, weeks[i + 1]) + '</span>';
+      return '<span class="mtstep">' + arrow(-1, weeks[i - 1]) +
+        '<span class="mtlab">Gameweek ' + g + (+g === nextGw ? ' \u00b7 next' : '') + '</span>' + arrow(1, weeks[i + 1]) + '</span>';
     };
     var opts = {
       picker: stepper,
@@ -4499,7 +4499,7 @@
       box.innerHTML = '<div class="pgwline">' + stepper(g) + '</div>' + myNextHtml(nt);
     };
     box.addEventListener("click", function (e) {
-      var b = e.target.closest && e.target.closest(".gwarr[data-gw]");
+      var b = e.target.closest && e.target.closest(".mtarr[data-gw]");
       if (b && b.getAttribute("data-gw")) show(+b.getAttribute("data-gw"));
     });
     show(cur);

@@ -90,7 +90,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     await p.click(".fplcard .fcbtn"); await p.waitForTimeout(900);
     const read = () => p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent, sub: (document.querySelector("#barSub") || {}).textContent,
       back: getComputedStyle(document.querySelector("#barBack")).display !== "none", sel: !!document.querySelector("#myTeamBox select"),
-      lab: document.querySelector("#myTeamBox .gwlab").textContent, arrows: [...document.querySelectorAll("#myTeamBox .gwarr")].map((x) => !x.disabled),
+      lab: document.querySelector("#myTeamBox .mtlab").textContent, arrows: [...document.querySelectorAll("#myTeamBox .mtarr")].map((x) => !x.disabled),
       head: (document.querySelector(".mthead") || {}).textContent || "",
       rows: [...document.querySelectorAll("#myTeamBox .pitch .prow")].map((row) => [...row.querySelectorAll(".pcard")].map((c) => ({ el: +c.getAttribute("data-el"),
         name: c.querySelector(".pname").textContent, opp: c.querySelector(".ppts").textContent,
@@ -98,7 +98,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       marks: document.querySelectorAll("#myTeamBox .pb.cap, #myTeamBox .pb.vice, #myTeamBox .pbench").length,
       total: (document.querySelector("#myTeamBox .pstat.main .v") || {}).textContent || null,
       wide: document.documentElement.scrollWidth > innerWidth + 1 }));
-    const step = async (dir) => { await p.click("#myTeamBox .gwarr >> nth=" + (dir < 0 ? 0 : 1)); await p.waitForTimeout(450); return read(); };
+    const step = async (dir) => { await p.click("#myTeamBox .mtarr >> nth=" + (dir < 0 ? 0 : 1)); await p.waitForTimeout(450); return read(); };
     const pitchOf = (t) => [1, 2, 3, 4].map((ty) => t.squad.filter((c) => c.type === ty).map((c) => ({ el: c.el, name: c.name,
       opp: c.fixtures.length ? c.fixtures.map((f) => f.opp + " (" + (f.home ? "H" : "A") + ")").join(" ") : "No match", flag: c.flag ? c.flag.level : "" })));
     let pg = await read();
