@@ -4459,36 +4459,50 @@
       host.innerHTML = '<div class="callout">Choose your team in your profile to see it here.</div>';
       return;
     }
-    var nt = K.nextTeam(ds, me), gws = K.squadGws(ds);
-    var played = gws.filter(function (g) { return ds.picks[g] && ds.picks[g][me]; });
-    if (!nt && !played.length) {
+    // every week played, then every week still to come, in one run
+    var played = K.squadGws(ds).filter(function (g) { return ds.picks[g] && ds.picks[g][me]; });
+    var nd = K.nextDeadline(ds), nextGw = nd ? +nd.gw : null;
+    var ahead = nextGw && K.nextTeam(ds, me) ? ((ds.bootstrap && ds.bootstrap.events) || [])
+      .filter(function (e) { return +e.id >= nextGw && e.deadline_time && played.indexOf(+e.id) === -1; })
+      .map(function (e) { return +e.id; }).sort(function (x, y) { return x - y; }) : [];
+    var weeks = played.concat(ahead);
+    if (!weeks.length) {
       host.innerHTML = '<div class="callout">Your squad arrives with the next data sync.</div>';
       return;
     }
-    if (state.myTeamGw !== "next" && played.indexOf(+state.myTeamGw) === -1) state.myTeamGw = null;
-    if (!state.myTeamGw) state.myTeamGw = nt ? "next" : played[played.length - 1];
-    if (state.myTeamGw === "next" && !nt) state.myTeamGw = played[played.length - 1];
+    var cur = +state.myTeamGw;
+    if (weeks.indexOf(cur) === -1) cur = ahead.length ? ahead[0] : played[played.length - 1];
     host.innerHTML = '<div id="myTeamBox"></div>';
     var box = $("#myTeamBox", host);
+    // Gameweek by gameweek, a step either way, as FPL's own app pages through them
+    var arrow = function (dir, to) {
+      return '<button type="button" class="gwarr" data-gw="' + (to || "") + '"' + (to ? '' : ' disabled') +
+        ' aria-label="' + (dir < 0 ? 'Previous' : 'Next') + ' gameweek"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
+        '<path d="' + (dir < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    };
+    var stepper = function (g) {
+      var i = weeks.indexOf(+g);
+      return '<span class="gwstep">' + arrow(-1, weeks[i - 1]) +
+        '<span class="gwlab">Gameweek ' + g + (+g === nextGw ? ' \u00b7 next' : '') + '</span>' + arrow(1, weeks[i + 1]) + '</span>';
+    };
     var opts = {
-      next: nt ? { label: "Gameweek " + nt.gw + " \u00b7 next", go: function () { state.myTeamGw = "next"; drawNext(); } } : null,
+      picker: stepper,
       remember: function (g, metric) { state.myTeamGw = g; state.myTeamMetric = metric; }
     };
-    var drawNext = function () {
-      var picker = '<div class="pgwline"><select class="in gwsel" id="mtGwSel" aria-label="Gameweek">' +
-        played.map(function (g) { return '<option value="' + g + '">Gameweek ' + g + '</option>'; }).join("") +
-        '<option value="next" selected>' + esc(opts.next.label) + '</option></select></div>';
+    var show = function (g) {
+      state.myTeamGw = g;
+      if (ahead.indexOf(g) === -1) { mountPitch(box, ds, me, g, state.myTeamMetric || "pts", false, opts); return; }
+      var nt = K.nextTeam(ds, me, g);
       // a card tapped opens the player as your player, as on any pitch
       box.setAttribute("data-bgw", nt.base);
       box.setAttribute("data-bentry", me);
-      box.innerHTML = picker + myNextHtml(nt);
-      $("#mtGwSel", box).addEventListener("change", function () {
-        if (this.value === "next") return;
-        mountPitch(box, ds, me, +this.value, state.myTeamMetric || "pts", false, opts);
-      });
+      box.innerHTML = '<div class="pgwline">' + stepper(g) + '</div>' + myNextHtml(nt);
     };
-    if (state.myTeamGw === "next") drawNext();
-    else mountPitch(box, ds, me, +state.myTeamGw, state.myTeamMetric || "pts", false, opts);
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest(".gwarr[data-gw]");
+      if (b && b.getAttribute("data-gw")) show(+b.getAttribute("data-gw"));
+    });
+    show(cur);
   }
   // The week ahead on the pitch, as FPL's own Transfers page lays a squad
   // out: all fifteen by position, two, five, five and three, each with his
@@ -4513,7 +4527,8 @@
     h += pitchHtml({ lines: lines, bench: [] }, "pts", false);
     h += '<div class="note" style="margin:12px 2px 0">The squad FPL last published for you, with each player\u2019s match ' +
       'this week. Transfers, your eleven, captain and bench for ' + esc(nt.name) + ' are kept private by FPL until the ' +
-      'deadline; from then this week is its pitch, like every week before it.</div>';
+      'deadline; from then this week is its pitch, like every week before it.' +
+      (nt.next ? '' : ' Knocks and bans are FPL\u2019s for the coming week, so they show on that week alone.') + '</div>';
     return h;
   }
 
@@ -5428,9 +5443,9 @@
   // The profile's head-to-head follows the squad: whichever week the squad
   // is showing, the match beside it is that week's. Set by renderProfile.
   var h2hSync = null;
-  // opts, from My Team: its picker offers the week ahead too (opts.next, with
-  // what to do when it is chosen), there is no Official/next switch, and the
-  // week shown is My Team's to remember (opts.remember), not the profile's.
+  // opts, from My Team: its own control in place of the picker (opts.picker,
+  // stepping a week either way), no Official/next switch, and the week shown
+  // is My Team's to remember (opts.remember), not the profile's.
   function mountPitch(box, ds, id, gw, metric, swapped, opts) {
     var again = function (g, m, s) { mountPitch(box, ds, id, g, m, s, opts); };
     // Between a gameweek settling and the next deadline a manager can already
@@ -5464,13 +5479,10 @@
       if (h2hSync) h2hSync(+gw);
     }
 
-    // My Team keeps its own picker id: the profile's squad stays in the page
-    // behind it, and two elements may not share an id
-    var selId = opts ? "mtGwSel" : "pitchGwSel";
     var h = '<div class="pgwline">';
-    h += '<select class="in gwsel" id="' + selId + '" aria-label="Gameweek">' + gws.map(function (g) {
+    h += opts ? opts.picker(+gw) : '<select class="in gwsel" id="pitchGwSel" aria-label="Gameweek">' + gws.map(function (g) {
       return '<option value="' + g + '"' + (+g === +gw ? ' selected' : '') + '>Gameweek ' + g + '</option>';
-    }).join("") + (opts && opts.next ? '<option value="next">' + esc(opts.next.label) + '</option>' : '') + '</select>';
+    }).join("") + '</select>';
     h += (pit.live ? ' <span class="pill live">Live</span>' : '') +
       (pit.chip ? ' <span class="pill gold">' + esc(CHIP_NAME[pit.chip] || pit.chip) + '</span>' : '');
     h += '</div>';
@@ -5513,10 +5525,8 @@
     box.innerHTML = (pd ? whenSwitch(pd, false) : "") + h;
     if (pd) wireWhen(box, ds, id, gw, metric, swapped, pd);
 
-    $("#" + selId, box).addEventListener("change", function () {
-      if (this.value === "next" && opts && opts.next) { opts.next.go(); return; }
-      again(+this.value, metric, false);
-    });
+    var sel = $("#pitchGwSel", box);
+    if (sel) sel.addEventListener("change", function () { again(+this.value, metric, false); });
     $(".psegrow", box).addEventListener("click", function (e) {
       var b = e.target.closest("button[data-metric]");
       if (b) again(gw, b.getAttribute("data-metric"), swapped);

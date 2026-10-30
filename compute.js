@@ -4606,13 +4606,22 @@
      profile's next squad), each with his matches that gameweek, FPL's flag
      on him and how near he is to a ban. FPL publishes nobody's eleven,
      captain or bench before the deadline, so this is the squad, not a
-     lineup. No deadline ahead (the season over) or no squad: null. */
-  C.nextTeam = function (ds, id) {
+     lineup. No deadline ahead (the season over) or no squad: null.
+     A later week (want, any gameweek from the next to the last) is the same
+     squad against that week's fixtures and deadline. FPL's flags and the ban
+     count are about the coming match, so they are the coming week's alone. */
+  C.nextTeam = function (ds, id, want) {
     if (!ds || !id) return null;
     id = +id;
     var nd = C.nextDeadline(ds);
     if (!nd) return null;
-    var gw = +nd.gw;
+    var gw = +nd.gw, target = gw, name = nd.name, when = nd.when;
+    if (want != null && +want !== gw) {
+      var ev = ((ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === +want; })[0];
+      if (!ev || +want < gw || !ev.deadline_time) return null;
+      target = +want; name = ev.name || ("Gameweek " + target); when = Date.parse(ev.deadline_time);
+    }
+    var soon = target === gw;
     var held = (C.squadGws(ds) || []).filter(function (g) {
       return +g < gw && ds.picks[g] && ds.picks[g][id] && ds.picks[g][id].p && ds.picks[g][id].p.length;
     });
@@ -4626,7 +4635,7 @@
     } else {
       els = ds.picks[base][id].p.map(function (pk) { return +pk[0]; });
     }
-    var fx = (ds.gwFixtures || {})[gw] || [], S = C.suspensions(ds), meta = ds.elements || {};
+    var fx = (ds.gwFixtures || {})[target] || [], S = soon ? C.suspensions(ds) : null, meta = ds.elements || {};
     var squad = els.map(function (el) {
       var m = meta[el] || ["?", 0, "", 0], club = m[2], b = S && S.byId[el];
       var fixtures = [];
@@ -4636,13 +4645,13 @@
         fixtures.push({ opp: home ? f[1] : f[0], home: home, ko: f[7] || null, fdr: (home ? f[9] : f[10]) || 0 });
       });
       return { el: +el, name: m[0], type: m[1] || 0, pos: PPOS[m[1]] || "", team: club || "", price: m[3] || 0,
-               isNew: !!isNew[el], fixtures: fixtures, flag: C.availability(ds, el, null),
+               isNew: !!isNew[el], fixtures: fixtures, flag: soon ? C.availability(ds, el, null) : null,
                banned: b ? b.banned : null, ban: b && b.next && b.next.away === 1 ? b.next : null };
     });
     squad.sort(function (a, b) {
       return (a.type - b.type) || (b.price - a.price) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     });
-    return { gw: gw, name: nd.name, deadline: nd.when, base: base, changed: changed, logged: logged, squad: squad };
+    return { gw: target, next: soon, name: name, deadline: when, base: base, changed: changed, logged: logged, squad: squad };
   };
 
   window.GO_COMPUTE = C;

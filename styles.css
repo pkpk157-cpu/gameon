@@ -2611,6 +2611,12 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 .fcbtn { display:flex; align-items:center; justify-content:center; gap:10px; margin:14px 4px 0; padding:12px 16px;
   border-radius:999px; background:rgba(40,20,110,.38); color:#fff; font-size:16px; font-weight:700; text-decoration:none; }
 .fcbtn svg { flex:none; }
+/* My Team: a gameweek either way, as FPL's own app steps through them */
+.gwstep { display:inline-flex; align-items:center; gap:10px; vertical-align:middle; }
+.gwarr { appearance:none; width:36px; height:36px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+  border:1px solid var(--line); background:var(--chip); color:var(--ink); cursor:pointer; padding:0; }
+.gwarr:disabled { opacity:.35; cursor:default; }
+.gwlab { min-width:9.5em; text-align:center; font-size:14px; font-weight:800; color:var(--ink); white-space:nowrap; }
 /* My Team, the week ahead: the deadline and the transfers made, over the pitch */
 .mthead { display:flex; flex-direction:column; align-items:center; gap:2px; margin:2px 2px 12px; text-align:center; }
 .mthead b { font-size:14px; }

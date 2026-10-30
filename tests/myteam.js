@@ -4,9 +4,12 @@ const GOENV = require("./lib/env.js");
    matches that gameweek and their difficulty, FPL's flag on him and whether
    one booking would ban him; on the pitch by position, two, five, five and
    three, as FPL's Transfers page lays a squad out, with no armband and no
-   bench, since FPL publishes no eleven before the deadline. The same picker holds every week already played, each the
-   profile's squad pitch, without the profile's Official/next switch and
-   without moving the week the profile remembers. Back is FPL. */
+   bench, since FPL publishes no eleven before the deadline. Every later week
+   to the last is the same squad against that week's fixtures and deadline,
+   its knocks and bans left to the coming week. Arrows step a week either way
+   through every week played, each the profile's squad pitch, without the
+   profile's Official/next switch and without moving the week the profile
+   remembers. Back is FPL. */
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8784;
@@ -47,6 +50,19 @@ chk(off === 0, "every man's matches, difficulty, flag and ban as the fixtures, F
         "a transfer logged for the week ahead: the new man in and marked, the old one gone", t2 && J({ changed: t2.changed }));
   }
 }
+// a later week: the same squad, that week's fixtures and deadline, no knocks or bans
+{
+  const g2 = nd.gw + 1, ev2 = ds.bootstrap.events.find((e) => e.id === g2), t2 = K.nextTeam(ds, me, g2);
+  let off2 = 0;
+  (t2 ? t2.squad : []).forEach((c) => {
+    const club = ds.elements[c.el][2];
+    const fx = (ds.gwFixtures[g2] || []).filter((f) => f[0] === club || f[1] === club).map((f) => ({ opp: f[0] === club ? f[1] : f[0], home: f[0] === club }));
+    if (J(c.fixtures.map((f) => ({ opp: f.opp, home: f.home }))) !== J(fx) || c.flag || c.banned || c.ban) off2++;
+  });
+  chk(t2 && t2.gw === g2 && !t2.next && t2.deadline === Date.parse(ev2.deadline_time) && J(t2.squad.map((c) => c.el)) === J(nt.squad.map((c) => c.el)) && off2 === 0,
+      "a later week: the same squad against that week's fixtures and deadline, no knocks or bans", t2 && ("GW" + t2.gw + ", " + off2 + " differ"));
+  chk(K.nextTeam(ds, me, nd.gw - 1) === null && K.nextTeam(ds, me, 99) === null, "a week already played, or one that does not exist, is not a week ahead");
+}
 // the season over: no week ahead
 {
   const d3 = JSON.parse(J(ds)); d3.bootstrap.events.forEach((e) => { e.deadline_time = "2020-01-01T00:00:00Z"; });
@@ -72,32 +88,45 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     const btn = await p.evaluate(() => { const a = document.querySelector(".fplcard .fcbtn"); return a ? { t: a.textContent.trim(), icon: !!a.querySelector("svg path"), last: a === document.querySelector(".fplcard").lastElementChild, fits: a.getBoundingClientRect().right <= innerWidth } : null; });
     chk(btn && btn.t === "My Team" && btn.icon && btn.last && btn.fits, w + "px: the FPL card ends with a My Team button, its icon drawn", J(btn));
     await p.click(".fplcard .fcbtn"); await p.waitForTimeout(900);
-    const pg = await p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent, sub: (document.querySelector("#barSub") || {}).textContent,
-      back: getComputedStyle(document.querySelector("#barBack")).display !== "none",
-      sel: document.querySelector("#mtGwSel").value, opts: [...document.querySelectorAll("#mtGwSel option")].map((o) => o.value),
-      head: document.querySelector(".mthead").textContent,
+    const read = () => p.evaluate(() => ({ hash: location.hash, title: document.querySelector("#barTitle").textContent, sub: (document.querySelector("#barSub") || {}).textContent,
+      back: getComputedStyle(document.querySelector("#barBack")).display !== "none", sel: !!document.querySelector("#myTeamBox select"),
+      lab: document.querySelector("#myTeamBox .gwlab").textContent, arrows: [...document.querySelectorAll("#myTeamBox .gwarr")].map((x) => !x.disabled),
+      head: (document.querySelector(".mthead") || {}).textContent || "",
       rows: [...document.querySelectorAll("#myTeamBox .pitch .prow")].map((row) => [...row.querySelectorAll(".pcard")].map((c) => ({ el: +c.getAttribute("data-el"),
         name: c.querySelector(".pname").textContent, opp: c.querySelector(".ppts").textContent,
         flag: (c.querySelector(".pname").className.match(/flagged (\w+)/) || [])[1] || "" }))),
       marks: document.querySelectorAll("#myTeamBox .pb.cap, #myTeamBox .pb.vice, #myTeamBox .pbench").length,
+      total: (document.querySelector("#myTeamBox .pstat.main .v") || {}).textContent || null,
       wide: document.documentElement.scrollWidth > innerWidth + 1 }));
+    const step = async (dir) => { await p.click("#myTeamBox .gwarr >> nth=" + (dir < 0 ? 0 : 1)); await p.waitForTimeout(450); return read(); };
+    const pitchOf = (t) => [1, 2, 3, 4].map((ty) => t.squad.filter((c) => c.type === ty).map((c) => ({ el: c.el, name: c.name,
+      opp: c.fixtures.length ? c.fixtures.map((f) => f.opp + " (" + (f.home ? "H" : "A") + ")").join(" ") : "No match", flag: c.flag ? c.flag.level : "" })));
+    let pg = await read();
     chk(pg.hash === "#fpl/myteam" && pg.sub === "My Team" && pg.title === ds.managers[5].entryName && pg.back, w + "px: its own page, your team's name in the bar, back arrow", J({ hash: pg.hash, title: pg.title, sub: pg.sub }));
-    chk(pg.sel === "next" && J(pg.opts) === J(K.squadGws(ds).filter((g) => ds.picks[g][me]).map(String).concat(["next"])), w + "px: it opens on the week ahead; the picker holds every week played and the next", pg.opts.join(","));
+    chk(!pg.sel && pg.lab === "Gameweek " + nd.gw + " · next" && pg.arrows.join() === "true,true", w + "px: arrows, not a dropdown; it opens on the week ahead, a step either way", J({ lab: pg.lab, arrows: pg.arrows }));
     chk(pg.head.indexOf("Deadline: ") === 0 && (nt.changed ? pg.head.indexOf(nt.changed + " transfer") !== -1 : pg.head.indexOf("Your Gameweek " + nt.base + " squad · transfers show after the deadline") !== -1) && !/No transfers/.test(pg.head),
         w + "px: the deadline, and whose squad this is: never a claim that nothing has changed", pg.head);
-    const wantRows = [1, 2, 3, 4].map((t) => nt.squad.filter((c) => c.type === t).map((c) => ({ el: c.el, name: c.name,
-      opp: c.fixtures.length ? c.fixtures.map((f) => f.opp + " (" + (f.home ? "H" : "A") + ")").join(" ") : "No match",
-      flag: c.flag ? c.flag.level : "" })));
-    chk(J(pg.rows) === J(wantRows), w + "px: the pitch by position, every man with his match and FPL's colour for any knock or ban", pg.rows.map((r) => r.length).join("-") + "; first " + J(pg.rows[0] && pg.rows[0][0]));
+    chk(J(pg.rows) === J(pitchOf(nt)), w + "px: the pitch by position, every man with his match and FPL's colour for any knock or ban", pg.rows.map((r) => r.length).join("-") + "; first " + J(pg.rows[0] && pg.rows[0][0]));
     chk(pg.marks === 0 && !pg.wide, w + "px: no armband and no bench, which only FPL knows before the deadline; nothing wider than the screen", "marks " + pg.marks);
-    // a week played: the squad pitch, no Official/next switch, the week ahead still on offer
-    const past = K.squadGws(ds).filter((g) => ds.picks[g][me])[0];
-    await p.selectOption("#mtGwSel", String(past)); await p.waitForTimeout(700);
-    const pp = await p.evaluate(() => ({ pitch: !!document.querySelector("#myTeamBox .pitch"), sel: document.querySelector("#mtGwSel").value,
-      next: !!document.querySelector('#mtGwSel option[value="next"]'), when: !!document.querySelector("#pitchWhen"), total: (document.querySelector("#myTeamBox .pstat.main .v") || {}).textContent }));
-    chk(pp.pitch && pp.sel === String(past) && pp.next && !pp.when && pp.total === String(K.managerPitch(ds, me, past).net), w + "px: a week played is its pitch and points, the week ahead still in the picker", J(pp));
-    await p.selectOption("#mtGwSel", "next"); await p.waitForTimeout(500);
-    chk(await p.evaluate(() => document.querySelectorAll("#myTeamBox .pitch .pcard").length) === nt.squad.length, w + "px: and back to the week ahead");
+    // a week on: that week's fixtures, its own deadline, no knocks
+    pg = await step(1);
+    const t2 = K.nextTeam(ds, me, nd.gw + 1);
+    chk(pg.lab === "Gameweek " + (nd.gw + 1) && J(pg.rows) === J(pitchOf(t2)) && pg.head.indexOf("Deadline: ") === 0, w + "px: a week on, the same squad against that week's matches", pg.lab);
+    // back past the week ahead: the last week played, its pitch and points
+    await step(-1); pg = await step(-1);
+    const played = K.squadGws(ds).filter((g) => ds.picks[g][me]), last = played[played.length - 1];
+    chk(pg.lab === "Gameweek " + last && pg.total === String(K.managerPitch(ds, me, last).net) && !pg.sel && !(await p.evaluate(() => !!document.querySelector("#pitchWhen"))),
+        w + "px: a week back is the week played: its pitch and points, the arrows still there", J({ lab: pg.lab, total: pg.total }));
+    // the ends: the first week played and the last of the season
+    for (let i = 0; i < 45 && (await read()).arrows[0]; i++) await step(-1);
+    pg = await read();
+    chk(pg.lab === "Gameweek " + played[0] && pg.arrows.join() === "false,true", w + "px: the first week played has no step back", pg.lab);
+    for (let i = 0; i < 45 && (await read()).arrows[1]; i++) await step(1);
+    pg = await read();
+    const lastEv = Math.max(...ds.bootstrap.events.filter((e) => e.deadline_time).map((e) => e.id));
+    chk(pg.lab === "Gameweek " + lastEv && pg.arrows.join() === "true,false" && pg.rows.flat().length === nt.squad.length, w + "px: the season's last week has no step on, and still your squad", pg.lab);
+    // back to the week ahead, and a player opens as your player
+    for (let i = 0; i < 45 && (await read()).lab !== "Gameweek " + nd.gw + " · next"; i++) await step(-1);
     await p.click("#myTeamBox .pitch .pcard"); await p.waitForTimeout(700);
     chk(await p.evaluate(() => location.hash) === "#player/" + nt.squad[0].el + "/" + nt.base + "/" + me, w + "px: a player opens his page, as your player", await p.evaluate(() => location.hash));
     await p.goBack(); await p.waitForTimeout(700);
