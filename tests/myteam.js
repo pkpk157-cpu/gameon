@@ -83,7 +83,8 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       wide: document.documentElement.scrollWidth > innerWidth + 1 }));
     chk(pg.hash === "#fpl/myteam" && pg.sub === "My Team" && pg.title === ds.managers[5].entryName && pg.back, w + "px: its own page, your team's name in the bar, back arrow", J({ hash: pg.hash, title: pg.title, sub: pg.sub }));
     chk(pg.sel === "next" && J(pg.opts) === J(K.squadGws(ds).filter((g) => ds.picks[g][me]).map(String).concat(["next"])), w + "px: it opens on the week ahead; the picker holds every week played and the next", pg.opts.join(","));
-    chk(pg.head.indexOf("Deadline: ") === 0 && (nt.changed ? pg.head.indexOf(nt.changed + " transfer") !== -1 : /No transfers made yet/.test(pg.head)), w + "px: the deadline, and the transfers made", pg.head);
+    chk(pg.head.indexOf("Deadline: ") === 0 && (nt.changed ? pg.head.indexOf(nt.changed + " transfer") !== -1 : pg.head.indexOf("Your Gameweek " + nt.base + " squad · transfers show after the deadline") !== -1) && !/No transfers/.test(pg.head),
+        w + "px: the deadline, and whose squad this is: never a claim that nothing has changed", pg.head);
     const wantRows = [1, 2, 3, 4].map((t) => nt.squad.filter((c) => c.type === t).map((c) => ({ el: c.el, name: c.name,
       opp: c.fixtures.length ? c.fixtures.map((f) => f.opp + " (" + (f.home ? "H" : "A") + ")").join(" ") : "No match",
       flag: c.flag ? c.flag.level : "" })));

@@ -4496,9 +4496,13 @@
   // and no bench: those are set in FPL and published only at the deadline,
   // and the last week's would be a guess at this one.
   function myNextHtml(nt) {
+    // FPL keeps a manager's transfers for the coming week to himself until
+    // the deadline: the public log has never once carried one, for any of
+    // the league, before it passed. So this is the last squad FPL has
+    // published, and says so, rather than claiming nothing has changed.
     var h = '<div class="mthead"><b>Deadline: ' + esc(deadlineWords(nt.deadline)) + '</b><span>' +
       (nt.changed ? num(nt.changed) + ' transfer' + (nt.changed === 1 ? '' : 's') + ' made for ' + esc(nt.name)
-        : 'No transfers made yet') + '</span></div>';
+        : 'Your Gameweek ' + nt.base + ' squad \u00b7 transfers show after the deadline') + '</span></div>';
     var lines = [1, 2, 3, 4].map(function (t) {
       return { players: nt.squad.filter(function (c) { return c.type === t; }).map(function (c) {
         return { el: c.el, name: c.name, team: c.team, type: c.type, pos: c.pos, mult: 1, waiting: true, flag: c.flag,
@@ -4507,9 +4511,9 @@
       }) };
     });
     h += pitchHtml({ lines: lines, bench: [] }, "pts", false);
-    h += '<div class="note" style="margin:12px 2px 0">Your squad as it stands, by position, with the transfers you have made ' +
-      '(read from FPL every hour). Your eleven, captain and bench are what you set in FPL; FPL publishes them at the ' +
-      'deadline, and from then this week is its pitch, like every week before it.</div>';
+    h += '<div class="note" style="margin:12px 2px 0">The squad FPL last published for you, with each player\u2019s match ' +
+      'this week. Transfers, your eleven, captain and bench for ' + esc(nt.name) + ' are kept private by FPL until the ' +
+      'deadline; from then this week is its pitch, like every week before it.</div>';
     return h;
   }
 
