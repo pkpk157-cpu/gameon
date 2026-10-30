@@ -4600,5 +4600,50 @@
     return res;
   };
 
+  /* ---- your team for the gameweek ahead ------------------------------------
+     The fifteen you will own at the next deadline: your newest squad with
+     the transfers you have logged since applied (the same reading as the
+     profile's next squad), each with his matches that gameweek, FPL's flag
+     on him and how near he is to a ban. FPL publishes nobody's eleven,
+     captain or bench before the deadline, so this is the squad, not a
+     lineup. No deadline ahead (the season over) or no squad: null. */
+  C.nextTeam = function (ds, id) {
+    if (!ds || !id) return null;
+    id = +id;
+    var nd = C.nextDeadline(ds);
+    if (!nd) return null;
+    var gw = +nd.gw;
+    var held = (C.squadGws(ds) || []).filter(function (g) {
+      return +g < gw && ds.picks[g] && ds.picks[g][id] && ds.picks[g][id].p && ds.picks[g][id].p.length;
+    });
+    if (!held.length) return null;
+    var base = +held[held.length - 1];
+    var pd = C.pendingSquad(ds, id), els, isNew = {}, changed = 0, logged = 0;
+    if (pd && +pd.gw === gw) {
+      els = pd.squad.map(function (c) { return c.el; });
+      pd.squad.forEach(function (c) { if (c.isNew) isNew[c.el] = 1; });
+      changed = pd.changed; logged = pd.logged; base = gw - 1;
+    } else {
+      els = ds.picks[base][id].p.map(function (pk) { return +pk[0]; });
+    }
+    var fx = (ds.gwFixtures || {})[gw] || [], S = C.suspensions(ds), meta = ds.elements || {};
+    var squad = els.map(function (el) {
+      var m = meta[el] || ["?", 0, "", 0], club = m[2], b = S && S.byId[el];
+      var fixtures = [];
+      fx.forEach(function (f) {
+        if (f[0] !== club && f[1] !== club) return;
+        var home = f[0] === club;
+        fixtures.push({ opp: home ? f[1] : f[0], home: home, ko: f[7] || null, fdr: (home ? f[9] : f[10]) || 0 });
+      });
+      return { el: +el, name: m[0], type: m[1] || 0, pos: PPOS[m[1]] || "", team: club || "", price: m[3] || 0,
+               isNew: !!isNew[el], fixtures: fixtures, flag: C.availability(ds, el, null),
+               banned: b ? b.banned : null, ban: b && b.next && b.next.away === 1 ? b.next : null };
+    });
+    squad.sort(function (a, b) {
+      return (a.type - b.type) || (b.price - a.price) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    });
+    return { gw: gw, name: nd.name, deadline: nd.when, base: base, changed: changed, logged: logged, squad: squad };
+  };
+
   window.GO_COMPUTE = C;
 })();
