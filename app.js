@@ -5732,42 +5732,55 @@
     var S = K.snapshot(ds, id);
     if (!S) return "";
     var mv = function (d) {
-      return d > 0 ? ' <b class="move up">' + num(d) + '</b>' : d < 0 ? ' <b class="move down">' + num(-d) + '</b>' : '';
+      return d > 0 ? '<b class="move up">' + num(d) + '</b>' : d < 0 ? '<b class="move down">' + num(-d) + '</b>' : '';
     };
-    // in FPL's colours on every profile, the same as your card on FPL
+    // In FPL's colours on every profile, the same as your card on FPL.
+    // The two scores as a scoreboard, the two ranks side by side, then the
+    // rest of the season as plain label-and-value rows.
     var h = '<div class="card snap">';
+    // the week against Game On's average, from the two figures shown (the
+    // average is a whole number, so the difference is exactly theirs)
+    var vs = "";
+    if (S.gwPoints != null && S.leagueAvg != null) {
+      var d = S.gwPoints - S.leagueAvg;
+      vs = '<div class="snapvs">GO avg ' + num(S.leagueAvg) + ' \u00b7 ' +
+        (d > 0 ? '<b class="up">+' + num(d) + '</b>' : d < 0 ? '<b class="down">\u2212' + num(-d) + '</b>' : '<b>level</b>') + '</div>';
+    }
     h += '<div class="snaphead">' +
       '<div class="snapstat"><div class="v">' + num(S.total) + '</div><div class="l">Total points</div></div>' +
       '<div class="snapstat"><div class="v">' + (S.gwPoints == null ? "\u2013" : num(S.gwPoints)) + '</div>' +
-        '<div class="l">' + (S.gw ? "GW" + S.gw : "This week") +
-        (S.leagueAvg == null ? '' : ' \u00b7 GO avg ' + num(S.leagueAvg)) + '</div></div>' +
+        '<div class="l">' + (S.gw ? "GW" + S.gw + " points" : "This week") + '</div>' + vs + '</div>' +
       '</div>';
-    // Two lines, FPL's rank first: the label, the number, and how it moved
-    // since last gameweek. No arrow when it did not move.
+    // FPL's rank first: the label, the number, and how it moved since last
+    // gameweek. No arrow when it did not move.
     var rank = function (k, v, d) {
       return '<div class="snaprank"><span class="k">' + k + '</span><b class="n">' + v + '</b>' + mv(d) + '</div>';
     };
     h += '<div class="snapranks">' +
-      (S.overall == null ? '' : rank("Overall", num(S.overall), S.overallMove || 0)) +
-      rank("GO", ordinal(S.rank), S.move) +
+      (S.overall == null ? '' : rank("Overall rank", num(S.overall), S.overallMove || 0)) +
+      rank("GO rank", ordinal(S.rank), S.move) +
       '</div>';
-    var tiles = [];
-    if (S.hits != null) {
-      tiles.push(pcard("Hits", S.hits ? "\u2212" + num(S.hits) : "0",
-        S.transfers === 1 ? "1 transfer" : num(S.transfers) + " transfers"));
-    }
-    if (S.bench != null) tiles.push(pcard("On the bench", num(S.bench), "points left there"));
-    if (S.best) tiles.push(pcard("Best week", num(S.best.points), "GW" + S.best.gw));
+    var rows = [];
+    var row = function (k, v, s) {
+      rows.push('<div class="snaprow"><span class="k">' + esc(k) + '</span><span class="sv"><b class="v">' + esc(v) + '</b>' +
+        (s ? '<i class="s">' + esc(s) + '</i>' : '') + '</span></div>');
+    };
+    if (S.best) row("Best week", num(S.best.points), "GW" + S.best.gw);
     if (S.leading) {
-      tiles.push(pcard("Off the top", "Leading", S.tied ? "shared 1st" : (S.lead == null ? "" : "by " + num(S.lead))));
+      row("Off the top", "Leading", S.tied ? "shared 1st" : (S.lead == null ? "" : "by " + num(S.lead)));
     } else {
-      tiles.push(pcard("Off the top", num(S.behindLeader),
+      row("Off the top", num(S.behindLeader),
         S.tied ? "shared " + ordinal(S.rank)
-               : (S.above && S.above.rank > 1 ? num(S.above.gap) + " off " + ordinal(S.above.rank) : ordinal(S.rank) + " place")));
+               : (S.above && S.above.rank > 1 ? num(S.above.gap) + " off " + ordinal(S.above.rank) : ordinal(S.rank) + " place"));
     }
-    tiles.push(pcard("Chips", S.chipPlays ? num(S.chipPlays) + " played" : "None yet", S.chipPlays ? S.chipNames : "all in hand"));
-    if (S.value != null) tiles.push(pcard("Squad", mval(S.value), S.bank == null ? "" : mval(S.bank) + " in the bank"));
-    h += '<div class="snapgrid">' + tiles.join("") + '</div></div>';
+    if (S.bench != null) row("On the bench", num(S.bench), "points left there");
+    if (S.hits != null) {
+      row("Hits", S.hits ? "\u2212" + num(S.hits) : "0",
+        S.transfers === 1 ? "1 transfer" : num(S.transfers) + " transfers");
+    }
+    row("Chips", S.chipPlays ? num(S.chipPlays) + " played" : "None yet", S.chipPlays ? S.chipNames : "all in hand");
+    if (S.value != null) row("Squad", mval(S.value), S.bank == null ? "" : mval(S.bank) + " in the bank");
+    h += '<div class="snaplist">' + rows.join("") + '</div></div>';
     return h;
   }
 

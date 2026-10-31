@@ -75,7 +75,7 @@ const probe = ids.filter((_, i) => i % 12 === 5);
     await go("profile/" + id, ".card.snap .snapstat .v");
     const pf = await p.evaluate(() => {
       const st = [...document.querySelectorAll(".card.snap .snapstat")].map((x) => ({ v: x.querySelector(".v").textContent, l: x.querySelector(".l").textContent }));
-      const go = [...document.querySelectorAll(".snaprank")].find((x) => x.querySelector(".k").textContent === "GO");
+      const go = [...document.querySelectorAll(".snaprank")].find((x) => x.querySelector(".k").textContent === "GO rank");
       const prize = {}; document.querySelectorAll("table.prizetbl tr").forEach((tr) => {
         const k = tr.querySelector(".pcomp b").textContent; prize[k] = { pos: tr.querySelector(".ppos").textContent, where: tr.querySelector(".pcomp .mgr").textContent,
           pill: (tr.querySelector(".pstate .pill") || {}).textContent }; });

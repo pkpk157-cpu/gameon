@@ -20,14 +20,17 @@ const ord = (n) => { const s = ["th","st","nd","rd"], v = n % 100; return n + (s
 const read = (p) => p.evaluate(() => {
   const c = document.querySelector('[data-view="profile"] .snap'); if (!c) return null;
   const t = (s, root) => { const e = (root || c).querySelector(s); return e ? e.textContent.replace(/\s+/g, " ").trim() : null; };
-  const tiles = {}; c.querySelectorAll(".snapgrid .pc").forEach((pc) => { tiles[t(".pcl", pc)] = { v: t(".pcv", pc), s: t(".pcs", pc) }; });
+  // the season rows: label, value, note; and their order
+  const tiles = {}, rowOrder = []; c.querySelectorAll(".snaplist .snaprow").forEach((r) => { const k = t(".k", r); rowOrder.push(k); tiles[k] = { v: t(".v", r), s: t(".s", r) }; });
   // the two rank lines: Overall first, then GO
   const pills = [...c.querySelectorAll(".snapranks .snaprank")].map((x) => ({ text: x.textContent.replace(/\s+/g, " ").trim(),
     k: x.querySelector(".k").textContent, n: x.querySelector(".n").textContent,
     up: !!x.querySelector(".move.up"), down: !!x.querySelector(".move.down") }));
   const view = document.querySelector('[data-view="profile"]');
+  const vsb = c.querySelector(".snapstat:nth-child(2) .snapvs b");
   return { total: t(".snapstat:nth-child(1) .v"), gw: t(".snapstat:nth-child(2) .v"), gwl: t(".snapstat:nth-child(2) .l"),
-    pills, tiles, // the sticky section strip is the view's first node by design; the card comes right after it
+    vs: t(".snapstat:nth-child(2) .snapvs"), vsUp: !!(vsb && vsb.classList.contains("up")), vsDown: !!(vsb && vsb.classList.contains("down")),
+    pills, tiles, rowOrder, // the sticky section strip is the view's first node by design; the card comes right after it
     first: (() => { const kids = [...view.children].filter((e) => !e.classList.contains("pchipsbar")); return !!kids[0] && kids[0].classList.contains("snap"); })(),
     order: [...view.children].filter((e) => !e.classList.contains("pchipsbar")).map((e) => e.className.split(" ")[0] + (e.id ? "#" + e.id : "")).slice(0, 4) };
 });
@@ -84,9 +87,13 @@ const expect = (p, id) => p.evaluate((id) => {
     console.log("-- " + who + " " + ids[who]);
     chk(got && got.first, who + ": the card is the first thing on the page", got && JSON.stringify(got.order));
     chk(got.total === num(exp.total), who + ": total points", got.total + " vs " + exp.total);
-    chk(got.gw === num(exp.ev) && got.gwl === "GW" + exp.gw + " · GO avg " + num(exp.avg), who + ": this gameweek and Game On's average, labelled GO", got.gw + " " + got.gwl);
+    chk(got.gw === num(exp.ev) && got.gwl === "GW" + exp.gw + " points", who + ": this gameweek's points", got.gw + " " + got.gwl);
+    const dd = exp.ev - exp.avg;
+    chk(got.vs === "GO avg " + num(exp.avg) + " · " + (dd > 0 ? "+" + num(dd) : dd < 0 ? "−" + num(-dd) : "level") && got.vsUp === dd > 0 && got.vsDown === dd < 0,
+        who + ": Game On's average, labelled GO, and the week against it", got.vs + " (" + exp.ev + " vs " + exp.avg + ")");
+    chk(JSON.stringify(got.rowOrder) === JSON.stringify(["Best week", "Off the top", "On the bench", "Hits", "Chips", "Squad"]), who + ": the season rows, in order", JSON.stringify(got.rowOrder));
     chk(exp.evNet, who + ": the gameweek figure is net of hits (" + exp.hit + " off)", got.gw);
-    chk(got.pills.length === 2 && got.pills[0].k === "Overall" && got.pills[1].k === "GO", who + ": Overall first, then GO", JSON.stringify(got.pills.map((x) => x.k)));
+    chk(got.pills.length === 2 && got.pills[0].k === "Overall rank" && got.pills[1].k === "GO rank", who + ": Overall first, then GO", JSON.stringify(got.pills.map((x) => x.k)));
     chk(got.pills[1].n === ord(exp.rank) && got.pills[1].text.indexOf("=") < 0, who + ": GO rank in words, never with an =", got.pills[1].text);
     chk(got.pills[1].up === exp.move > 0 && got.pills[1].down === exp.move < 0, who + ": GO movement direction", JSON.stringify(got.pills[1]) + " move " + exp.move);
     chk(got.pills[0].n === num(exp.overall) && got.pills[0].up === exp.omove > 0 && got.pills[0].down === exp.omove < 0 &&
