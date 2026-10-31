@@ -14,17 +14,21 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
   fs.readFile(path.join(APP, u), (e, b) => { if (e) { r.writeHead(404); r.end(); return; }
     r.writeHead(200, { "content-type": T[path.extname(u)] || "text/plain", "cache-control": "no-store" }); r.end(b); }); });
 let fails = 0;
-// Between a deadline and the first kick-off the newest week has no scores:
-// its Gameweek tab says when they start, and the tiles are read off the week
-// before. Returns the week it moved off, or null.
+// Between a deadline and the first kick-off the newest week has no scores.
+// Stats opens on the newest week that has some; the new one, picked, says
+// when its scores start and shows no tiles. Returns what it saw, or null
+// when every week in the picker has kicked off.
 const offAhead = async (p) => p.evaluate(() => {
   const ds = window.GO_STORE.dataset(), C = window.GO_COMPUTE, sel = document.querySelector("#stGwSel");
-  if (!sel || !C.gwAhead(ds, +sel.value)) return null;
-  const from = +sel.value, box = document.querySelector("#stBox");
+  if (!sel) return null;
+  const opts = [...sel.options].map((o) => +o.value), last = Math.max.apply(null, opts);
+  if (!C.gwAhead(ds, last)) return null;
+  const def = +sel.value, kicked = opts.filter((g) => !C.gwAhead(ds, g));
+  sel.value = String(last); sel.dispatchEvent(new Event("change", { bubbles: true }));
+  const box = document.querySelector("#stBox");
   const said = !!box && /hasn\u2019t kicked off yet/.test(box.textContent) && !box.querySelector(".hcard");
-  const kicked = [...sel.options].map((o) => +o.value).filter((g) => !C.gwAhead(ds, g));
-  sel.value = String(Math.max.apply(null, kicked)); sel.dispatchEvent(new Event("change", { bubbles: true }));
-  return { from, said };
+  sel.value = String(def); sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return { from: last, def, said: said && def === Math.max.apply(null, kicked) };
 });
 const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? "  " + x : "")); if (!ok) fails++; };
 const digits = (s) => String(s).replace(/[^\d.,]/g, "").replace(/,/g, "");
@@ -38,7 +42,7 @@ const digits = (s) => String(s).replace(/[^\d.,]/g, "").replace(/,/g, "");
     await p.goto("http://localhost:" + PORT + "/index.html#stats", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(1500);
     await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(300);
     const off = await offAhead(p); await p.waitForTimeout(300);
-    if (off) chk(off.said, w + ": GW" + off.from + " not kicked off: its tab says so, with no tiles", JSON.stringify(off));
+    if (off) chk(off.said, w + ": GW" + off.from + " not kicked off: Stats opens on GW" + off.def + ", and GW" + off.from + " says when it starts, with no tiles", JSON.stringify(off));
     // the series agrees with the tab, week by week
     const agree = await p.evaluate(() => {
       const ds = window.GO_STORE.dataset(), C = window.GO_COMPUTE, S = C.gwSeries(ds);

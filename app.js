@@ -6896,7 +6896,12 @@
     }).map(function (e) { return e.id; });
     if (!all.length) all = K.squadGws(ds);
     if (!all.length) { host.innerHTML = '<div class="callout">No gameweeks played yet.</div>'; return; }
-    if (!state.statsGw || all.indexOf(+state.statsGw) === -1) state.statsGw = all[all.length - 1];
+    if (!state.statsGw || all.indexOf(+state.statsGw) === -1) {
+      // the newest week with a ball kicked: between a deadline and the first
+      // match the new one has nothing to show yet, and is a tap away
+      var kicked = all.filter(function (g) { return !K.gwAhead(ds, g); });
+      state.statsGw = kicked.length ? kicked[kicked.length - 1] : all[all.length - 1];
+    }
     if (!STAT_TABS.some(function (t) { return t.k === state.statsTab; })) state.statsTab = "gw";
 
     // Each page is reached from the profile sheet and named in the bar, so
