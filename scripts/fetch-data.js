@@ -100,9 +100,44 @@ async function pool(items, worker, concurrency = 6) {
   });
 }
 
-async function classicAll() { return classicOf(CLASSIC); }
+async function classicAll(prevRoster) { return classicOf(CLASSIC, prevRoster); }
 
-async function classicOf(leagueId) {
+// FPL's standings come fifty to a page, and while a gameweek is live the ranks
+// move between one page's read and the next. A manager who climbs across a
+// page edge after his new page was read is missed, and the one he pushed down
+// is read twice: from the first match of GW9 (31 Oct) every run held one
+// manager twice and lost another. The pages always add up to the league, so a
+// read with a repeat in it is a read of a moving table: read it again, up to
+// three times. If it never holds still, keep each manager once and carry the
+// ones it missed from the last roster published, as an outage does; during a
+// live week every figure on the table is rebuilt from the histories anyway.
+async function classicOf(leagueId, prevRoster, pause = 3000) {
+  let got = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    got = await classicPages(leagueId);
+    const ids = got.managers.map((m) => m.id);
+    const repeats = ids.length - new Set(ids).size;
+    if (!repeats) return got;
+    console.log("  league " + leagueId + ": the table moved while it was read (" + repeats + " read twice) — " +
+      (attempt < 3 ? "reading it again" : "keeping each manager once"));
+    if (attempt < 3) await sleep(pause);
+  }
+  const seen = new Set(), managers = [];
+  got.managers.forEach((m) => { if (!seen.has(m.id)) { seen.add(m.id); managers.push(m); } });
+  const lost = got.managers.length - managers.length;
+  const missed = (prevRoster || []).filter((m) => !seen.has(+m.id));
+  // as many missed as were read twice is a table that moved and nothing else;
+  // anything else is not something to guess at
+  if (missed.length && missed.length === lost) {
+    console.log("  carried from the last roster: " + missed.map((m) => m.id).join(", "));
+    missed.forEach((m) => managers.push(Object.assign({}, m)));
+  } else if (lost) {
+    console.log("  " + lost + " manager(s) missed and the last roster does not say who; publishing each once");
+  }
+  return { managers, name: got.name };
+}
+
+async function classicPages(leagueId) {
   let all = [], name = "";
   for (let page = 1; ; page++) {
     const d = await getJSON("/leagues-classic/" + leagueId + "/standings/?page_standings=" + page);
@@ -311,7 +346,7 @@ function histRow(c) {
   if (c.percentile_rank != null && c.percentile_rank !== "") row.pc = Number(c.percentile_rank);
   return row;
 }
-module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf, histRow };
+module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf, histRow, classicOf };
 
 if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
@@ -337,7 +372,7 @@ if (require.main === module) (async () => {
   console.log("Fetching classic league…");
   let managers, name, rosterAsOf = null;
   try {
-    const lg = await classicAll();
+    const lg = await classicAll(prev.managers);
     managers = lg.managers;
     name = lg.name;
   } catch (e) {
@@ -348,7 +383,9 @@ if (require.main === module) (async () => {
     // the last one forward and keep going; every number on it is rebuilt from
     // the histories fetched next, which come from a different endpoint.
     if (!(prev.managers && prev.managers.length)) throw e;
-    managers = prev.managers.map((m) => Object.assign({}, m));
+    // each once: a roster published from a table read mid-move held a repeat
+    const once = new Set();
+    managers = prev.managers.filter((m) => !once.has(+m.id) && once.add(+m.id)).map((m) => Object.assign({}, m));
     name = (prev.league && prev.league.name) || "";
     rosterAsOf = prev.updatedAt || null;
     console.log("  standings unavailable (" + (e && e.message) + ") — carrying " +
