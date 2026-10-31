@@ -1003,8 +1003,10 @@
     rows.forEach(function (r, i) { if (+r.id === id) { me = r; idx = i; } });
     if (!me || typeof me.total !== "number") return null;
     var counted = rows.filter(function (r) { return typeof r.eventTotal === "number"; });
+    // `|| 0`: between a deadline and the first goal the only points are hits,
+    // and an average of -0.4 rounds to -0, which prints as "-0"
     var avg = counted.length
-      ? Math.round(counted.reduce(function (s, r) { return s + r.eventTotal; }, 0) / counted.length) : null;
+      ? Math.round(counted.reduce(function (s, r) { return s + r.eventTotal; }, 0) / counted.length) || 0 : null;
     var H = (ds.history && ds.history[id]) || null;
     var gws = H ? Object.keys(H).map(Number).filter(function (g) { return H[g] && typeof H[g].p === "number"; })
                     .sort(function (a, b) { return a - b; }) : [];
@@ -1901,7 +1903,7 @@
       sum += sc; n++;
       if (!top || sc > top.pts) top = { id: m.id, name: m.entryName, pts: sc };
     });
-    return { average: n ? Math.round(sum / n) : null, highest: top };
+    return { average: n ? Math.round(sum / n) || 0 : null, highest: top }; // never -0, as above
   };
   C.fplGwFigures = function (ds, gw) {
     var ev = ((ds && ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === +gw; })[0] || {};
@@ -2117,7 +2119,7 @@
       var sum = 0, hitTotal = 0, benchTotal = 0, trTotal = 0;
       rows.forEach(function (r) { sum += r.p; hitTotal += r.hits; benchTotal += r.bench; trTotal += r.transfers; });
       var mid = sorted[Math.floor(sorted.length / 2)];
-      var avg = Math.round(sum / rows.length);
+      var avg = Math.round(sum / rows.length) || 0; // never -0
       gwStats = {
         gw: +gw, count: rows.length,
         top: sorted[0], second: sorted[1] || null, low: sorted[sorted.length - 1],

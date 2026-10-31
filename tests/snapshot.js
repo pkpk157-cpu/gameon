@@ -16,6 +16,27 @@ const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? 
 const num = (n) => Number(n).toLocaleString("en-US");
 const ord = (n) => { const s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v-20)%10] || s[v] || s[0]); };
 
+// Between a deadline and the first goal the only points are hits, so Game
+// On's average for the week can sit between -0.5 and 0, which rounds to -0
+// and prints as "-0". Every gameweek average comes out as 0 there instead.
+{
+  const H = require(path.join(APP, "tests/audit/harness.js"));
+  const L = H.loadCompute(), C0 = L.C, d0 = L.ds;
+  const gw = C0.currentGw(d0) || 1, ids = d0.managers.map((m) => m.id);
+  // a week of hits only: 24 managers at -4 and one at -2, the rest 0, so -98 over the league
+  ids.forEach((id, i) => { const h = d0.history[id] || (d0.history[id] = {}); h[gw] = Object.assign({}, h[gw] || {}, { p: i === 24 ? -2 : 0, h: i < 24 ? 4 : 0 }); });
+  const nz = (v) => Object.is(v, -0);
+  const G = C0.goGwFigures(d0, gw);
+  const rows = ids.map((id, i) => ({ id, total: 500, eventTotal: i < 24 ? -4 : i === 24 ? -2 : 0, computedRank: i + 1, move: 0, tiedWith: 1 }));
+  const realClassic = C0.classic; C0.classic = () => rows;
+  let S = null; try { S = C0.snapshot(d0, ids[30]); } catch (e) { S = { err: e.message }; }
+  C0.classic = realClassic;
+  const HL = C0.highlights ? C0.highlights(d0, gw) : null;
+  const hAvg = HL && HL.gwStats ? HL.gwStats.average : 0;
+  chk(!nz(G.average) && !nz(S && S.leagueAvg) && !nz(hAvg),
+      "an average of -0.4 for the week reads 0, never -0", JSON.stringify({ goGw: G.average, card: S && S.leagueAvg, stats: hAvg }));
+}
+
 // what the card shows, read back as text
 const read = (p) => p.evaluate(() => {
   const c = document.querySelector('[data-view="profile"] .snap'); if (!c) return null;
