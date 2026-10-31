@@ -75,10 +75,15 @@ gws.filter((g) => g <= +ds.pitchGw).forEach((g) => {
   });
   const sumB = M.go.bought.reduce((s, x) => s + x.n, 0), sumS = M.go.sold.reduce((s, x) => s + x.n, 0);
   const lp = ds.livePoints[g] || {};
-  const bOk = M.go.bought.every((x) => x.pts === (lp[x.el] || 0)) && M.go.sold.every((x) => x.pts === (lp[x.el] || 0));
+  // locked with nothing kicked off: no points beside the players, nothing judged
+  const ahead = !!K.gwAhead(ds, g);
+  const bOk = ahead ? M.go.bought.every((x) => x.pts === null) && M.go.sold.every((x) => x.pts === null) && !!M.ahead
+    : M.go.bought.every((x) => x.pts === (lp[x.el] || 0)) && M.go.sold.every((x) => x.pts === (lp[x.el] || 0)) && !M.ahead;
   const P = M.go.paid, HP = M.go.hitsPaid;
-  const paidOk = P && P.of === gains.length && P.won === gains.filter((x) => x > 0).length && P.lost === gains.filter((x) => x < 0).length && P.level === gains.filter((x) => x === 0).length;
-  const hitsOk = HP && HP.of === hitNets.length && HP.won === hitNets.filter((x) => x > 0).length && HP.net === hitNets.reduce((a, b) => a + b, 0);
+  const paidOk = ahead ? P === null && !M.go.best.length && !M.go.worst.length
+    : P && P.of === gains.length && P.won === gains.filter((x) => x > 0).length && P.lost === gains.filter((x) => x < 0).length && P.level === gains.filter((x) => x === 0).length;
+  const hitsOk = ahead ? HP === null
+    : HP && HP.of === hitNets.length && HP.won === hitNets.filter((x) => x > 0).length && HP.net === hitNets.reduce((a, b) => a + b, 0);
   const hits = ds.managers.reduce((s, mg) => s + ((((ds.history[mg.id] || {})[g]) || {}).h || 0), 0);
   if (M.go.transfers !== transfers || M.go.managers !== managers || sumB !== ins || sumS !== outs || !bOk || !paidOk || !hitsOk || M.go.hits !== hits)
     badWeeks.push("GW" + g);
@@ -113,11 +118,21 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     const a = await p.evaluate(() => ({ hash: location.hash, title: (document.querySelector("#barTitle") || document.querySelector(".bar h1") || {}).textContent,
       gw: document.querySelector("#mkGwSel").value, labs: [...document.querySelectorAll("section.view.active .lab-sm")].map((x) => x.textContent),
       cards: [...document.querySelectorAll("section.view.active .hcard .hl span")].map((x) => x.textContent), wide: document.documentElement.scrollWidth > innerWidth,
+      notes: [...document.querySelectorAll("section.view.active .note")].map((x) => x.textContent).join(" | "),
       cut: [...document.querySelectorAll("section.view.active .hcard .hl span")].some((x) => x.scrollWidth > x.clientWidth + 1) }));
     chk(a.hash === "#market" && +a.gw === lockedGw, w + "px: it opens on the last locked gameweek", JSON.stringify({ hash: a.hash, gw: a.gw }));
-    chk(["Bought by Game On", "Sold by Game On", "Best moves", "Worst moves", "Most bought across FPL", "Most sold across FPL"].every((x) => a.labs.indexOf(x) !== -1),
-        w + "px: Game On's buys and sales, the best and worst moves, and FPL's beside them", a.labs.join(" | "));
-    chk(a.cards.join(",") === "Transfers,Hits taken,Transfers paid,Hits that paid" && !a.cut && !a.wide, w + "px: four headline figures, none cut, nothing wider than the phone", a.cards.join(","));
+    if (K.gwAhead(ds, lockedGw)) {
+      // locked, not a ball kicked: buys and sales stand, nothing is judged yet
+      chk(["Bought by Game On", "Sold by Game On", "Most bought across FPL", "Most sold across FPL"].every((x) => a.labs.indexOf(x) !== -1) &&
+          a.labs.indexOf("Best moves") === -1 && a.cards.indexOf("Transfers paid") === -1 && a.cards.indexOf("Hits that paid") === -1 &&
+          /No match has kicked off yet/.test(a.notes),
+          w + "px: before kick-off: buys, sales and FPL's, no moves or hits judged, and it says why", a.labs.join(" | ") + " / " + a.notes);
+    } else {
+      chk(["Bought by Game On", "Sold by Game On", "Best moves", "Worst moves", "Most bought across FPL", "Most sold across FPL"].every((x) => a.labs.indexOf(x) !== -1),
+          w + "px: Game On's buys and sales, the best and worst moves, and FPL's beside them", a.labs.join(" | "));
+    }
+    const heads = K.gwAhead(ds, lockedGw) ? "Transfers,Hits taken" : "Transfers,Hits taken,Transfers paid,Hits that paid";
+    chk(a.cards.join(",") === heads && !a.cut && !a.wide, w + "px: " + (heads.split(",").length === 4 ? "four" : "two, until kick-off,") + " headline figures, none cut, nothing wider than the phone", a.cards.join(","));
     await p.selectOption("#mkGwSel", String(lockedGw + 1)); await p.waitForTimeout(500);
     const o = await p.evaluate(() => ({ lead: document.querySelector("section.view.active .statlead").textContent,
       cards: [...document.querySelectorAll("section.view.active .hcard .hl span")].map((x) => x.textContent),

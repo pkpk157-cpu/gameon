@@ -21,6 +21,18 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
   fs.readFile(f, (e, b) => { if (e) { r.writeHead(404); r.end(); return; }
     r.writeHead(200, { "content-type": T[path.extname(u)] || "text/plain", "cache-control": "no-store" }); r.end(b); }); });
 let fails = 0;
+// Between a deadline and the first kick-off the newest week has no scores:
+// its Gameweek tab says when they start, and the tiles are read off the week
+// before. Returns the week it moved off, or null.
+const offAhead = async (p) => p.evaluate(() => {
+  const ds = window.GO_STORE.dataset(), C = window.GO_COMPUTE, sel = document.querySelector("#stGwSel");
+  if (!sel || !C.gwAhead(ds, +sel.value)) return null;
+  const from = +sel.value, box = document.querySelector("#stBox");
+  const said = !!box && /hasn\u2019t kicked off yet/.test(box.textContent) && !box.querySelector(".hcard");
+  const kicked = [...sel.options].map((o) => +o.value).filter((g) => !C.gwAhead(ds, g));
+  sel.value = String(Math.max.apply(null, kicked)); sel.dispatchEvent(new Event("change", { bubbles: true }));
+  return { from, said };
+});
 const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? "  " + x : "")); if (!ok) fails++; };
 
 // The picture, read back: its size, its bytes, and the colour at a few points.
@@ -73,6 +85,8 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
       chk(st.btn && (st.sel === (tab === "value")), tab + " tab: the button shows" + (tab === "value" ? " beside the picker" : " on its own"), JSON.stringify(st));
     }
     await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(150);
+    const off = await offAhead(p); await p.waitForTimeout(300);
+    if (off) chk(off.said, "GW" + off.from + " not kicked off: its tab says so; the picture is of the week before", JSON.stringify(off));
     const t0 = Date.now(); const pic = await exportNow(p); const ms = Date.now() - t0;
     chk(!!pic && pic.w === 1080 && pic.h === 1920, "Gameweek tab: a 1080 by 1920 picture opens in the sheet", pic && pic.w + "x" + pic.h + " in " + ms + "ms");
     chk(pic && pic.bytes > 200000, "a real PNG, not a blank", pic && pic.bytes + " bytes");
@@ -122,6 +136,7 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
   // 2. dark theme
   await run({ scheme: "dark" }, async (p, errs) => {
     console.log("-- dark theme");
+    await offAhead(p); await p.waitForTimeout(300);
     const pic = await exportNow(p);
     chk(!!pic && pic.w === 1080, "the picture is made", pic && pic.w + "x" + pic.h);
     chk(pic && pic.wall[0] < 40 && pic.wall[1] < 30 && pic.wall[2] < 50, "a dark wallpaper in the dark theme", pic && JSON.stringify(pic.wall));
@@ -135,6 +150,7 @@ const isGreen = ([r, g, b]) => g > 120 && r < 90 && b < 120;
     const fit = await p.evaluate(() => { const b = document.querySelector("#stShare").getBoundingClientRect();
       return { right: b.right, left: b.left, over: document.documentElement.scrollWidth > document.documentElement.clientWidth }; });
     chk(fit.left >= 0 && fit.right <= 320 && !fit.over, "the button fits without sideways scroll", JSON.stringify(fit));
+    await offAhead(p); await p.waitForTimeout(300);
     const pic = await exportNow(p);
     const box = await p.evaluate(() => { const im = document.querySelector(".shpic img").getBoundingClientRect(); const bt = document.querySelector("#shSave").getBoundingClientRect();
       return { imgW: im.width, imgH: im.height, btnBottom: bt.bottom, vh: innerHeight }; });

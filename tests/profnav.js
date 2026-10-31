@@ -38,7 +38,12 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     await p.evaluate(() => window.scrollTo(0, 0)); await p.waitForTimeout(250);
     // a closed section still shows its latest row
     const peeks = await p.evaluate(() => [...document.querySelectorAll("details.pfold")].map(d => { const pk = d.nextElementSibling && d.nextElementSibling.classList.contains("pfoldpeek") ? d.nextElementSibling : null; return { id: d.id, has: !!pk, shown: !!pk && !!pk.offsetParent, rows: pk ? pk.querySelectorAll("tbody tr").length + pk.querySelectorAll(".fx").length : 0 }; }));
-    chk(peeks.every(x => x.has && x.shown && x.rows === 1), w + ": each closed section shows exactly one latest row", JSON.stringify(peeks));
+    // Transfers' latest entry is a week: each swap in it and its hit line,
+    // so the peek is that week's rows, the top of the full table and no more
+    const trWeek = await p.evaluate(() => { const t = document.querySelector("#ps-transfers table.trlog tbody"); if (!t) return null;
+      const rows = [...t.querySelectorAll("tr")]; let n = 1; while (n < rows.length && !(rows[n].querySelector(".trw") || {}).textContent) n++; return n; });
+    chk(peeks.every(x => x.has && x.shown && (x.id === "ps-transfers" ? x.rows === trWeek : x.rows === 1)),
+        w + ": each closed section shows its latest row (Transfers: its latest week, " + trWeek + " rows)", JSON.stringify(peeks));
     const openRows = await p.evaluate(() => { const d = document.querySelector("#ps-past"); d.open = true; const all = d.querySelector(".pfoldbody").querySelectorAll("tbody tr").length; const peekShown = !!d.nextElementSibling.offsetParent; d.open = false; return { all, peekShown }; });
     chk(openRows.all > 1 && !openRows.peekShown, w + ": open shows every row and the preview steps aside", JSON.stringify(openRows));
     // tapping the preview opens the section

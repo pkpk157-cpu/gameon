@@ -7028,6 +7028,14 @@
   function statsGw(H, ds) {
     var g = H.gwStats;
     if (!g) return '<div class="callout">No scores recorded for this gameweek yet.</div>';
+    // Squads locked, nothing kicked off: every score is 0 or a hit, so a top
+    // score or a best captain would be a pick among ties. Say when it starts.
+    var ahead = K.gwAhead(ds, H.gw);
+    if (ahead) {
+      return '<div class="callout">Gameweek ' + H.gw + ' hasn\u2019t kicked off yet' +
+        (ahead.ko ? ': the first match is ' + esc(whenText(ahead.ko)) : '') +
+        '. Its scores, captains and bench show from then; Picks has the squads now.</div>';
+    }
     // The dropdown above already names the gameweek; repeating it here was
     // the same words twice, a line apart. Only "Live" earns the space.
     var h = H.live ? '<div class="statlead"><span class="pill live">Live</span></div>' : '';
@@ -7297,6 +7305,8 @@
     // FPL keeps every manager's transfers for the coming week private until
     // the deadline, so an open week has FPL's own figures and none of ours
     if (M.open) h += '<div class="note" style="margin:-4px 2px 10px">FPL\u2019s figures so far. Game On\u2019s own transfers show once the deadline passes: FPL keeps every manager\u2019s transfers private until then.</div>';
+    else if (M.ahead) h += '<div class="note" style="margin:-4px 2px 10px">No match has kicked off yet' +
+      (M.ahead.ko ? ' (the first is ' + esc(whenText(M.ahead.ko)) + ')' : '') + '. How the transfers and hits did shows from then.</div>';
     else if (M.live) h += '<div class="note" style="margin:-4px 2px 10px">Points are still coming in for this gameweek.</div>';
 
     var chips = [];

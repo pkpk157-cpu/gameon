@@ -210,6 +210,16 @@
     });
     return Object.keys(have).map(Number).sort(function (a, b) { return a - b; });
   };
+  // A locked gameweek with not a ball kicked yet. Between a deadline and the
+  // first match every score in it is 0 or a hit, so nothing about the week can
+  // be ranked or judged: a "top score" or a "best move" would be a pick among
+  // ties. Returns { ko: the first kick-off } when that is so, otherwise null.
+  C.gwAhead = function (ds, gw) {
+    var fx = ((ds && ds.gwFixtures) || {})[gw] || [];
+    if (!fx.length || fx.some(function (f) { return !!f[2]; })) return null;
+    var ko = fx.map(function (f) { return f[7]; }).filter(Boolean).sort()[0];
+    return { ko: ko || null };
+  };
   // The in-progress gameweek (current but not yet finalised), or null.
   // Asked thousands of times an open, so the answer is kept per events list:
   // a publish brings a new list, and nothing edits one in place.
@@ -1549,7 +1559,8 @@
     // a man bought in week g is owned until the first later squad, not a Free
     // Hit's, that is without him
     var stay = function (el, g) {
-      if (chipAt[g] === "freehit") return [g];
+      // a Free Hit's week counts once it has been played, like any other
+      if (chipAt[g] === "freehit") return done.indexOf(g) !== -1 ? [g] : [];
       var end = null;
       for (var k = g + 1; k <= +ds.pitchGw; k++) {
         if (chipAt[k] === "freehit") continue;
@@ -1606,6 +1617,9 @@
     gw = +gw;
     var lp = (ds.livePoints || {})[gw] || null, els = ds.elements;
     var open = gw > +ds.pitchGw;
+    // locked, nothing kicked off: no points to judge a move or a hit by yet
+    var ahead = !open ? C.gwAhead(ds, gw) : null;
+    if (ahead) lp = null;
     var bought = {}, sold = {}, moves = [], hitWeeks = [], managers = 0, transfers = 0, hits = 0, hitters = 0, wc = 0, fh = 0;
     ds.managers.forEach(function (m) {
       var ins = [], outs = [], pairs = [];
@@ -1657,6 +1671,7 @@
     };
     return {
       gw: gw, open: open, live: !open && C.scoredGws(ds).indexOf(gw) === -1,
+      ahead: ahead ? { ko: ahead.ko } : null,
       go: { managers: managers, transfers: transfers, hits: hits, hitters: hitters, wildcards: wc, freehits: fh,
             bought: rank(bought), sold: rank(sold),
             // did they work: each transfer against the player it replaced, and

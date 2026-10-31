@@ -94,7 +94,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       on: (c.querySelector(".srcpill .on") || {}).textContent, wide: c.scrollWidth > c.clientWidth + 1 }; });
     const squad = () => p.evaluate(() => ({ st: [...document.querySelectorAll("#pitchBox .pstats .pstat")].map((x) => [x.querySelector(".v").textContent, x.querySelector(".l").textContent.trim()]),
       on: (document.querySelector("#pitchBox .srcrow .on") || {}).textContent, pill: !!document.querySelector("#pitchBox .srcpill") }));
-    const fig = (v) => (v == null ? "–" : Number(v).toLocaleString("en-US"));
+    const fig = (v) => (v == null ? "—" : Number(v).toLocaleString("en-US"));
     await p.goto("http://localhost:" + PORT + "/index.html#fpl", { waitUntil: "domcontentloaded" });
     await p.waitForSelector(".fplcard", { timeout: 20000 }); await p.waitForTimeout(2500);
     await p.click(".fplcard .srcpill [data-src=go]"); await p.waitForTimeout(300);
