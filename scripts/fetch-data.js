@@ -220,12 +220,21 @@ function purchasePrices(transfers, squad, gw, freeHit, startOf) {
    first deadline this saw has no per-player figures, and none are made up.
    Read every run while the next window is open, so a moment's lag at a
    deadline (FPL still resetting its counts) is put right on the next run.
-   The open window is kept as it stands, with when it was read. */
-const MARKET_TOP = 15;
+   The open window is kept as it stands, with when it was read.
+   Each list is the top fifteen overall and every position's top eight, so
+   a list by position is that position's own top eight, not whoever of it
+   made the overall fifteen; a list kept that way says so (pos). */
+const MARKET_TOP = 15, MARKET_POS_TOP = 8;
 function marketOf(elements, events, prev, stamp, nowMs) {
   prev = prev || {};
-  const top = (o) => Object.keys(o).filter((k) => o[k] > 0).sort((a, b) => (o[b] - o[a]) || (a - b))
-    .slice(0, MARKET_TOP).map((k) => [+k, o[k]]);
+  const typeOf = {};
+  elements.forEach((el) => { typeOf[el.id] = el.element_type; });
+  const top = (o) => {
+    const sorted = Object.keys(o).filter((k) => o[k] > 0).sort((a, b) => (o[b] - o[a]) || (a - b));
+    const keep = new Set(sorted.slice(0, MARKET_TOP));
+    [1, 2, 3, 4].forEach((t) => sorted.filter((k) => typeOf[k] === t).slice(0, MARKET_POS_TOP).forEach((k) => keep.add(k)));
+    return sorted.filter((k) => keep.has(k)).map((k) => [+k, o[k]]);
+  };
   const sum = (o) => Object.keys(o).reduce((s, k) => s + o[k], 0);
   const locked = events.filter((e) => e.deadline_time && Date.parse(e.deadline_time) <= nowMs)
     .reduce((m, e) => Math.max(m, e.id), 0);
@@ -257,12 +266,12 @@ function marketOf(elements, events, prev, stamp, nowMs) {
         if (x) dIn[id] = x;
         if (y) dOut[id] = y;
       });
-      if (!bad) out.gws[locked] = { in: top(dIn), out: top(dOut), total: sum(dIn) };
+      if (!bad) out.gws[locked] = { in: top(dIn), out: top(dOut), total: sum(dIn), pos: MARKET_POS_TOP };
     }
   }
   const next = events.find((e) => e.id === locked + 1);
   if (next && next.deadline_time && Date.parse(next.deadline_time) > nowMs && sane) {
-    out.open = { gw: next.id, at: stamp, in: top(winIn), out: top(winOut), total: sum(winIn) };
+    out.open = { gw: next.id, at: stamp, in: top(winIn), out: top(winOut), total: sum(winIn), pos: MARKET_POS_TOP };
   }
   return out;
 }

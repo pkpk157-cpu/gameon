@@ -7281,15 +7281,17 @@
         return '<option value="' + x + '"' + (x === gw ? " selected" : "") + '>Gameweek ' + x + (x > +ds.pitchGw ? " \u00b7 open" : "") + '</option>';
       }).join("") + '</select></div>';
     h += '<div class="statlead">Gameweek ' + gw + (M.open ? " so far" : "") + '</div>';
-    if (M.open) h += '<div class="note" style="margin:-4px 2px 10px">Transfers logged before the deadline. Nothing is final until it passes.</div>';
+    // FPL keeps every manager's transfers for the coming week private until
+    // the deadline, so an open week has FPL's own figures and none of ours
+    if (M.open) h += '<div class="note" style="margin:-4px 2px 10px">FPL\u2019s figures so far. Game On\u2019s own transfers show once the deadline passes: FPL keeps every manager\u2019s transfers private until then.</div>';
     else if (M.live) h += '<div class="note" style="margin:-4px 2px 10px">Points are still coming in for this gameweek.</div>';
 
     var chips = [];
     if (g.wildcards) chips.push(num(g.wildcards) + (g.wildcards === 1 ? " wildcard" : " wildcards"));
     if (g.freehits) chips.push(num(g.freehits) + (g.freehits === 1 ? " Free Hit" : " Free Hits"));
-    h += '<div class="hgrid">' +
-      hcard("Transfers", num(g.transfers), g.managers ? num(g.managers) + " managers" : "nobody yet", null, chips.join(" \u00b7 "), "swap") +
-      (M.open ? "" : hcard("Hits taken", g.hits ? "\u2212" + num(g.hits) : "0", g.hitters ? num(g.hitters) + " managers" : "no hits", null, "", "down"));
+    h += '<div class="hgrid">' + (M.open ? "" :
+      hcard("Transfers", num(g.transfers), g.managers ? num(g.managers) + " managers" : "nobody", null, chips.join(" \u00b7 "), "swap") +
+      hcard("Hits taken", g.hits ? "\u2212" + num(g.hits) : "0", g.hitters ? num(g.hitters) + " managers" : "no hits", null, "", "down"));
     // the two that answer whether it worked: transfers that beat the player
     // they replaced, and hits whose moves won back what they cost
     var P = g.paid, HP = g.hitsPaid;
@@ -7309,15 +7311,34 @@
     h += '</div>';
 
     var pt = function (x) { return x.pts == null ? "" : signedPts(x.pts).replace(/^\+/, "") + (Math.abs(x.pts) === 1 ? " pt" : " pts"); };
-    if (g.bought.length || g.sold.length) {
+    // the players' lists by position: every list on the page that names players
+    var POSN = [["all", "All"], ["1", "GK"], ["2", "DEF"], ["3", "MID"], ["4", "FWD"]];
+    if (!state.mkPos) state.mkPos = "all";
+    var mine = function (l) { return (state.mkPos === "all" ? l : l.filter(function (x) { return String(x.type) === state.mkPos; })).slice(0, 8); };
+    h += '<div class="psegrow"><div class="pseg sm" id="mkPos" role="tablist" aria-label="Position">' + POSN.map(function (p) {
+      return '<button type="button" role="tab" data-pos="' + p[0] + '"' + (state.mkPos === p[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>' + p[1] + '</button>';
+    }).join("") + '</div></div>';
+    // name, then his position, then how many and what he scored; today's price at the end
+    var plist = function (title, items, tag, note) {
+      return '<div class="hlist"><div class="lab-sm">' + esc(title) + '</div>' +
+        (items.length ? items.map(function (x, i) {
+          return '<div class="hrow"><span class="hi">' + (i + 1) + '</span>' +
+            '<span class="hn">' + esc(x.name) + ' <span class="hpos">' + esc(x.pos) + '</span> <span class="htag">' + esc(tag(x)) + '</span></span>' +
+            '<span class="hp">' + mval(x.price) + '</span></div>';
+        }).join("") : '<div class="note" style="margin:4px 0 2px">Nobody this week.</div>') +
+        (note ? '<div class="note" style="margin-top:6px">' + esc(note) + '</div>' : '') + '</div>';
+    };
+    // how many managers, said once in the note, so the points fit a 320px row
+    var mgrs = function (x) { return num(x.n) + (x.pts == null ? "" : " \u00b7 " + pt(x)); };
+    if (M.open) {
+      // nothing of Game On's to show before the deadline: said once above
+    } else if (g.bought.length || g.sold.length) {
       h += '<div class="card"><div class="bd hcols">' +
-        hlist("Bought by Game On", g.bought.slice(0, 8), function (x) {
-          return { name: x.name, tag: num(x.n) + (x.n === 1 ? " manager" : " managers"), val: pt(x) }; }) +
-        hlist("Sold by Game On", g.sold.slice(0, 8), function (x) {
-          return { name: x.name, tag: num(x.n) + (x.n === 1 ? " manager" : " managers"), val: pt(x) }; }, M.open ? "" : "Points are what each scored in gameweek " + gw + ".") +
+        plist("Bought by Game On", mine(g.bought), mgrs) +
+        plist("Sold by Game On", mine(g.sold), mgrs, "How many Game On managers, then what each player scored in gameweek " + gw + "; prices are today\u2019s.") +
         '</div></div>';
     } else {
-      h += '<div class="callout">No Game On transfers ' + (M.open ? "logged yet for this gameweek." : "this gameweek.") + '</div>';
+      h += '<div class="callout">No Game On transfers this gameweek.</div>';
     }
     if (g.best.length) {
       h += '<div class="card"><div class="bd hcols">' +
@@ -7328,11 +7349,16 @@
           "Each transfer\u2019s points against the player it replaced, in gameweek " + gw + (g.wildcards || g.freehits ? "; wildcards and Free Hits are not counted" : "") + ". Transfers paid counts the same.") +
         '</div></div>';
     }
-    if (f.in && f.out) {
+    if (f.in && f.out && state.mkPos !== "all" && !f.byPos) {
+      // a week kept before every position's top eight was: its lists are the
+      // overall fifteen, and a position's share of those is not its top eight
+      h += '<div class="callout">FPL\u2019s lists by position are kept from later weeks on. For this week, FPL\u2019s lists are under All.</div>';
+    } else if (f.in && f.out) {
+      var fx = function (x) { return bigCount(x.n) + (x.pts == null ? "" : " \u00b7 " + pt(x)); };
       h += '<div class="card"><div class="bd hcols">' +
-        hlist("Most bought across FPL", f.in.slice(0, 8), function (x) { return { name: x.name, tag: bigCount(x.n), val: pt(x) }; }) +
-        hlist("Most sold across FPL", f.out.slice(0, 8), function (x) { return { name: x.name, tag: bigCount(x.n), val: pt(x) }; },
-          f.at ? "As FPL had them at " + new Date(f.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + "." : "") +
+        plist("Most bought across FPL", mine(f.in), fx) +
+        plist("Most sold across FPL", mine(f.out), fx,
+          (f.at ? "As FPL had them at " + new Date(f.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + ". " : "") + "Prices are today\u2019s.") +
         '</div></div>';
     } else if (!M.open) {
       var mk = ds.market || {};
@@ -7342,6 +7368,12 @@
     }
     host.innerHTML = h;
     $("#mkGwSel", host).addEventListener("change", function () { state.marketGw = +this.value; renderMarket(host, ds); });
+    $("#mkPos", host).addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-pos]");
+      if (!b || b.getAttribute("data-pos") === state.mkPos) return;
+      state.mkPos = b.getAttribute("data-pos");
+      renderMarket(host, ds);
+    });
   }
 
   function statsValue(H, ds) {

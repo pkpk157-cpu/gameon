@@ -1639,14 +1639,19 @@
       }
     });
     var pts = function (el) { return lp && !open ? (lp[el] || 0) : null; };
+    // each player with his position and today's price, for the lists and their filter
+    var who = function (k, n) {
+      var e = els[k] || [];
+      return { el: +k, name: e[0] || "?", type: e[1] || 0, pos: PPOS[e[1]] || "", price: e[3] || 0, n: n, pts: pts(k) };
+    };
     var rank = function (o) {
-      return Object.keys(o).map(function (k) { return { el: +k, name: (els[k] || [])[0] || "?", n: o[k], pts: pts(k) }; })
+      return Object.keys(o).map(function (k) { return who(k, o[k]); })
         .sort(function (a, b) { return (b.n - a.n) || ((b.pts || 0) - (a.pts || 0)); });
     };
     moves.sort(function (a, b) { return b.gain - a.gain; });
     var mk = ds.market || {}, f = open ? (mk.open && +mk.open.gw === gw ? mk.open : null) : ((mk.gws || {})[gw] || null);
     var fplList = function (list) {
-      return (list || []).map(function (x) { return { el: +x[0], name: (els[x[0]] || [])[0] || "?", n: x[1], pts: pts(x[0]) }; });
+      return (list || []).map(function (x) { return who(x[0], x[1]); });
     };
     return {
       gw: gw, open: open, live: !open && C.scoredGws(ds).indexOf(gw) === -1,
@@ -1660,7 +1665,9 @@
             hitsPaid: lp && !open ? { won: hitWeeks.filter(function (x) { return x > 0; }).length, of: hitWeeks.length,
                                       net: hitWeeks.reduce(function (s, x) { return s + x; }, 0) } : null,
             best: moves.slice(0, 5), worst: moves.slice().reverse().filter(function (x) { return x.gain < 0; }).slice(0, 5) },
-      fpl: { total: f && open && f.total != null ? f.total : null, in: f ? fplList(f.in) : null, out: f ? fplList(f.out) : null, at: f && open ? f.at : null }
+      fpl: { total: f && open && f.total != null ? f.total : null, in: f ? fplList(f.in) : null, out: f ? fplList(f.out) : null, at: f && open ? f.at : null,
+             // kept with every position's own top eight, so a list by position is whole
+             byPos: !!(f && f.pos) }
     };
   };
 

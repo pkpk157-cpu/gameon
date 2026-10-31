@@ -12,6 +12,7 @@ const APP = GOENV.APP, PORT = 8770;
 const { marketOf } = require(path.join(APP, "scripts/fetch-data.js"));
 const H = require(path.join(APP, "tests/audit/harness.js")).loadCompute();
 const K = H.C, ds = H.ds;
+const J = JSON.stringify;
 let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? "  " + x : "")); if (!ok) fails++; };
 
 // 1. across FPL, run by run
@@ -36,6 +37,22 @@ chk(m.gws[2] && m.gws[2].total === 360 && m.open.gw === 3, "a gameweek read hold
 // a count that would go backwards is not published
 const bad = marketOf([el(1, 100, 200, 300, 20)], events, { base: {} }, "e", t0 + 8 * day);
 chk(!bad.base[1] && !bad.open, "a reading that makes no sense (window above the season) is not kept", JSON.stringify(bad));
+// every position's top eight is kept as well as the overall fifteen, so a list by position is complete
+{
+  const many = [];
+  // 30 forwards bought most, then 12 goalkeepers, 12 defenders, 12 midfielders bought less
+  for (let i = 0; i < 66; i++) {
+    const type = i < 30 ? 4 : i < 42 ? 1 : i < 54 ? 2 : 3;
+    many.push(Object.assign(el(i + 1, 5000, 0, 1000 - i * 10, 0), { element_type: type }));
+  }
+  const mm = marketOf(many, events, null, "g", t0 + 7 * day + 3600e3);
+  const ids = mm.open.in.map((x) => x[0]), by = (t) => ids.filter((id) => many[id - 1].element_type === t);
+  const want = (t) => many.filter((x) => x.element_type === t).sort((a, b) => b.transfers_in_event - a.transfers_in_event).slice(0, 8).map((x) => x.id);
+  chk(mm.open.pos === 8 && ids.slice(0, 15).join() === many.slice(0, 15).map((x) => x.id).join() &&
+      [1, 2, 3, 4].every((t) => by(t).slice(0, 8).join() === want(t).join()) &&
+      mm.open.in.every((x, i) => !i || mm.open.in[i - 1][1] >= x[1]),
+      "kept: the overall fifteen and every position's own top eight, biggest first, marked so", "kept " + ids.length + "; GK " + by(1).length + ", DEF " + by(2).length + ", MID " + by(3).length + ", FWD " + by(4).length);
+}
 const pre = marketOf([el(1, 0, 0, 500, 0)], events, null, "f", t0);
 chk(pre.locked === 0 && pre.open === null, "before the first deadline there is no gameweek to read", JSON.stringify(pre));
 
@@ -74,7 +91,7 @@ chk(gws.length && !badWeeks.length, "every gameweek: transfers, managers, hits, 
 const raw = JSON.parse(fs.readFileSync(path.join(APP, "data.json"), "utf8"));
 const lockedGw = gws.filter((g) => g <= +ds.pitchGw).pop();
 const els = Object.keys(raw.dataset.elements).map(Number);
-raw.dataset.market = { locked: lockedGw, base: {}, gws: {}, open: { gw: lockedGw + 1, at: new Date().toISOString(), in: els.slice(0, 15).map((e, i) => [e, 90000 - i * 1000]), out: els.slice(20, 35).map((e, i) => [e, 70000 - i * 1000]), total: 1234567 } };
+raw.dataset.market = { locked: lockedGw, base: {}, gws: {}, open: { gw: lockedGw + 1, at: new Date().toISOString(), in: els.slice(0, 15).map((e, i) => [e, 90000 - i * 1000]), out: els.slice(20, 35).map((e, i) => [e, 70000 - i * 1000]), total: 1234567, pos: 8 } };
 raw.dataset.market.gws[lockedGw] = { in: els.slice(40, 55).map((e, i) => [e, 900000 - i * 1000]), out: els.slice(60, 75).map((e, i) => [e, 800000 - i * 1000]), total: 9000000 };
 const body = JSON.stringify(raw);
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
@@ -105,8 +122,36 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     const o = await p.evaluate(() => ({ lead: document.querySelector("section.view.active .statlead").textContent,
       cards: [...document.querySelectorAll("section.view.active .hcard .hl span")].map((x) => x.textContent),
       labs: [...document.querySelectorAll("section.view.active .lab-sm")].map((x) => x.textContent), text: document.querySelector("section.view.active").textContent }));
-    chk(/so far/.test(o.lead) && o.cards.join(",") === "Transfers,FPL\u2019s most bought" && o.labs.indexOf("Most bought across FPL") !== -1 && /As FPL had them at/.test(o.text),
-        w + "px: the open week is what has been logged so far, no return yet, FPL as of when it was read", JSON.stringify({ lead: o.lead, cards: o.cards }));
+    // FPL keeps managers' transfers private until the deadline: the open week is FPL's alone, and says why
+    chk(/so far/.test(o.lead) && o.cards.join(",") === "FPL\u2019s most bought" && o.labs.indexOf("Most bought across FPL") !== -1 && /As FPL had them at/.test(o.text) &&
+        /Game On\u2019s own transfers show once the deadline passes/.test(o.text) && !/nobody yet|logged yet/.test(o.text),
+        w + "px: the open week is FPL's figures so far, and says Game On's come after the deadline, never that nobody has moved", JSON.stringify({ lead: o.lead, cards: o.cards }));
+    // every player row: name, position, then today's price at the end; the filter keeps one position
+    // what the page was served: the open week kept with lists by position, the week before without
+    const MO = K.market(raw.dataset, lockedGw + 1);
+    const rowsOf = () => p.evaluate(() => [...document.querySelectorAll("section.view.active .hlist")].filter((l) => /across FPL|by Game On/.test(l.querySelector(".lab-sm").textContent))
+      .map((l) => ({ t: l.querySelector(".lab-sm").textContent, r: [...l.querySelectorAll(".hrow")].map((r) => ({ name: r.querySelector(".hn").firstChild.textContent.trim(),
+        pos: (r.querySelector(".hpos") || {}).textContent, price: r.querySelector(".hp").textContent })) })));
+    let rl = await rowsOf();
+    const fin = rl.find((x) => x.t === "Most bought across FPL");
+    chk(fin && fin.r.length && fin.r.every((x, i) => x.name === MO.fpl.in[i].name && x.pos === MO.fpl.in[i].pos && x.price === "£" + (MO.fpl.in[i].price / 10).toFixed(1) + "m"),
+        w + "px: each row names the player, his position, and today's price at the end", JSON.stringify(fin && fin.r[0]));
+    await p.click('#mkPos [data-pos="2"]'); await p.waitForTimeout(400);
+    const want = MO.fpl.byPos ? MO.fpl.in.filter((x) => x.type === 2).slice(0, 8).map((x) => x.name) : null;
+    rl = await rowsOf();
+    const fd = rl.find((x) => x.t === "Most bought across FPL");
+    chk(MO.fpl.byPos ? (fd && J(fd.r.map((x) => x.name)) === J(want) && fd.r.every((x) => x.pos === "DEF"))
+                     : (!fd && await p.evaluate(() => /lists by position are kept from later weeks/.test(document.querySelector("section.view.active").textContent))),
+        w + "px: DEF keeps FPL's own top defenders, or says plainly when the week was kept before lists by position", MO.fpl.byPos ? J(fd && fd.r.map((x) => x.name)) : "kept before");
+    await p.selectOption("#mkGwSel", String(lockedGw)); await p.waitForTimeout(500);
+    const ML = K.market(raw.dataset, lockedGw);
+    rl = await rowsOf();
+    const gb = rl.find((x) => x.t === "Bought by Game On");
+    chk(gb && J(gb.r.map((x) => x.name)) === J(ML.go.bought.filter((x) => x.type === 2).slice(0, 8).map((x) => x.name)) && gb.r.every((x) => x.pos === "DEF"),
+        w + "px: the filter holds across weeks, and Game On's buys by position are its own top eight", J(gb && gb.r.slice(0, 3)));
+    chk(!rl.find((x) => x.t === "Most bought across FPL") && await p.evaluate(() => /lists by position are kept from later weeks/.test(document.querySelector("section.view.active").textContent)),
+        w + "px: a week kept before lists by position says so for FPL's, rather than showing a partial list");
+    await p.click('#mkPos [data-pos="all"]'); await p.waitForTimeout(300);
     chk(!er.length, w + "px: no JS errors", er.join(" | "));
     await c.close();
   }
