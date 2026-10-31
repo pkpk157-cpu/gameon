@@ -29,9 +29,22 @@ const HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)", "
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// FPL down, not just busy. Around a deadline FPL takes the whole game offline
+// ("the game is being updated") and answers 503 to everything for an hour or
+// more. Each call used to spend its seven tries and give up on its own, so a
+// run walked all 245 histories that way, held the deploy queue for 25 minutes
+// until the heartbeat cancelled it, and the next run did the same. Once
+// several calls in a row have each given up for that reason, with no answer at
+// all in between, stop asking: the run keeps what is live and ends in a minute
+// or two, and the first run after FPL comes back publishes at once. A 404 is
+// FPL answering, so it never counts.
+const DOWN_AFTER = 6;
+let gaveUpInARow = 0, fplDown = null;
+
 async function getJSON(path, tries = 7) {
   let last;
   for (let i = 0; i < tries; i++) {
+    if (fplDown) throw fplDown;
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 30000);
@@ -47,9 +60,20 @@ async function getJSON(path, tries = 7) {
         await sleep(after > 0 ? Math.min(after * 1000, 30000) : 1500 * (i + 1));
         continue;
       }
-      if (!res.ok) throw new Error("HTTP " + res.status + " for " + path);
-      return await res.json();
+      if (!res.ok) throw Object.assign(new Error("HTTP " + res.status + " for " + path), { status: res.status });
+      const body = await res.json();
+      gaveUpInARow = 0;
+      return body;
     } catch (e) { last = e; await sleep(700 * (i + 1)); }
+  }
+  if (fplDown) throw fplDown;
+  const answered = last && last.status >= 400 && last.status < 500;
+  if (answered) gaveUpInARow = 0;
+  else if (++gaveUpInARow >= DOWN_AFTER) {
+    fplDown = Object.assign(new Error(DOWN_AFTER + " calls in a row got no answer (last: " +
+      ((last && last.message) || path) + ")"), { fplUnavailable: true });
+    console.log("  FPL is not answering: " + fplDown.message + " — stopping here");
+    throw fplDown;
   }
   // Marked, so the run can tell "FPL did not answer" (keep what is live and
   // try again in five minutes) from a fault in this script (fail loudly).
@@ -358,6 +382,7 @@ if (require.main === module) (async () => {
       pastSeasons[m.id] = h.past.map((p) => ({ season: p.season_name, rank: p.rank, total: p.total_points }));
     }
   }, 6);
+  if (fplDown) throw fplDown;
   console.log("  histories done, failed " + hist.failed);
 
   // A history that did not answer must not be published as a blank. Every
@@ -1279,6 +1304,8 @@ if (require.main === module) (async () => {
       throw Object.assign(new Error("refusing to publish: only " + withHistory + "/" + now + " managers have history"), { keepLive: true });
     }
   }
+  // Whatever ran after FPL went down was built from nothing; never publish it.
+  if (fplDown) throw fplDown;
   fs.writeFileSync("data.json", JSON.stringify({ generatedAt: dataset.updatedAt, dataset }));
   console.log("Wrote data.json — " + managers.length + " managers, " + H2H.length +
     " H2H leagues, pitch GW " + (pitchGw || "none") + ", failed " + (hist.failed || 0));
