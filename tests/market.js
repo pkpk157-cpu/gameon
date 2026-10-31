@@ -141,16 +141,20 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
     chk(/so far/.test(o.lead) && o.cards.join(",") === "FPL\u2019s most bought" && o.labs.indexOf("Most bought across FPL") !== -1 && /As FPL had them at/.test(o.text) &&
         /Game On\u2019s own transfers show once the deadline passes/.test(o.text) && !/nobody yet|logged yet/.test(o.text),
         w + "px: the open week is FPL's figures so far, and says Game On's come after the deadline, never that nobody has moved", JSON.stringify({ lead: o.lead, cards: o.cards }));
-    // every player row: name, position, then today's price at the end; the filter keeps one position
+    // every player row: name, position, today's price in brackets beside it, and how many at the end; the filter keeps one position
     // what the page was served: the open week kept with lists by position, the week before without
     const MO = K.market(raw.dataset, lockedGw + 1);
     const rowsOf = () => p.evaluate(() => [...document.querySelectorAll("section.view.active .hlist")].filter((l) => /across FPL|by Game On/.test(l.querySelector(".lab-sm").textContent))
       .map((l) => ({ t: l.querySelector(".lab-sm").textContent, r: [...l.querySelectorAll(".hrow")].map((r) => ({ name: r.querySelector(".hn").firstChild.textContent.trim(),
-        pos: (r.querySelector(".hpos") || {}).textContent, price: r.querySelector(".hp").textContent })) })));
+        pos: (r.querySelector(".hpos") || {}).textContent, price: (r.querySelector(".hpr") || {}).textContent, count: r.querySelector(".hp").textContent,
+        cut: r.querySelector(".hn").scrollWidth > r.querySelector(".hn").clientWidth + 1 })) })));
     let rl = await rowsOf();
     const fin = rl.find((x) => x.t === "Most bought across FPL");
-    chk(fin && fin.r.length && fin.r.every((x, i) => x.name === MO.fpl.in[i].name && x.pos === MO.fpl.in[i].pos && x.price === "£" + (MO.fpl.in[i].price / 10).toFixed(1) + "m"),
-        w + "px: each row names the player, his position, and today's price at the end", JSON.stringify(fin && fin.r[0]));
+    chk(fin && fin.r.length && fin.r.every((x, i) => x.name === MO.fpl.in[i].name && x.pos === MO.fpl.in[i].pos && x.price === "(£" + (MO.fpl.in[i].price / 10).toFixed(1) + "m)" &&
+          !/£/.test(x.count) && /\d/.test(x.count)),
+        w + "px: each row names the player, his position and today's price in brackets, and ends on how many", JSON.stringify(fin && fin.r[0]));
+    const cut = rl.reduce((a, l) => a.concat(l.r.filter((x) => x.cut).map((x) => l.t + ": " + x.name)), []);
+    chk(!cut.length, w + "px: no row is cut short", cut.join(" | "));
     await p.click('#mkPos [data-pos="2"]'); await p.waitForTimeout(400);
     const want = MO.fpl.byPos ? MO.fpl.in.filter((x) => x.type === 2).slice(0, 8).map((x) => x.name) : null;
     rl = await rowsOf();

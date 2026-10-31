@@ -7346,24 +7346,27 @@
     h += '<div class="psegrow"><div class="pseg sm" id="mkPos" role="tablist" aria-label="Position">' + POSN.map(function (p) {
       return '<button type="button" role="tab" data-pos="' + p[0] + '"' + (state.mkPos === p[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>' + p[1] + '</button>';
     }).join("") + '</div></div>';
-    // name, then his position, then how many and what he scored; today's price at the end
-    var plist = function (title, items, tag, note) {
+    // The point of these lists is how many: that is the figure at the end of
+    // each row. Beside the name, his position, today's price in brackets and,
+    // once the week has kicked off, what he scored in it.
+    var plist = function (title, items, count, note) {
       return '<div class="hlist"><div class="lab-sm">' + esc(title) + '</div>' +
         (items.length ? items.map(function (x, i) {
           return '<div class="hrow"><span class="hi">' + (i + 1) + '</span>' +
-            '<span class="hn">' + esc(x.name) + ' <span class="hpos">' + esc(x.pos) + '</span> <span class="htag">' + esc(tag(x)) + '</span></span>' +
-            '<span class="hp">' + mval(x.price) + '</span></div>';
+            '<span class="hn">' + esc(x.name) + ' <span class="hpos">' + esc(x.pos) + '</span> <span class="hpr">(' + mval(x.price) + ')</span>' +
+            (x.pts == null ? '' : ' <span class="htag">' + esc(pt(x)) + '</span>') + '</span>' +
+            '<span class="hp">' + count(x) + '</span></div>';
         }).join("") : '<div class="note" style="margin:4px 0 2px">Nobody this week.</div>') +
         (note ? '<div class="note" style="margin-top:6px">' + esc(note) + '</div>' : '') + '</div>';
     };
-    // how many managers, said once in the note, so the points fit a 320px row
-    var mgrs = function (x) { return num(x.n) + (x.pts == null ? "" : " \u00b7 " + pt(x)); };
+    var scoredNote = g.bought.concat(g.sold).some(function (x) { return x.pts != null; }) ? " and what he scored in gameweek " + gw : "";
+    var mgrs = function (x) { return num(x.n); };
     if (M.open) {
       // nothing of Game On's to show before the deadline: said once above
     } else if (g.bought.length || g.sold.length) {
       h += '<div class="card"><div class="bd hcols">' +
         plist("Bought by Game On", mine(g.bought), mgrs) +
-        plist("Sold by Game On", mine(g.sold), mgrs, "How many Game On managers, then what each player scored in gameweek " + gw + "; prices are today\u2019s.") +
+        plist("Sold by Game On", mine(g.sold), mgrs, "The number is how many Game On managers. Beside each name: today\u2019s price" + scoredNote + ".") +
         '</div></div>';
     } else {
       h += '<div class="callout">No Game On transfers this gameweek.</div>';
@@ -7382,11 +7385,13 @@
       // overall fifteen, and a position's share of those is not its top eight
       h += '<div class="callout">FPL\u2019s lists by position are kept from later weeks on. For this week, FPL\u2019s lists are under All.</div>';
     } else if (f.in && f.out) {
-      var fx = function (x) { return bigCount(x.n) + (x.pts == null ? "" : " \u00b7 " + pt(x)); };
+      var fx = function (x) { return bigCount(x.n); };
+      var fplScored = f.in.concat(f.out).some(function (x) { return x.pts != null; }) ? " and what he scored in gameweek " + gw : "";
       h += '<div class="card"><div class="bd hcols">' +
         plist("Most bought across FPL", mine(f.in), fx) +
         plist("Most sold across FPL", mine(f.out), fx,
-          (f.at ? "As FPL had them at " + new Date(f.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + ". " : "") + "Prices are today\u2019s.") +
+          (f.at ? "As FPL had them at " + new Date(f.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + ". " : "") +
+          "The number is how many across FPL. Beside each name: today\u2019s price" + fplScored + ".") +
         '</div></div>';
     } else if (!M.open) {
       var mk = ds.market || {};
