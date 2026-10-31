@@ -5734,8 +5734,8 @@
     var mv = function (d) {
       return d > 0 ? ' <b class="move up">' + num(d) + '</b>' : d < 0 ? ' <b class="move down">' + num(-d) + '</b>' : '';
     };
-    // yours wears FPL's colours, the same as your card on FPL
-    var h = '<div class="card snap' + (isMe(id) ? ' mine' : '') + '">';
+    // in FPL's colours on every profile, the same as your card on FPL
+    var h = '<div class="card snap">';
     h += '<div class="snaphead">' +
       '<div class="snapstat"><div class="v">' + num(S.total) + '</div><div class="l">Total points</div></div>' +
       '<div class="snapstat"><div class="v">' + (S.gwPoints == null ? "\u2013" : num(S.gwPoints)) + '</div>' +

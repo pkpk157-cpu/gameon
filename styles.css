@@ -1390,17 +1390,17 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
 .snapgrid .pc .pcs { white-space:normal; } /* "Wildcard, Bench Boost" may take two lines */
 @media (max-width:350px) { .snapgrid { grid-template-columns:repeat(2, minmax(0,1fr)); } }
 .snapgrid.two { grid-template-columns:repeat(2, minmax(0,1fr)); }
-/* Your own season card in FPL's colours, the same as your card on FPL:
+/* Every profile's season card in FPL's colours, the same as your card on FPL:
    white on the cyan-to-purple, the pills and tiles a wash of white. */
-.card.snap.mine { color:#fff; border-color:transparent; border-radius:22px;
+.card.snap { color:#fff; border-color:transparent; border-radius:22px;
   background:radial-gradient(120% 90% at 100% 0%, rgba(0,255,135,.30), transparent 55%),
     linear-gradient(100deg, #11b9d5 0%, #3d86dc 45%, #6c4ce0 78%, #7f2fd6 100%);
   box-shadow:0 10px 28px rgba(55,0,60,.22); -webkit-backdrop-filter:none; backdrop-filter:none; }
-.snap.mine .snapstat .l, .snap.mine .snaprank .k, .snap.mine .pc .pcl, .snap.mine .pc .pcs { color:rgba(255,255,255,.9); }
-.snap.mine .snaprank { background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.5); }
-.snap.mine .pc { background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.3); box-shadow:none; }
-.snap.mine .move.up { color:#00ff87; }
-.snap.mine .move.down { color:#ffc2d1; }
+.snap .snapstat .l, .snap .snaprank .k, .snap .pc .pcl, .snap .pc .pcs { color:rgba(255,255,255,.9); }
+.snap .snaprank { background:rgba(255,255,255,.16); border-color:rgba(255,255,255,.5); }
+.snap .pc { background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.3); box-shadow:none; }
+.snap .move.up { color:#00ff87; }
+.snap .move.down { color:#ffc2d1; }
 /* badges: what a manager has done this season, as chips under the name line */
 .badges { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
 .badges { position:relative; }

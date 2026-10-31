@@ -114,12 +114,13 @@ const expect = (p, id) => p.evaluate((id) => {
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);
   let own = await read(p);
   chk(own.first && own.order.indexOf("section#ps-rivals") < 0, "own page, no rivals pinned: card first, no rivals block", JSON.stringify(own.order));
-  // your own card wears FPL's colours, white on the gradient; nobody else's does
+  // every profile's card wears FPL's colours, white on the gradient, yours and everyone else's
   const look = await p.evaluate(() => { const s = document.querySelector(".card.snap"), cs = getComputedStyle(s);
-    return { mine: s.classList.contains("mine"), grad: /linear-gradient/.test(cs.backgroundImage), ink: cs.color, wide: s.scrollWidth > s.clientWidth + 1 }; });
-  chk(look.mine && look.grad && look.ink === "rgb(255, 255, 255)" && !look.wide, "own page: the card in FPL's colours, white on the gradient", JSON.stringify(look));
+    return { grad: /linear-gradient/.test(cs.backgroundImage), ink: cs.color, wide: s.scrollWidth > s.clientWidth + 1 }; });
+  chk(look.grad && look.ink === "rgb(255, 255, 255)" && !look.wide, "own page: the card in FPL's colours, white on the gradient", JSON.stringify(look));
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.leader); await p.waitForTimeout(700);
-  chk(await p.evaluate(() => !document.querySelector(".card.snap").classList.contains("mine")), "someone else's card keeps the app's own look");
+  chk(await p.evaluate(() => { const s = document.querySelector(".card.snap"), cs = getComputedStyle(s);
+    return /linear-gradient/.test(cs.backgroundImage) && cs.color === "rgb(255, 255, 255)" && s.scrollWidth <= s.clientWidth + 1; }), "someone else's card in the same colours: every profile alike");
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);
   await p.evaluate((id) => { localStorage.setItem("go12.rivals", JSON.stringify([id])); }, ids.leader);
   await p.evaluate(() => { location.hash = "#classic"; }); await p.waitForTimeout(300);
