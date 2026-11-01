@@ -4403,10 +4403,11 @@
     var flag = fplFlag(rec && rec.region);
     var arrow = function (n) { return '<svg viewBox="0 0 24 24" width="' + n + '" height="' + n + '" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; };
     var fig = function (v) { return v == null ? "\u2013" : num(v); };
-    // FPL's figures by default, Game On's on the switch; FPL's are only read
-    // once it has finished the week, the rule every page keeps
+    // FPL's figures by default, Game On's on the switch. FPL's fill in as each
+    // match day settles, so until the week is finished they say "so far"
     var src = lsGet("go12.src.card") === "go" ? "go" : "fpl";
     var fx = K.fplGwFigures(ds, gw), gx = K.goGwFigures(ds, gw);
+    var sofar = src === "fpl" && !fx.final && (fx.average != null || fx.highest != null) ? " so far" : "";
     var avg = src === "fpl" ? fx.average : gx.average;
     var hi = src === "fpl" ? fx.highest : (gx.highest ? gx.highest.pts : null);
     var hiAttr = src === "fpl" ? (fx.highestEntry ? teamLink(fx.highestEntry) : "") : (gx.highest ? ' data-entry="' + (+gx.highest.id) + '"' : "");
@@ -4423,9 +4424,9 @@
       '<div class="fcrule"></div>' +
       '<div class="fcgw"><span></span><span>' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</span>' + srcPill(src) + '</div>' +
       '<div class="fcnums">' +
-        '<div class="fcn"><b>' + fig(avg) + '</b><span>Average</span></div>' +
+        '<div class="fcn"><b>' + fig(avg) + '</b><span>Average' + sofar + '</span></div>' +
         '<a class="fcn main" href="#profile/' + (+me) + '/squad" aria-label="Your squad"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></a>' +
-        '<div class="fcn"' + (hiAttr ? hiAttr + ' role="button" tabindex="0"' : "") + '><b>' + fig(hi) + '</b><span>Highest' +
+        '<div class="fcn"' + (hiAttr ? hiAttr + ' role="button" tabindex="0"' : "") + '><b>' + fig(hi) + '</b><span>Highest' + sofar +
           (hiAttr ? " " + arrow(16) : "") + '</span></div>' +
       '</div>' +
       (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
@@ -5257,8 +5258,10 @@
       hiId = pit.highest ? pit.highest.id : null;
       if (hiId) hiAttr = ' data-entry="' + hiId + '"';
       if (fpl) {
-        leftLabel = "Average"; left = fpl.average === null ? "—" : num(fpl.average);
-        rightLabel = "Highest" + (fpl.highestEntry ? ' <span class="arw">›</span>' : '');
+        // FPL's own figures fill in as each match day settles: "so far" until it finishes the week
+        var sf = !fpl.final && (fpl.average != null || fpl.highest != null) ? " so far" : "";
+        leftLabel = "Average" + sf; left = fpl.average === null ? "—" : num(fpl.average);
+        rightLabel = "Highest" + sf + (fpl.highestEntry ? ' <span class="arw">›</span>' : '');
         right = fpl.highest === null ? "—" : num(fpl.highest);
         hiId = fpl.highestEntry;
         hiAttr = hiId ? teamLink(hiId) : "";

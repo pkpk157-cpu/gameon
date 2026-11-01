@@ -14,6 +14,18 @@ const K = H.C, ds = H.ds;
 let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? "  " + x : "")); if (!ok) fails++; };
 const me = ds.managers[5], gw = +ds.pitchGw, ev = ds.bootstrap.events.find((e) => +e.id === gw);
 const fx = K.fplGwFigures(ds, gw), gx = K.goGwFigures(ds, gw);
+// FPL's figures fill in as each match day settles; until it finishes the week they say "so far"
+const sofar = (f) => (!f.final && (f.average != null || f.highest != null) ? " so far" : "");
+{
+  // FPL's figures as FPL has them, and beating its average judged only once it has finished the week
+  const ev = (ds.bootstrap.events || []).find((e) => +e.id === +gw) || {};
+  const HL = K.highlights(ds, gw), fa = HL && HL.gwStats ? HL.gwStats.fplAverage : null;
+  chk(fx.average === (ev.average > 0 ? ev.average : null) && fx.highest === (ev.highest > 0 ? ev.highest : null) && fx.final === !!ev.finished &&
+      fa === (fx.final ? fx.average : null),
+      "FPL's average and highest as FPL has published them" + (fx.final ? "" : ", so far") + "; Beat the average waits for FPL to finish the week",
+      JSON.stringify({ gw, fx, statsAvg: fa }));
+}
+
 const next = ds.bootstrap.events.find((e) => e.deadline_time && Date.parse(e.deadline_time) > Date.now());
 const ENTRY = { id: me.id, player_region_iso_code_short: "IN", leagues: { classic: [{ id: 314, name: "Overall", entry_rank: 1000, entry_last_rank: 1200, league_type: "s" }], h2h: [] } };
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
@@ -35,11 +47,14 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       return { who: card.querySelector(".fcwho b").textContent, mgr: card.querySelector(".fcwho span").textContent, badge: !!card.querySelector(".fcbadge"),
         gw: card.querySelector(".fcgw > span:nth-child(2)").textContent, src: [...card.querySelectorAll(".srcpill button")].map((x) => x.textContent + (x.classList.contains("on") ? "*" : "")).join("|"), n, labs: [...card.querySelectorAll(".fcn span")].map((x) => x.textContent.trim()), next: (card.querySelector(".fcnext") || {}).textContent || "", first: first === card,
         leagues: document.querySelectorAll(".flrow").length, wide: card.scrollWidth > card.clientWidth + 1,
+        // each figure's label on one line and whole, "so far" and all
+        labFit: [...card.querySelectorAll(".fcn span")].every((x) => x.scrollWidth <= x.clientWidth + 1 && x.getClientRects().length === 1),
         oneLine: card.querySelector(".fcnext b") ? card.querySelector(".fcnext b").getClientRects().length === 1 && card.querySelector(".fcnext b").getBoundingClientRect().height < 30 : true }; });
     const pts = K.gwScore(ds, me.id, gw);
     chk(c1.first && c1.who === me.entryName && c1.mgr === "\u{1F1EE}\u{1F1F3}" + me.playerName && !c1.badge, w + "px: the card leads the page: team, flag and manager, no badge", JSON.stringify({ who: c1.who, mgr: c1.mgr }));
     const fig = (v) => (v ? Number(v).toLocaleString("en-US") : "–");
-    chk(c1.labs.join("|") === "Average|Points|Highest", w + "px: the card's average and highest are FPL's, plain", c1.labs.join(" | "));
+    chk(c1.labs.join("|") === "Average" + sofar(fx) + "|Points|Highest" + sofar(fx), w + "px: the card's average and highest are FPL's, plain" + (sofar(fx) ? ", so far until FPL finishes the week" : ""), c1.labs.join(" | "));
+    chk(c1.labFit, w + "px: every label fits on its line, uncut");
     chk(c1.gw.startsWith(ev.name) && c1.src === "GO|FPL*" && c1.n[0] === fig(fx.average) && c1.n[1] === String(pts) && c1.n[2] === fig(fx.highest),
         w + "px: the card opens on FPL: average and highest are FPL's, the points the app's own", JSON.stringify({ gw: c1.gw, src: c1.src, n: c1.n, want: [fx.average, pts, fx.highest] }));
     if (next) {
@@ -111,7 +126,7 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
         "squad opens on GO, whatever the card is on", JSON.stringify(s));
     await p.click("#pitchBox .srcpill [data-src=fpl]"); await p.waitForTimeout(400);
     s = await squad();
-    chk(s.on === "FPL" && s.st[0][0] === fig(fx.average) && s.st[0][1] === "Average" && s.st[1][0] === String(pit.net) && s.st[2][0] === fig(fx.highest) && /^Highest/.test(s.st[2][1]),
+    chk(s.on === "FPL" && s.st[0][0] === fig(fx.average) && s.st[0][1] === "Average" + sofar(fx) && s.st[1][0] === String(pit.net) && s.st[2][0] === fig(fx.highest) && s.st[2][1].indexOf("Highest" + sofar(fx)) === 0,
         "squad on FPL: FPL's average and highest, your points unchanged", JSON.stringify(s));
     // an earlier week on FPL: that week's figures
     const gws = K.squadGws(ds), g0 = gws[0], f0 = K.fplGwFigures(ds, g0);

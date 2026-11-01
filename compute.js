@@ -1920,12 +1920,17 @@
     });
     return { average: n ? Math.round(sum / n) || 0 : null, highest: top }; // never -0, as above
   };
+  // FPL's own average and highest for a gameweek. FPL fills them in as each
+  // match day is settled, not minute by minute (GW9's stayed 0 through
+  // Saturday's games and read 31 and 122 from just after midnight), so until
+  // the week is finished they are FPL's figures so far: shown, and marked
+  // final: false. 0 or null is FPL having published nothing yet.
   C.fplGwFigures = function (ds, gw) {
     var ev = ((ds && ds.bootstrap && ds.bootstrap.events) || []).filter(function (e) { return +e.id === +gw; })[0] || {};
-    if (!ev.finished) return { average: null, highest: null, highestEntry: null };
     return { average: ev.average > 0 ? ev.average : null,
              highest: ev.highest > 0 ? ev.highest : null,
-             highestEntry: ev.highest > 0 && ev.highestEntry > 0 ? +ev.highestEntry : null };
+             highestEntry: ev.highest > 0 && ev.highestEntry > 0 ? +ev.highestEntry : null,
+             final: !!ev.finished };
   };
   /* An outside team's season so far: FPL's total, led through a live week
      the way the classic table leads Game On's (last week's total plus this
@@ -2155,8 +2160,11 @@
       gwStats.topQuarter = at(0.25);
       gwStats.bottomQuarter = at(0.75);
       gwStats.benchAvg = Math.round(benchTotal / rows.length);
-      // FPL's average is only read once it has finished the week
-      gwStats.fplAverage = C.fplGwFigures(ds, gw).average;
+      // Beating FPL's average is judged once FPL has finished the week: before
+      // then its average stops at the last settled match day while these
+      // scores run on, and the two are not the same moment
+      var fplFig = C.fplGwFigures(ds, gw);
+      gwStats.fplAverage = fplFig.final ? fplFig.average : null;
       if (gwStats.fplAverage !== null) {
         gwStats.beatFpl = rows.filter(function (r) { return r.p > gwStats.fplAverage; }).length;
       }

@@ -304,7 +304,8 @@ const ENTRY = { id: ME, name: meName, leagues: {
     let ov = ovOf([gwNow]);
     const pit = H.C.managerPitch(ov, 9000004, gwNow), sum = H.C.extSummary(ov, 9000004), fg = H.C.fplGwFigures(H.ds, gwNow);
     const nf = (v) => v == null ? "—" : v.toLocaleString("en-GB");
-    chk(tm.st.length === 3 && tm.st[0].l === "Average" && tm.st[0].v === nf(fg.average), "beside the points: FPL's average for the week, plain", JSON.stringify(tm.st[0]) + " vs " + fg.average);
+    const sofar = (f) => (!f.final && (f.average != null || f.highest != null) ? " so far" : "");
+    chk(tm.st.length === 3 && tm.st[0].l === "Average" + sofar(fg) && tm.st[0].v === nf(fg.average), "beside the points: FPL's average for the week, plain" + (sofar(fg) ? ", so far until FPL finishes it" : ""), JSON.stringify(tm.st[0]) + " vs " + fg.average);
     chk(tm.st[1].v === nf(pit.net) && /^Total Pts\s*−4$/.test(tm.st[1].l), "the week's points net of the hit, the hit shown", JSON.stringify(tm.st[1]) + " vs " + pit.net);
     chk(/^Highest/.test(tm.st[2].l) && tm.st[2].v === nf(fg.highest), "and FPL's highest, plain", JSON.stringify(tm.st[2]));
     chk((tm.tiles.Total || {}).v === nf(sum.total), "the season total, by the rule Compare uses", JSON.stringify(tm.tiles.Total) + " vs " + sum.total);
@@ -414,7 +415,7 @@ const ENTRY = { id: ME, name: meName, leagues: {
     raw.dataset.bootstrap.events.forEach((e) => {
       if (e.id === gA) { e.highest = 131; e.highestEntry = 9000005; }
       if (e.id === gB) { e.highest = 127; e.highestEntry = ours; }
-      if (!e.finished) { e.highest = 77; e.highestEntry = 9000006; }   // a week still on: not shown
+      if (!e.finished) { e.highest = 77; e.highestEntry = 9000006; }   // a week still on: FPL's so far
     });
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
     await ctx.addInitScript(({ me }) => { try { localStorage.setItem("go12.me", String(me)); localStorage.setItem("go12.theo", "off"); } catch (e) {} }, { me: ME });
@@ -441,10 +442,11 @@ const ENTRY = { id: ME, name: meName, leagues: {
         return x ? { v: x.querySelector(".v").textContent, l: x.querySelector(".l").textContent, team: x.getAttribute("data-team"), entry: x.getAttribute("data-entry") } : null; });
     };
     let x = await hi(null);
-    // the week the page opens on: one still being played has no highest yet;
-    // between a finalised week and the next deadline it is that finished week
+    // the week the page opens on: one still being played shows FPL's highest
+    // as FPL has it so far, said so, and opens that team; between a finalised
+    // week and the next deadline it is that finished week
     if (!(H.ds.bootstrap.events.find((e) => e.id === H.ds.pitchGw) || {}).finished)
-      chk(x && x.v === "—" && !x.team && !x.entry, "a week still being played shows no FPL highest, and links nowhere", JSON.stringify(x));
+      chk(x && x.v === "77" && /^Highest so far/.test(x.l) && x.team === "9000006" && !x.entry, "a week still being played shows FPL's highest so far, said so, and opens that team", JSON.stringify(x));
     else
       chk(x && x.v === "131" && x.team === "9000005" && !x.entry, "the latest week, finalised, shows FPL's highest and opens that team", JSON.stringify(x));
     x = await hi(gA);
