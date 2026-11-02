@@ -4400,6 +4400,10 @@
     var ev = evs.filter(function (e) { return +e.id === gw; })[0] || {};
     var live = K.liveGwId(ds) === gw, pts = K.gwScore(ds, me, gw);
     var now = Date.now(), next = evs.filter(function (e) { return e.deadline_time && Date.parse(e.deadline_time) > now; })[0];
+    // the next deadline only once this gameweek is finished and FPL has
+    // finalised it; until then the card is about the week still being played,
+    // as the bar is ("GW9 live", not "GW10 in 4d")
+    if (K.finishedGws(ds).indexOf(gw) === -1) next = null;
     var flag = fplFlag(rec && rec.region);
     var arrow = function (n) { return '<svg viewBox="0 0 24 24" width="' + n + '" height="' + n + '" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; };
     var fig = function (v) { return v == null ? "\u2013" : num(v); };

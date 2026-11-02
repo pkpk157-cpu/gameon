@@ -26,7 +26,9 @@ const sofar = (f) => (!f.final && (f.average != null || f.highest != null) ? " s
       JSON.stringify({ gw, fx, statsAvg: fa }));
 }
 
-const next = ds.bootstrap.events.find((e) => e.deadline_time && Date.parse(e.deadline_time) > Date.now());
+// the next deadline shows only once the card's gameweek is finished and finalised
+const cardFinal = K.finishedGws(ds).indexOf(+ds.pitchGw) !== -1;
+const next = cardFinal ? ds.bootstrap.events.find((e) => e.deadline_time && Date.parse(e.deadline_time) > Date.now()) : null;
 const ENTRY = { id: me.id, player_region_iso_code_short: "IN", leagues: { classic: [{ id: 314, name: "Overall", entry_rank: 1000, entry_last_rank: 1200, league_type: "s" }], h2h: [] } };
 const T = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".json":"application/json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png" };
 const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u === "/") u = "/index.html";
@@ -62,6 +64,8 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       const want = ist.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" }) + " " + ist.getUTCDate() + " " + ist.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }) +
         " at " + String(ist.getUTCHours()).padStart(2, "0") + ":" + String(ist.getUTCMinutes()).padStart(2, "0");
       chk(c1.next.indexOf(next.name) === 0 && c1.next.indexOf("Deadline: " + want) !== -1 && c1.oneLine, w + "px: the next deadline in the phone's own time, on one line", c1.next);
+    } else {
+      chk(!c1.next, w + "px: GW" + ds.pitchGw + " not finished and finalised: no next deadline on the card yet", c1.next);
     }
     chk(c1.leagues > 0 && !c1.wide, w + "px: the leagues follow it, nothing wider than the card", c1.leagues + " league rows");
     await p.click(".fcn.main"); await p.waitForTimeout(600);
