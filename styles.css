@@ -1458,9 +1458,9 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   border-left:1px solid var(--glass-border); border-top:1px solid var(--glass-border); }
 @keyframes bubblein { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .bbubble { animation:none; } }
-/* Compare and Rival, in the bar beside the manager's name. They are the two
-   things you do to somebody else's page, so they ride with his name rather
-   than sitting in the page under it. */
+/* Compare, in the bar beside the manager's name. It is the thing you do to
+   somebody else's page, so it rides with his name rather than sitting in the
+   page under it. */
 /* the name keeps the top line to itself; these ride on the line below it */
 .barline { display:flex; align-items:center; gap:10px; min-width:0; }
 .barline .barsub { flex:1; min-width:0; }
@@ -1469,19 +1469,16 @@ table.t.cmptable.seasons .sp { font-size:10.5px; font-weight:600; color:var(--in
   padding:6px 12px; border-radius:999px; white-space:nowrap;
   border:1px solid var(--bar-line); background:var(--bar-fill); color:var(--bar-ink); }
 .barpill:hover { border-color:var(--pl-green); color:var(--pl-green); }
-.barpill.on { background:var(--pl-green); border-color:var(--pl-green); color:#06231a; }
-.barpill.on:hover { color:#06231a; }
 /* your own page: not a control, just the word, in the gold the badges use */
 .barpill.you { cursor:default; color:#ffd76a; border-color:rgba(255,215,106,.55); background:rgba(255,215,106,.14); }
-/* On a phone the bar has to hold a back arrow, the burger, the name, these
-   two and the person icon. The pills give up what they can so the name keeps
+/* On a phone the bar has to hold a back arrow, the burger, the name, Compare
+   and the person icon. The pills give up what they can so the name keeps
    as many letters as possible. */
 @media (max-width:389px) {
   .barpill { font-size:11.5px; padding:5px 10px; }
   .barpills { gap:5px; }
   .barline { gap:8px; }
 }
-/* the rivals strip: one row each, the gaps in your favour when green */
 /* ---- profile: section chips and folds ---------------------------------- */
 /* The bar must rest exactly where it sticks, or it jumps the moment it
    catches: the page's own top padding sat above it at rest and vanished when
@@ -1517,12 +1514,6 @@ details.pfold summary:focus-visible { outline:2px solid var(--accent); outline-o
 details.pfold[open] + .pfoldpeek { display:none; }
 @media (prefers-reduced-motion: reduce) { details.pfold summary .caret { transition:none; } }
 
-/* the rivals table: you among them, best first; a compare button per rival */
-table.t.rvtbl td.rvact, table.t.rvtbl th:last-child { width:40px; padding-left:0; padding-right:10px; text-align:right; }
-.rvcmp { appearance:none; cursor:pointer; width:32px; height:32px; border-radius:50%; display:inline-flex;
-  align-items:center; justify-content:center; padding:0; vertical-align:middle;
-  border:1px solid var(--line-strong); background:var(--glass-hi); color:var(--accent); }
-.rvcmp:hover { border-color:var(--accent); }
 .pcards { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:6px; margin-bottom:4px; }
 .pc { padding:9px 10px; border-radius:var(--radius-xs);
   background:var(--glass); border:1px solid var(--glass-border);

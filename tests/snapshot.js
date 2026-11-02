@@ -1,9 +1,8 @@
 const GOENV = require("./lib/env.js");
 /* The season in one card at the top of a profile. Every figure on it is
    recomputed here from the dataset and must match; ranks are never written
-   with an "="; the leader reads "Leading"; on your own page the rivals block
-   follows the card, and only when rivals are pinned; and with no history the
-   card still stands on the figures it has. */
+   with an "="; the leader reads "Leading"; it leads every profile, yours too;
+   and with no history the card still stands on the figures it has. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8800;
@@ -136,12 +135,12 @@ const expect = (p, id) => p.evaluate((id) => {
     chk(got.pills[1].text.indexOf("=") < 0 && /shared/.test(got.tiles["Off the top"].s), "a shared place says so in words, without an =", got.pills[1].text + " / " + got.tiles["Off the top"].s);
   } else console.log("  (no tie in the table today, shared-place wording not exercised)");
 
-  // your own page: the card, then rivals when pinned, then the rest
+  // your own page: the card, then the rest
   await p.evaluate((id) => { localStorage.setItem("go12.me", JSON.stringify(id)); localStorage.removeItem("go12.rivals"); }, ids.mid);
   await p.reload({ waitUntil: "domcontentloaded" }); await p.waitForTimeout(1200);
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);
   let own = await read(p);
-  chk(own.first && own.order.indexOf("section#ps-rivals") < 0, "own page, no rivals pinned: card first, no rivals block", JSON.stringify(own.order));
+  chk(own.first && own.order.join(" ").indexOf("ps-rivals") < 0, "own page: card first", JSON.stringify(own.order));
   // every profile's card wears FPL's colours, white on the gradient, yours and everyone else's
   const look = await p.evaluate(() => { const s = document.querySelector(".card.snap"), cs = getComputedStyle(s);
     return { grad: /linear-gradient/.test(cs.backgroundImage), ink: cs.color, wide: s.scrollWidth > s.clientWidth + 1 }; });
@@ -154,7 +153,7 @@ const expect = (p, id) => p.evaluate((id) => {
   await p.evaluate(() => { location.hash = "#classic"; }); await p.waitForTimeout(300);
   await p.evaluate((x) => { location.hash = "#profile/" + x; }, ids.mid); await p.waitForTimeout(700);
   own = await read(p);
-  chk(own.first && own.order[1] === "section-title#ps-rivals", "own page, a rival pinned: card first, rivals second", JSON.stringify(own.order));
+  chk(own.first && own.order.join(" ").indexOf("ps-rivals") < 0, "own page, with a rivals list a phone kept from before: card first, no rivals block", JSON.stringify(own.order));
 
   // no history at all: the card keeps the figures it has and drops the rest
   await p.evaluate(() => { window.GO_STORE.dataset().history = {}; location.hash = "#classic"; }); await p.waitForTimeout(300);

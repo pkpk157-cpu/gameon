@@ -5,7 +5,9 @@
   "use strict";
 
   var S = window.GO_STORE, K = window.GO_COMPUTE;
-  var ME_KEY = "go12.me", THEME_KEY = "go12.theme", RIVALS_KEY = "go12.rivals", RIVALS_MAX = 2;
+  var ME_KEY = "go12.me", THEME_KEY = "go12.theme";
+  // Pinned rivals were taken out; the list a phone kept goes with them.
+  try { localStorage.removeItem("go12.rivals"); } catch (e) {}
   var FAVS_KEY = "go12.favs";
   var state = { view: "classic", me: lsGet(ME_KEY), monthKey: null, seasonKey: null, group: null, h2hComp: "UCL" };
 
@@ -230,24 +232,7 @@
   }
   function lsGet(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
-  // Rivals: up to three managers pinned from their profiles, kept on this
-  // device only. Ids that no longer name a manager are dropped when read, so
-  // a manager who leaves the league leaves the list with him.
-  function rivals() {
-    var v = lsGet(RIVALS_KEY);
-    return Array.isArray(v) ? v.map(Number).filter(function (x) { return x > 0; }).slice(0, RIVALS_MAX) : [];
-  }
-  function isRival(id) { return rivals().indexOf(+id) !== -1; }
-  // Returns "added", "removed", or "full".
-  function toggleRival(id) {
-    id = +id;
-    var r = rivals();
-    var at = r.indexOf(id);
-    if (at !== -1) { r.splice(at, 1); lsSet(RIVALS_KEY, r); return "removed"; }
-    if (r.length >= RIVALS_MAX) return "full";
-    r.push(id); lsSet(RIVALS_KEY, r); return "added";
-  }
-  // Starred players, kept on this device only. Unlike rivals there is no cap:
+  // Starred players, kept on this device only. There is no cap:
   // a watchlist is the reader's own business and fifteen or fifty are both
   // reasonable. Ids are held as numbers so a star survives the player being
   // renamed, and a player who leaves the game simply stops appearing in a
@@ -541,8 +526,7 @@
     // Arriving from here, the first side is you — the comparison anyone opening
     // this has in mind. Only the first: whoever you were looking at last is
     // worth keeping in the second box, and if that was you, the page picks
-    // somebody else rather than sitting you opposite yourself. Reaching Head to
-    // head from a rival's page still fills in both names from that page.
+    // somebody else rather than sitting you opposite yourself.
     $("#pfCompare").addEventListener("click", function () {
       if (state.me) state.cmpA = state.me;
       go("compare");
@@ -2567,12 +2551,6 @@
       else state.cmpB = +state.profileId;
       location.hash = "compare";
     });
-    $("#rvToggle").addEventListener("click", function () {
-      var r = toggleRival(state.profileId);
-      if (r === "full") { toast("You already have " + RIVALS_MAX + " rivals \u2014 unpin one first"); return; }
-      toast(r === "added" ? "Pinned as a rival" : "Rival unpinned");
-      paintRivalPill();
-    });
     // Tap a player anywhere a pitch is drawn: his own page, opened on the
     // gameweek that was tapped. There used to be a sheet here holding a points
     // breakdown and a season table, which is most of what the page does and
@@ -2998,8 +2976,8 @@
     if (m.topic) { info.style.display = ""; info.setAttribute("data-rules", m.topic); }
     else { info.style.display = "none"; info.removeAttribute("data-rules"); }
 
-    // Beside the name: Compare and Rival on somebody else's page, and on
-    // your own the one word that says so.
+    // Beside the name: Compare on somebody else's page, and on your own the
+    // one word that says so.
     var pills = $("#barPills");
     var onProfile = state.view === "profile" && state.profileId && !!(S.dataset() || {}).managers;
     var onOther = onProfile && !isMe(state.profileId);
@@ -3007,21 +2985,10 @@
     var onTeam = state.view === "fpl" && !!state.fplTeam && !!(state.fplTeamBar && state.fplTeamBar.id === state.fplTeam);
     pills.style.display = onProfile || onTeam ? "" : "none";
     $("#cmpMe").style.display = onOther || onTeam ? "" : "none";
-    $("#rvToggle").style.display = onOther ? "" : "none";
     $("#youPill").style.display = onProfile && !onOther ? "" : "none";
-    if (onOther) paintRivalPill();
     // The pill row makes the bar taller, and the sticky strips below sit on
     // the bar's measured height — so measure again whenever it may have changed.
     measureChrome();
-  }
-  // The rival pill carries its own state: lit while he is one of yours.
-  function paintRivalPill() {
-    var b = $("#rvToggle");
-    if (!b) return;
-    var on = isRival(state.profileId);
-    b.classList.toggle("on", on);
-    b.setAttribute("aria-pressed", on ? "true" : "false");
-    b.title = on ? "One of your rivals \u2014 tap to unpin" : "Keep an eye on this manager";
   }
   function goBack() {
     // A match was opened from a list of fixtures; that is where back leads.
@@ -5483,12 +5450,9 @@
     var P = K.managerProfile(ds, id);
     // The manager's team and name live in the top bar, so they are not
     // repeated here. One compact card per competition.
-    // Compare and Rival now sit in the bar beside his name; this page keeps
-    // only the note that says when it is your own.
-    // The season in one card comes first; then, on your own page, your
-    // rivals if you have pinned any; then everything else.
+    // Compare sits in the bar beside his name; this page keeps only the note
+    // that says when it is your own. The season in one card comes first.
     var h = snapshotHtml(ds, id);
-    if (isMe(id)) h += rivalsHtml(ds, id);
     // Badges are won, not listed: with none there is nothing to say, so
     // nothing is said.
     var B = K.badges(ds, id);
@@ -5700,14 +5664,6 @@
       closeBubble();
       if (!open) openBubble(btn, bd);
     });
-    var rvBox = $("#rivalsBox", host);
-    if (rvBox) rvBox.addEventListener("click", function (e) {
-      var c = e.target.closest("[data-cmp]");
-      if (!c) return;
-      e.stopPropagation();
-      state.cmpA = +id; state.cmpB = +c.getAttribute("data-cmp");
-      location.hash = "compare";
-    });
     var h2hBtn = $("#h2hAll", host);
     if (h2hBtn) h2hBtn.addEventListener("click", function () {
       var rest = $("#h2hRest", host);
@@ -5729,9 +5685,6 @@
     });
   }
 
-  // The rivals strip on your own profile. Each row is the rival against you:
-  // the gap this gameweek and the gap on the season, in your favour when
-  // positive. Live numbers come from the same rows the Classic table draws.
   // The season in one card, at the top of every profile: the figures a
   // manager asks about first, in the order they ask. Ranks are never written
   // with an "=" — a shared place says so in words underneath.
@@ -5789,42 +5742,6 @@
     if (S.value != null) row("Squad", mval(S.value), S.bank == null ? "" : mval(S.bank) + " in the bank");
     h += '<div class="snaplist">' + rows.join("") + '</div></div>';
     return h;
-  }
-
-  function rivalsHtml(ds, meId) {
-    // The section exists only once a rival is pinned; before that the
-    // button on other people's profiles is the whole feature.
-    var ids = rivals();
-    var h = psect("rivals", "Rivals");
-    if (!ids.length) return "";
-    var rows = K.classic(ds), by = {};
-    rows.forEach(function (r) { by[+r.id] = r; });
-    var me = by[+meId];
-    if (!me) return "";
-    // You and your rivals as one short table, in the order the Classic
-    // table has you — so who is ahead is the order, not a sum to do.
-    var set = ids.map(function (rid) { return rid === +meId ? null : by[rid]; })
-      .filter(function (r) { return !!r; });
-    if (!set.length) return ""; // every pin was someone gone, or you
-    set.push(me);
-    set.sort(function (a, b) { return (a.computedRank - b.computedRank) || (a.order - b.order); });
-    var live = K.liveGwId(ds);
-    var gwLabel = "GW" + (live || K.currentGw(ds) || "");
-    var body = set.map(function (r) {
-      var mine = +r.id === +meId;
-      return '<tr' + (mine ? ' class="me"' : '') + '>' +
-        '<td class="num"><span class="r">' + r.computedRank + '</span></td>' +
-        '<td class="name" data-entry="' + r.id + '"><span class="who">' + esc(r.entryName) + '</span>' +
-          '<div class="mgr">' + esc(r.playerName) + '</div></td>' +
-        '<td class="num">' + num(r.eventTotal) + '</td>' +
-        '<td class="num"><b>' + num(r.total) + '</b></td>' +
-        '<td class="rvact">' + (mine ? '' :
-          '<button type="button" class="rvcmp" data-cmp="' + r.id + '" aria-label="Compare with ' +
-          esc(r.entryName) + '">' + svg("h2h", 16) + '</button>') + '</td></tr>';
-    }).join("");
-    return h + '<div class="card"><div class="tablewrap" id="rivalsBox"><table class="t rvtbl"><thead><tr>' +
-      '<th class="num">#</th><th>Team</th><th class="num">' + esc(gwLabel) + '</th><th class="num">Total</th><th></th>' +
-      '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   // A profile section: a title the chip row can find and jump to.

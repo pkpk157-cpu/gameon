@@ -67,7 +67,7 @@ const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? 
       const after = await p.evaluate(() => { const s = document.querySelector("section.view.active"); return { stillThere: !!s && !!s.textContent.trim().length, undef: /undefined|NaN|\[object Object\]/.test(s ? s.textContent : "") }; });
       chk(after.stillThere && !after.undef, where + ": survives every control on it being used", JSON.stringify(after));
     }
-    // the two sheets, a player card, a badge bubble, a rival pin, and a refresh
+    // the two sheets, a player card, a badge bubble, and a refresh
     where = tag + " sheets";
     for (const btn of ["#barMenu", "#barYou"]) { await p.click(btn); await p.waitForTimeout(500); await p.evaluate(() => history.back()); await p.waitForTimeout(400); }
     where = tag + " player card";
@@ -75,16 +75,6 @@ const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? 
     await p.evaluate(() => { const c = document.querySelector(".pcard[data-el]"); c && c.click(); }); await p.waitForTimeout(600);
     chk(await p.evaluate(() => !!document.querySelector(".pphead")), where + ": a player card opens his page");
     await p.evaluate(() => history.back()); await p.waitForTimeout(400);
-    where = tag + " rivals";
-    // the settings walk above blanks every field and saves, which clears the
-    // reader's own team — put it back before asking about their rivals
-    await p.evaluate(() => { try { localStorage.setItem("go12.me", "1255976"); } catch (e) {} });
-    await p.evaluate(() => location.reload()); await p.waitForTimeout(1600);
-    await p.evaluate(() => location.hash = "#profile/130740"); await p.waitForTimeout(900);
-    await p.evaluate(() => { const b = document.querySelector("#rvToggle"); b && b.click(); }); await p.waitForTimeout(400);
-    await p.evaluate(() => location.hash = "#profile/1255976"); await p.waitForTimeout(800);
-    chk(await p.evaluate(() => !!document.querySelector(".rvtbl")), where + ": pinning one draws the rivals table");
-    await p.evaluate(() => { try { localStorage.removeItem("go12.rivals"); } catch (e) {} });
     where = tag + " back out";
     for (let i = 0; i < 6; i++) { await p.evaluate(() => history.back()); await p.waitForTimeout(220); }
     chk(await p.evaluate(() => !document.body.classList.contains("locked") && !!document.querySelector("section.view.active")), where + ": walking back leaves a live page, unlocked");

@@ -95,7 +95,7 @@ const sides = (p) => p.evaluate(() => ({
     chk(v.a.indexOf(myName) === 0 && v.b && v.b !== v.a,
       w + ": me in both boxes is not a comparison — the second finds somebody else", v.a + " vs " + v.b);
 
-    // a rival's own compare button still names both sides from that page
+    // another manager's compare button still names both sides from that page
     await p.evaluate(() => { location.hash = "classic"; });
     await p.waitForTimeout(500);
     const pick = await p.evaluate(() => {
@@ -111,7 +111,7 @@ const sides = (p) => p.evaluate(() => ({
       if (has) {
         await p.click("#cmpMe"); await p.waitForTimeout(900);
         v = await sides(p);
-        chk(v.a.indexOf(myName) === 0 && v.b && v.b !== v.a, w + ": a rival's compare button still fills both sides", v.a + " vs " + v.b);
+        chk(v.a.indexOf(myName) === 0 && v.b && v.b !== v.a, w + ": another manager's compare button still fills both sides", v.a + " vs " + v.b);
       } else chk(true, w + ": that profile has no compare button to press");
     }
 

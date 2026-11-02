@@ -1,7 +1,7 @@
 const GOENV = require("./lib/env.js");
 /* Every broken dataset we know how to make, against every screen and the
    controls added since: stat tabs, the profile's chip row and folds, badges,
-   rivals, player cards and both sheets. Nothing may throw. */
+   player cards and both sheets. Nothing may throw. */
 const { chromium } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8761;
@@ -52,13 +52,6 @@ let fails = 0;
     }
     where = st + " sheets";
     for (const btn of ["#barMenu", "#barYou"]) { try { await p.click(btn, { timeout: 1500 }); } catch (e) {} await p.waitForTimeout(350); await p.evaluate(() => history.back()); await p.waitForTimeout(300); }
-    where = st + " pinning a rival";
-    const other = await p.evaluate(() => { try { const d = window.GO_STORE.dataset(); const m = (d.managers || [])[1]; return m ? m.id : null; } catch (e) { return null; } });
-    if (other) {
-      await p.evaluate(id => location.hash = "#profile/" + id, other); await p.waitForTimeout(500);
-      await p.evaluate(() => { const b = document.querySelector("#rvToggle"); b && b.click(); }); await p.waitForTimeout(250);
-      await p.evaluate(id => location.hash = "#profile/" + id, me); await p.waitForTimeout(500);
-    }
     if (hits.length) { console.log("  FAIL " + st); hits.slice(0, 5).forEach(h => console.log("        " + h)); fails++; }
     else console.log("  ok   " + st + (me ? "" : "  (no managers to stand in for a reader)"));
     await ctx.close();

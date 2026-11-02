@@ -289,7 +289,7 @@ const ENTRY = { id: ME, name: meName, leagues: {
         gws: sel ? [...sel.options].map((o) => +o.value) : [], gw: sel ? +sel.value : null,
         metric: (host.querySelector(".pseg button.on") || {}).textContent || "",
         cmp: getComputedStyle(document.querySelector("#cmpMe")).display !== "none" && getComputedStyle(document.querySelector("#barPills")).display !== "none",
-        rival: getComputedStyle(document.querySelector("#rvToggle")).display !== "none",
+        rival: !!document.querySelector("#rvToggle"),
         wide: document.documentElement.scrollWidth > innerWidth + 1 };
     });
     let tm = await readTeam();

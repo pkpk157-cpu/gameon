@@ -1,5 +1,6 @@
 const GOENV = require("./lib/env.js");
-/* Compare and Rival, in the bar beside the manager's name. */
+/* Compare, in the bar beside the manager's name. Rivals were taken out: no
+   Rival button anywhere, and a list a phone kept from before is cleared. */
 const { chromium, devices } = require("playwright-core");
 const fs = require("fs"), http = require("http"), path = require("path");
 const APP = GOENV.APP, PORT = 8777;
@@ -12,16 +13,16 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
   const b = await chromium.launch({ executablePath: GOENV.CHROME });
   for (const w of [390, 360, 320]) {
     const ctx = await b.newContext({ viewport: { width: w, height: 800 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: "block" });
-    await ctx.addInitScript(() => { try { localStorage.setItem("go12.me", "1255976"); localStorage.removeItem("go12.rivals"); } catch (e) {} });
+    // a phone that pinned somebody before rivals went
+    await ctx.addInitScript(() => { try { localStorage.setItem("go12.me", "1255976"); if (!sessionStorage.getItem("seeded")) { localStorage.setItem("go12.rivals", "[1273065]"); sessionStorage.setItem("seeded", "1"); } } catch (e) {} });
     const p = await ctx.newPage(); const errs = []; p.on("pageerror", e => errs.push(e.message));
     const go = async (h, ms) => { await p.evaluate(x => { location.hash = x; }, "#" + h); await p.waitForTimeout(ms || 800); };
     await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(1800);
     const pills = () => p.evaluate(() => { const box = document.querySelector("#barPills");
-      const c = document.querySelector("#cmpMe"), r = document.querySelector("#rvToggle");
+      const c = document.querySelector("#cmpMe");
       const bar = document.querySelector("header.topbar").getBoundingClientRect();
       const t = document.querySelector("#barTitle").getBoundingClientRect();
-      return { shown: !!box.offsetParent, words: [c.textContent, r.textContent],
-        on: r.classList.contains("on"), pressed: r.getAttribute("aria-pressed"),
+      return { shown: !!box.offsetParent, words: [...box.querySelectorAll("button")].map((x) => x.textContent),
         inBar: !!box.offsetParent && box.getBoundingClientRect().right <= bar.right + 1 && box.getBoundingClientRect().top >= bar.top - 1,
         underName: !!box.offsetParent && box.getBoundingClientRect().top >= t.bottom - 2,
         titleCut: document.querySelector("#barTitle").scrollWidth > document.querySelector("#barTitle").clientWidth + 1,
@@ -30,31 +31,17 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
     await go("profile/1255976", 1200);
     // your own page carries the one word that says so, and neither control
     const own = await p.evaluate(() => { const y = document.querySelector("#youPill");
-      return { you: !!y.offsetParent && y.textContent.trim() === "This is you", cmp: !!document.querySelector("#cmpMe").offsetParent, rv: !!document.querySelector("#rvToggle").offsetParent }; });
-    chk(own.you && !own.cmp && !own.rv, w + ": on your own page the bar says This is you, with no Compare or Rival", JSON.stringify(own));
+      return { you: !!y.offsetParent && y.textContent.trim() === "This is you", cmp: !!document.querySelector("#cmpMe").offsetParent,
+        rv: !!document.querySelector("#rvToggle"), table: !!document.querySelector(".rvtbl, #ps-rivals"), kept: localStorage.getItem("go12.rivals") }; });
+    chk(own.you && !own.cmp && !own.rv && !own.table, w + ": on your own page the bar says This is you, with no Compare, and no rivals table", JSON.stringify(own));
+    chk(own.kept === null, w + ": a rivals list kept from before is cleared", String(own.kept));
     // a long name, to see what the bar does when it is squeezed
     await go("profile/1273065", 1200);
     let s = await pills();
-    chk(s.shown && s.words.join("|") === "Compare|Rival", w + ": one word each, beside the name", JSON.stringify(s.words));
-    chk(s.inBar && s.underName, w + ": both sit in the bar, on the line under the name", JSON.stringify(s));
+    chk(s.shown && s.words.join("|") === "Compare", w + ": Compare alone beside the name, no Rival", JSON.stringify(s.words));
+    chk(s.inBar && s.underName, w + ": it sits in the bar, on the line under the name", JSON.stringify(s));
     chk(!s.titleCut, w + ": and the name keeps all its letters", s.title);
-    chk(!s.on && s.pressed === "false", w + ": the rival pill starts unlit");
-    if (w === 390) await p.screenshot({ path: "barpills-off.png", clip: { x: 0, y: 0, width: w, height: 120 } });
-    await p.click("#rvToggle"); await p.waitForTimeout(400);
-    s = await pills();
-    chk(s.on && s.pressed === "true" && s.words[1] === "Rival", w + ": tapping it lights it, and it still says Rival", JSON.stringify(s.words));
-    if (w === 390) await p.screenshot({ path: "barpills-on.png", clip: { x: 0, y: 0, width: w, height: 120 } });
-    chk(JSON.stringify(await p.evaluate(() => JSON.parse(localStorage.getItem("go12.rivals")))) === "[1273065]", w + ": and he is pinned");
-    // leaving and coming back keeps it lit
-    await go("classic"); await go("profile/1273065", 1000);
-    chk((await pills()).on, w + ": still lit when you come back to him");
-    // your own page now carries the rivals table
-    await go("profile/1255976", 1200);
-    chk(await p.evaluate(() => !!document.querySelector(".rvtbl")), w + ": your page now has the rivals table");
-    // tapping again unpins
-    await go("profile/1273065", 1000);
-    await p.click("#rvToggle"); await p.waitForTimeout(400);
-    chk(!(await pills()).on, w + ": tapping again puts it out");
+    if (w === 390) await p.screenshot({ path: "barpills.png", clip: { x: 0, y: 0, width: w, height: 120 } });
     // compare takes you there with the pair set
     await p.click("#cmpMe"); await p.waitForTimeout(1200);
     const cmp = await p.evaluate(() => ({ hash: location.hash, a: (document.querySelector("#cmpA") || {}).value, b: (document.querySelector("#cmpB") || {}).value }));
