@@ -21,9 +21,13 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
 });
 let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL ") + m + (x ? "  " + x : "")); if (!ok) fails++; };
 
-const marks = (p) => p.evaluate(() => [...document.querySelectorAll("#menuBody .mi-mark")].map(m => {
+// FPL news has no badge: its drawn tile is the whole mark. The checks on
+// badges (decoded, swapped, taken out when broken) are about the other four.
+const BADGED = (m) => m.go !== "news";
+const marks = (p, all) => p.evaluate((all) => [...document.querySelectorAll("#menuBody .mi-mark")].map(m => {
   const img = m.querySelector("img.mi-logo"), tile = m.querySelector("svg.tile");
-  return {
+  const go = (m.closest(".menuitem") || { getAttribute: () => null }).getAttribute("data-go");
+  return { go,
     src: img ? img.getAttribute("src") : null,
     lazy: img ? img.getAttribute("loading") : null,
     ready: !!img && img.complete && img.naturalWidth > 0,
@@ -32,7 +36,7 @@ const marks = (p) => p.evaluate(() => [...document.querySelectorAll("#menuBody .
     tileKids: tile ? tile.children.length : -1,
     boxed: m.getBoundingClientRect().width > 0
   };
-}));
+}), all).then((a) => (all ? a : a.filter(BADGED)));
 
 async function open(p) {
   await p.click("#barMenu");
@@ -58,16 +62,20 @@ async function open(p) {
     await p.waitForTimeout(260);
     const early = [];
     for (const h of await p.$$("#menuBody .mi-mark")) early.push(await h.screenshot());
-    const m1 = await marks(p);
+    const m1 = await marks(p, true);
     await p.waitForTimeout(1600);
     const late = [];
     for (const h of await p.$$("#menuBody .mi-mark")) late.push(await h.screenshot());
 
-    chk(m1.length === 4, "four section marks", String(m1.length));
-    chk(m1.every(m => m.lazy === null), "the badges are not lazy — a drawer off screen never fetches those", m1.map(m => m.lazy).join(","));
-    chk(m1.every(m => m.ready), "every badge is already decoded when the drawer opens", JSON.stringify(m1.map(m => m.ready)));
-    chk(m1.every(m => m.tileKids === 4), "and the tile under it carries no glyph to flash", m1.map(m => m.tileKids).join(","));
-    chk(early.length === 4 && early.every((buf, i) => buf.equals(late[i])),
+    // four sections wear a real badge over the drawn tile; FPL news is the
+    // drawn tile alone, its glyph the whole mark, so it has nothing to swap
+    const badges = m1.filter(BADGED), drawn = m1.filter(m => !BADGED(m));
+    chk(m1.length === 5 && badges.length === 4 && badges.every(m => m.src) && drawn.length === 1 && !drawn[0].src, "five section marks: four badges and the drawn news tile", m1.length + " / " + badges.length);
+    chk(badges.every(m => m.lazy === null), "the badges are not lazy — a drawer off screen never fetches those", badges.map(m => m.lazy).join(","));
+    chk(badges.every(m => m.ready), "every badge is already decoded when the drawer opens", JSON.stringify(badges.map(m => m.ready)));
+    chk(badges.every(m => m.tileKids === 4), "and the tile under it carries no glyph to flash", badges.map(m => m.tileKids).join(","));
+    chk(drawn.every(m => m.tileKids > 4 && m.boxed), "the news tile is drawn whole, glyph and all", drawn.map(m => m.tileKids).join(","));
+    chk(early.length === 5 && early.every((buf, i) => buf.equals(late[i])),
       "the marks look identical a moment after opening and a second and a half later");
     chk(errs.length === 0, "no page errors", errs.join(" | "));
     await ctx.close();
@@ -153,7 +161,7 @@ async function open(p) {
     const hs = await p.evaluate(() => [...document.querySelectorAll("#menuBody .menulist .menuitem")].map(x => {
       const r = x.getBoundingClientRect(), t = x.querySelector(".mi-t").getBoundingClientRect(), s2 = x.querySelector(".mi-s").getBoundingClientRect();
       return { h: Math.round(r.height), inside: t.top >= r.top && s2.bottom <= r.bottom, gap: Math.round(s2.top - t.bottom) }; }));
-    chk(hs.length === 4 && hs.every(x => x.h === hs[0].h), w + "px: all four sections are the same height", hs.map(x => x.h).join(","));
+    chk(hs.length === 5 && hs.every(x => x.h === hs[0].h), w + "px: all five sections are the same height", hs.map(x => x.h).join(","));
     chk(hs.every(x => x.inside && x.gap <= 4), w + "px: each card's title and line sit together inside it", JSON.stringify(hs.map(x => x.gap)));
     chk(errs.length === 0, w + "px: no page errors", errs.join(" | "));
     await ctx.close();

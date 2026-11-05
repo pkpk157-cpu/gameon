@@ -71,7 +71,7 @@ const ENTRY = { id: ME, name: meName, leagues: {
     const menu = await p.evaluate(() => [...document.querySelectorAll("#menuBody .menuitem")].map((b) => ({ t: b.querySelector(".mi-t").textContent,
       img: (b.querySelector("img.mi-logo") || {}).getAttribute ? b.querySelector("img.mi-logo").getAttribute("src") : null,
       stops: [...b.querySelectorAll("linearGradient stop")].slice(0, 2).map((s) => s.getAttribute("stop-color")).join(">") })));
-    chk(menu.map((m) => m.t).join("|") === "Premier League|FPL|Game On tournament|Game On Voluntary",
+    chk(menu.map((m) => m.t).join("|") === "Premier League|FPL|Game On tournament|Game On Voluntary|FPL news",
       "the menu offers FPL between the Premier League and the Game On tournament", menu.map((m) => m.t).join("|"));
     const f = menu.find((m) => m.t === "FPL") || {}, pl = menu.find((m) => m.t === "Premier League") || {};
     chk(f.img === "fpl-tile.webp" && pl.img === "pl-lion.webp", "the FPL tile has its own art, not the Premier League's", f.img + " vs " + pl.img);
