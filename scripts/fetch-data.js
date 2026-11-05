@@ -1317,6 +1317,13 @@ if (require.main === module) (async () => {
   })();
   if (faceHide.length) console.log("  " + faceHide.length + " photograph(s) held back: the player has changed club since the shot");
 
+  // FPL news for the menu's News page. Its own reader, read at most every
+  // quarter of an hour, and it never throws: whatever happens, the league's
+  // data publishes, with the last good headlines if there are no new ones.
+  let news = prev.news || null;
+  try { news = await require("./news.js").newsOf(prev.news); } catch (e) { news = prev.news || null; }
+  if (news && news.sources) console.log("news: " + Object.keys(news.sources).map((k) => k + (news.sources[k].ok ? " " + news.sources[k].n : " kept (" + news.sources[k].why + ")")).join(", ") + " -> " + news.items.length + " headlines");
+
   const dataset = {
     updatedAt: new Date().toISOString(), season: "Game On V12",
     bootstrap: { events }, league: { id: CLASSIC, name: name }, rosterAsOf, voluntary,
@@ -1327,7 +1334,7 @@ if (require.main === module) (async () => {
     elements, pitchGw, picksV: 2, livePoints, picks, chips, gwFixtures, teams: teamShort, teamNames,
     buys: buys || {}, buysGw: pitchGw, buysV: BUYS_V, moves: moves || {},
     liveBonus, liveStats, picksFinal, liveAudit, prices, priceLog, market, breakdown, gwStamps, gwEvents, flags,
-    faceHide, pending
+    faceHide, pending, news
   };
   // Refuse to publish something clearly worse than what is already live: a
   // partial fetch overwriting good data is worse than skipping a run.

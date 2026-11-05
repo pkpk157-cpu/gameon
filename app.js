@@ -176,6 +176,11 @@
   var G_COINS = '<ellipse cx="15" cy="10.4" rx="7.2" ry="2.8" fill="#fff"/>' +
     '<path d="M7.8 10.4v3c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>' +
     '<path d="M7.8 15.6v3c0 1.55 3.22 2.8 7.2 2.8s7.2-1.25 7.2-2.8v-3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>';
+  // a folded newspaper: the masthead, a picture block and its lines of type
+  var G_NEWS = '<rect x="7.4" y="8.4" width="15.2" height="13.4" rx="2" fill="#fff"/>' +
+    '<rect x="9.4" y="10.4" width="11.2" height="2" rx=".6" fill="rgba(0,0,0,.32)"/>' +
+    '<rect x="9.4" y="14" width="4.6" height="5.6" rx=".6" fill="rgba(0,0,0,.2)"/>' +
+    '<path d="M15.4 14.8h5.2M15.4 17h5.2M15.4 19.2h3.6" stroke="rgba(0,0,0,.28)" stroke-width="1.2" stroke-linecap="round"/>';
   var TILE = {
     classic: tile("cl", "#ffd76a", "#e6a417", G_TROPHY),
     monthly: tile("mo", "#5db4ff", "#2f7bf0", G_CAL),
@@ -2167,12 +2172,14 @@
       { k: "league", go: backTo, t: "Game On tournament", s: "Classic, MoM, LMS, Pyramid and UCL",
         i: markTile("mgo", "#ffd76a", "#e6a417", G_TROPHY, "logo-tile.webp") },
       { k: "vol", go: "vol", t: "Game On Voluntary", s: "Five side leagues and prizes",
-        i: markTile("mvo", "#ff9f4a", "#d1521c", G_COINS, "logo-tile-inv.webp") }
+        i: markTile("mvo", "#ff9f4a", "#d1521c", G_COINS, "logo-tile-inv.webp") },
+      { k: "news", go: "news", t: "FPL news", s: "From FPL, Fantasy Football Scout and the web",
+        i: '<span class="mi-mark">' + tile("mnw", "#5ec8f2", "#1f6fc4", G_NEWS) + '</span>' }
     ];
     // Prices and player stats are not a section of the league — they are
     // reference, about footballers rather than managers — so they live in the
     // profile sheet with the other lookups instead of here.
-    var inLeague = here !== "prices" && here !== "pl" && here !== "vol" && here !== "fpl";
+    var inLeague = here !== "prices" && here !== "pl" && here !== "vol" && here !== "fpl" && here !== "news";
     return '<div class="menu"><div class="lab-sm">Sections</div>' +
       '<div class="menulist">' + items.map(function (it) {
         var on = (it.k === "league") ? inLeague : (here === it.k);
@@ -2721,7 +2728,7 @@
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
       .concat(["rules", "settings", "profile", "compare", "stats", "prices", "chips", "pl",
-               "winnings", "gwstatus", "vol", "player", "fpl", "market", "bans"]);
+               "winnings", "gwstatus", "vol", "player", "fpl", "market", "bans", "news"]);
     if (known.indexOf(view) === -1) {
       // A bookmark or a cached hash for a view that no longer exists: show the
       // league, and correct the address so a reload does not repeat the detour.
@@ -2735,7 +2742,7 @@
     if (SUB_VIEWS.indexOf(view) === -1) state.backView = state.backTo = view;
     // A section's own page (Premier League, FPL, Voluntary) is somewhere to
     // come back to as well, as it stood; a match, a league or a team is not
-    else if ((view === "fpl" && !parts[1]) || view === "vol" ||
+    else if ((view === "fpl" && !parts[1]) || view === "vol" || view === "news" ||
              (view === "pl" && !/^[A-Z]{3}-[A-Z]{3}$/.test(parts[2] || ""))) state.backTo = h;
     // A player can be opened from a match, a leaderboard, a pitch or a price
     // table, and back has to mean the page he was opened from. backView holds
@@ -2867,6 +2874,7 @@
     winnings:{ t: "Winnings" },
     gwstatus:{ t: "Gameweek status" },
     vol:     { t: "Game On Voluntary", topic: "voluntary" },
+    news:    { t: "FPL news" },
     // the bar carries his name, so the page body never repeats it
     player:  { t: "Player" },
     market:  { t: "Transfer market" },
@@ -2875,7 +2883,7 @@
   // Sub-views carry a back arrow in the bar; a profile also puts the manager's
   // team and name there, so the page body never repeats them.
   var SUB_VIEWS = ["profile", "rules", "compare", "stats", "settings", "prices", "chips", "pl",
-                   "winnings", "gwstatus", "vol", "player", "fpl", "market", "bans"];
+                   "winnings", "gwstatus", "vol", "player", "fpl", "market", "bans", "news"];
   function updateBanner() {
     var m = VIEW_META[state.view] || { t: "Game On V12" };
     var title = m.t, sub = "";
@@ -2969,7 +2977,7 @@
     // a team or a player opened inside one does.
     var back = $("#barBack");
     var landing = (state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory) ||
-      (state.view === "pl" && !state.plMatch) || state.view === "vol";
+      (state.view === "pl" && !state.plMatch) || state.view === "vol" || state.view === "news";
     back.style.display = SUB_VIEWS.indexOf(state.view) === -1 || landing ? "none" : "";
 
     var info = $("#barInfo");
@@ -3042,6 +3050,7 @@
     if (state.view === "market") return renderMarket(host, S.dataset());
     if (state.view === "bans") return renderBans(host, S.dataset());
     if (state.view === "vol") return renderVoluntary(host, S.dataset());
+    if (state.view === "news") return renderNews(host, S.dataset());
     if (state.view === "player") return renderPlayer(host, S.dataset());
 
     if (!ds || !ds.managers || !ds.managers.length) {
@@ -4867,6 +4876,56 @@
     var cached = fplCached(me);
     paint(cached, cached ? "fresh" : "loading");
     if (!cached || Date.now() - cached.at >= FPL_FRESH_MS) fplFetch(me).then(after);
+  }
+
+  /* ---- FPL news ------------------------------------------------------------
+     Headlines only, each opening on its own site. The updater reads them
+     (scripts/news.js): FPL's own articles, Fantasy Football Scout, and Google
+     News for everyone else. Each says where it is from and when it was
+     published; the pills narrow the list to one source. */
+  var NEWS_SRC = [["all", "All"], ["fpl", "FPL"], ["ffs", "Scout"], ["gn", "Web"]];
+  function renderNews(host, ds) {
+    var N = ds && ds.news, items = N && Array.isArray(N.items) ? N.items : [];
+    if (!items.length) {
+      host.innerHTML = '<div class="callout">No news yet. The first headlines arrive with the next update.</div>';
+      return;
+    }
+    if (!NEWS_SRC.some(function (p) { return p[0] === state.newsSrc; })) state.newsSrc = "all";
+    var now = Date.now();
+    var link = function (u) { return /^https:\/\/[^\s"'<>]+$/i.test(String(u || "")) ? String(u) : null; };
+    // newest first, whatever order they were stored in
+    var stamp = function (it) { var t = Date.parse(it && it.d); return isFinite(t) ? t : 0; };
+    var rows = items.filter(function (it) { return it && (state.newsSrc === "all" || it.s === state.newsSrc); })
+      .sort(function (a, b) { return stamp(b) - stamp(a); })
+      .map(function (it) {
+        var u = link(it.u);
+        if (!u || !it.t) return "";
+        var t = Date.parse(it.d), age = isFinite(t) ? now - t : null;
+        // within the week, how long ago; before that, the day
+        var when = age == null ? "" : age < 7 * 864e5 ? agoText(age)
+          : new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+        return '<a class="nwrow" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' +
+          '<span class="nwmeta"><span class="nwsrc nw-' + esc(it.s) + '">' + esc(it.o || "") + '</span>' +
+            (when ? '<span class="nwwhen">' + esc(when) + '</span>' : '') + '</span>' +
+          '<span class="nwt">' + esc(it.t) + '</span>' +
+          (it.x ? '<span class="nwx">' + esc(it.x) + '</span>' : '') + '</a>';
+      }).join("");
+    var label = (NEWS_SRC.filter(function (p) { return p[0] === state.newsSrc; })[0] || [])[1];
+    var read = N.at && isFinite(Date.parse(N.at)) ? agoText(now - Date.parse(N.at)) : "";
+    host.innerHTML =
+      '<div class="psegrow"><div class="pseg sm" id="nwSrc" role="tablist" aria-label="Source">' + NEWS_SRC.map(function (p) {
+        return '<button type="button" role="tab" data-src="' + p[0] + '"' + (state.newsSrc === p[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>' + p[1] + '</button>';
+      }).join("") + '</div></div>' +
+      (rows ? '<div class="card nwlist">' + rows + '</div>'
+            : '<div class="callout">Nothing from ' + esc(label) + ' just now.</div>') +
+      '<div class="note" style="margin:10px 2px 4px">Headlines from FPL (premierleague.com), Fantasy Football Scout and Google News, ' +
+        'checked every 15 minutes' + (read ? '; last checked ' + esc(read) : '') + '. Each opens on its own site.</div>';
+    $("#nwSrc", host).addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-src]");
+      if (!b || b.getAttribute("data-src") === state.newsSrc) return;
+      state.newsSrc = b.getAttribute("data-src");
+      renderNews(host, ds);
+    });
   }
 
   function renderVoluntary(host, ds) {
