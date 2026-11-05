@@ -1,0 +1,59 @@
+name: Probe news sources (temporary)
+on:
+  push:
+    branches: [probe-news]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Fetch each source
+        run: |
+          cat > probe.js <<'JS'
+          const UA = "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)";
+          const urls = [
+            ["rss google", "https://news.google.com/rss/search?q=%22Fantasy+Premier+League%22&hl=en-GB&gl=GB&ceid=GB:en"],
+            ["rss ffscout", "https://www.fantasyfootballscout.co.uk/feed/"],
+            ["rss guardian", "https://www.theguardian.com/football/fantasy-football/rss"],
+            ["rss pundit", "https://www.fantasyfootballpundit.com/feed/"],
+            ["pl pulse FPL", "https://footballapi.pulselive.com/content/PremierLeague/text/EN/?pageSize=5&tagNames=FPL&sort=publishDate%20desc"],
+            ["pl pulse fantasy", "https://footballapi.pulselive.com/content/PremierLeague/text/EN/?pageSize=5&tagNames=Fantasy%20Premier%20League&sort=publishDate%20desc"],
+            ["pl pulse any", "https://footballapi.pulselive.com/content/PremierLeague/text/EN/?pageSize=3"],
+            ["pl api text", "https://api.premierleague.com/content/premierleague/text/EN?pageSize=5"],
+            ["pl api en", "https://api.premierleague.com/content/premierleague/en/text?pageSize=5"],
+            ["pl news html", "https://www.premierleague.com/en/news"],
+            ["pl fpl html", "https://www.premierleague.com/en/news?tag=fantasy-premier-league"],
+            ["fpl site", "https://fantasy.premierleague.com/"],
+            ["pl rss", "https://www.premierleague.com/rss/news"]
+          ];
+          (async () => {
+            for (const [k, u] of urls) {
+              console.log("\n######## " + k + "  " + u);
+              try {
+                const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 20000);
+                const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "*/*", "Origin": "https://www.premierleague.com", "Referer": "https://www.premierleague.com/" }, signal: ctrl.signal, redirect: "follow" });
+                clearTimeout(t);
+                const body = await r.text();
+                console.log("status " + r.status + " type " + r.headers.get("content-type") + " bytes " + body.length + " final " + r.url);
+                if (/json/.test(r.headers.get("content-type") || "")) {
+                  try { const j = JSON.parse(body); console.log("json keys " + Object.keys(j).join(","));
+                    const arr = j.content || j.data || j.results || j.items || [];
+                    console.log("first item: " + JSON.stringify(arr[0] || j).slice(0, 2500)); } catch (e) { console.log(body.slice(0, 1500)); }
+                } else if (/xml|rss/.test(r.headers.get("content-type") || "") || /^<\?xml|<rss/.test(body.trim())) {
+                  const items = body.split(/<item[\s>]/).slice(1, 4);
+                  items.forEach((it, i) => console.log("item " + i + ": " + it.slice(0, 1200).replace(/\s+/g, " ")));
+                } else {
+                  const hosts = [...new Set((body.match(/https?:\/\/[a-z0-9.-]*(api|pulselive|content)[a-z0-9.-]*\.[a-z]+[^"'\s<>]{0,120}/gi) || []))].slice(0, 30);
+                  console.log("api-looking urls: " + hosts.join("\n  "));
+                  console.log("head: " + body.slice(0, 600).replace(/\s+/g, " "));
+                }
+              } catch (e) { console.log("ERROR " + (e && e.message)); }
+            }
+          })();
+          JS
+          node probe.js
