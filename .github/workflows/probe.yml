@@ -20,49 +20,29 @@ jobs:
             const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "*/*" }, signal: c.signal }); clearTimeout(t);
             return { s: r.status, ct: r.headers.get("content-type"), b: await r.text(), url: r.url }; };
           (async () => {
-            // 1. which tags do PL articles carry? find the FPL ones
-            try {
-              const r = await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=60");
-              const j = JSON.parse(r.b); const tally = {};
-              j.content.forEach((a) => (a.tags || []).forEach((t) => { const k = (t.label || t.name || JSON.stringify(t)).slice(0, 60); tally[k] = (tally[k] || 0) + 1; }));
-              console.log("TAGS over 60 latest: " + JSON.stringify(Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 60)));
-              const a0 = j.content[0]; console.log("ITEM KEYS " + Object.keys(a0).join(","));
-              console.log("ITEM sample " + JSON.stringify({ title: a0.title, date: a0.date, publishFrom: a0.publishFrom, hotlinkUrl: a0.hotlinkUrl, canonicalUrl: a0.canonicalUrl, url: a0.url, tags: a0.tags, leadMedia: a0.leadMedia && { type: a0.leadMedia.type, imageUrl: a0.leadMedia.imageUrl, onDemandUrl: a0.leadMedia.onDemandUrl }, summary: a0.summary, subtitle: a0.subtitle }).slice(0, 2500));
-              const fpl = j.content.filter((a) => /fpl|fantasy/i.test(JSON.stringify(a.tags || []) + " " + a.title));
-              console.log("FPL-looking among 60: " + fpl.length + " :: " + fpl.slice(0, 8).map((a) => a.title + " | tags " + JSON.stringify((a.tags || []).map((t) => t.label))).join("\n   "));
-            } catch (e) { console.log("tags ERROR " + e.message); }
-            // 2. filters to try for FPL-only articles
-            const filt = [
-              "tagNames=FPL", "tagNames=fpl", "tagNames=Fantasy", "tagNames=FPL%20Scout", "tagNames=The%20Scout",
-              "tagExpression=%22FPL%22", "tagExpression=%22Fantasy%20Premier%20League%22", "tags=FPL", "references=FPL"
-            ];
-            for (const f of filt) {
-              try { const r = await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=5&" + f);
-                let line = "status " + r.s; try { const j = JSON.parse(r.b); line += " total " + (j.pageInfo && j.pageInfo.numEntries) + " :: " + (j.content || []).map((a) => a.title).join(" || "); } catch (e) { line += " " + r.b.slice(0, 200); }
-                console.log("FILTER " + f + " -> " + line.slice(0, 900));
-              } catch (e) { console.log("FILTER " + f + " ERROR " + e.message); }
+            const fpl = [], tally = {};
+            for (let page = 0; page < 6; page++) {
+              try { const r = await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=100&page=" + page);
+                const j = JSON.parse(r.b);
+                (j.content || []).forEach((a) => { const tl = (a.tags || []).map((t) => t.label);
+                  if (/\bFPL\b|fantasy/i.test(a.title)) { fpl.push(a); tl.forEach((x) => { tally[x] = (tally[x] || 0) + 1; }); } });
+                console.log("page " + page + " items " + (j.content || []).length + " oldest " + ((j.content || []).slice(-1)[0] || {}).date);
+              } catch (e) { console.log("page " + page + " ERROR " + e.message); }
             }
-            // 3. the other two sites' feeds
-            const feeds = [
-              "https://www.theguardian.com/football/series/fantasy-football-tips/rss",
-              "https://www.theguardian.com/football/fantasy-football-tips/rss",
-              "https://www.theguardian.com/sport/fantasy-football/rss",
-              "https://www.theguardian.com/football/fantasyfootball/rss",
-              "https://www.theguardian.com/football/series/fantasy-football/rss",
-              "https://www.fantasyfootballpundit.com/rss.xml",
-              "https://www.fantasyfootballpundit.com/feed.xml",
-              "https://www.fantasyfootballpundit.com/rss",
-              "https://www.fantasyfootballpundit.com/sitemap.xml"
-            ];
-            for (const u of feeds) {
-              try { const r = await get(u); const items = r.b.split(/<item[\s>]|<entry[\s>]|<url>/).slice(1);
-                console.log("FEED " + u + " -> " + r.s + " " + r.ct + " items " + items.length + " :: " + (items[0] || r.b.slice(0, 200)).slice(0, 400).replace(/\s+/g, " "));
-              } catch (e) { console.log("FEED " + u + " ERROR " + e.message); }
+            console.log("FPL-titled: " + fpl.length);
+            console.log("their tags: " + JSON.stringify(Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 40)));
+            fpl.slice(0, 25).forEach((a) => console.log(" * " + a.date + " | " + a.title + " | ext " + ((a.tags || []).some((t) => t.label === "External")) + " | hot " + (a.hotlinkUrl || "") + " | canon " + (a.canonicalUrl || "") + " | seg " + (a.titleUrlSegment || "") + " | id " + a.id + " | img " + ((a.leadMedia && a.leadMedia.imageUrl) || a.imageUrl || "")));
+            // the tag filter, with the labels these articles actually carry
+            const labs = Object.keys(tally).filter((x) => /fpl|fantasy|scout/i.test(x)).slice(0, 6);
+            for (const l of labs) {
+              try { const r = await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=8&tagNames=" + encodeURIComponent(l));
+                const j = JSON.parse(r.b); console.log("FILTER tagNames=" + l + " total " + (j.pageInfo && j.pageInfo.numEntries) + " :: " + (j.content || []).map((a) => a.date.slice(0, 10) + " " + a.title).join(" || ").slice(0, 900));
+              } catch (e) { console.log("FILTER " + l + " ERROR " + e.message); }
             }
-            // 4. the Guardian's football page names its fantasy tag
-            try { const r = await get("https://www.theguardian.com/football/fantasy-football");
-              console.log("GUARDIAN page " + r.s + " final " + r.url + " :: tags " + [...new Set((r.b.match(/theguardian\.com\/[a-z-]+\/[a-z-]*fantasy[a-z-]*/g) || []))].slice(0, 10).join(" , "));
-            } catch (e) { console.log("guardian page ERROR " + e.message); }
+            // the Guardian's feed: what it actually carries
+            try { const r = await get("https://www.theguardian.com/sport/fantasy-football/rss");
+              r.b.split(/<item>/).slice(1, 9).forEach((it) => { const t = (it.match(/<title>([\s\S]*?)<\/title>/) || [])[1]; const d = (it.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1]; const l = (it.match(/<link>([\s\S]*?)<\/link>/) || [])[1]; console.log("GUARDIAN " + d + " | " + t + " | " + l); });
+            } catch (e) { console.log("guardian ERROR " + e.message); }
           })();
           JS
           node probe.js
