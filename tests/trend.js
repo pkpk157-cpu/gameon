@@ -43,6 +43,37 @@ const digits = (s) => String(s).replace(/[^\d.,]/g, "").replace(/,/g, "");
     await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(300);
     const off = await offAhead(p); await p.waitForTimeout(300);
     if (off) chk(off.said, w + ": GW" + off.from + " not kicked off: Stats opens on GW" + off.def + ", and GW" + off.from + " says when it starts, with no tiles", JSON.stringify(off));
+    // Selections and values are known at the deadline: those pages open on
+    // the newest week whatever has kicked off; returns on the newest with a
+    // ball kicked; and a week the reader picks holds across the pages.
+    {
+      const gwOf = () => p.evaluate(() => { const s = document.querySelector("#stGwSel"); return { v: +s.value, max: Math.max.apply(null, [...s.options].map((o) => +o.value)),
+        kicked: Math.max.apply(null, [...s.options].map((o) => +o.value).filter((g) => !window.GO_COMPUTE.gwAhead(window.GO_STORE.dataset(), g))) }; });
+      // a fresh open: nobody has picked a week yet (the step above did)
+      // (a query string makes it a real reload: a change of hash alone keeps the page)
+      await p.goto("http://localhost:" + PORT + "/index.html?fresh=" + w + "#stats/picks", { waitUntil: "domcontentloaded" });
+      await p.waitForSelector("#stGwSel", { timeout: 20000 }); await p.waitForTimeout(800);
+      const pk = await gwOf();
+      await p.evaluate(() => { location.hash = "#stats/value"; }); await p.waitForTimeout(400);
+      const vl = await gwOf();
+      await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(400);
+      const gr = await gwOf();
+      chk(pk.v === pk.max && vl.v === vl.max && gr.v === gr.kicked, w + ": selections and values open on the newest week (GW" + pk.max + "), returns on the newest kicked off (GW" + gr.kicked + ")", JSON.stringify({ pk, vl, gr }));
+      // the chips on the selections page are that week's own
+      await p.evaluate(() => { location.hash = "#stats/picks"; }); await p.waitForTimeout(400);
+      const chips = await p.evaluate(() => { const ds = window.GO_STORE.dataset(), g = +document.querySelector("#stGwSel").value, c = {};
+        Object.keys((ds.picks || {})[g] || {}).forEach((id) => { const x = ds.picks[g][id].c; if (x) c[x] = (c[x] || 0) + 1; });
+        return { g, want: c, shown: document.querySelector("#stBox").textContent.replace(/\s+/g, " ") }; });
+      const name = { "3xc": "Triple Captain", bboost: "Bench Boost", freehit: "Free Hit", wildcard: "Wildcard" };
+      chk(Object.keys(chips.want).every((k) => chips.shown.indexOf(name[k] + " · " + chips.want[k]) !== -1), w + ": the chips shown are GW" + chips.g + "'s own", JSON.stringify(chips.want));
+      // a week picked holds across the pages
+      const pick = Math.max(1, pk.max - 2);
+      await p.selectOption("#stGwSel", String(pick)); await p.waitForTimeout(300);
+      await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(400);
+      const held = await gwOf();
+      chk(held.v === pick, w + ": a week the reader picks stays picked on the next page", JSON.stringify({ pick, held }));
+      await p.evaluate(() => { location.hash = "#stats/gw"; }); await p.waitForTimeout(200);
+    }
     // the series agrees with the tab, week by week
     const agree = await p.evaluate(() => {
       const ds = window.GO_STORE.dataset(), C = window.GO_COMPUTE, S = C.gwSeries(ds);

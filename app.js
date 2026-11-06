@@ -6986,13 +6986,18 @@
     }).map(function (e) { return e.id; });
     if (!all.length) all = K.squadGws(ds);
     if (!all.length) { host.innerHTML = '<div class="callout">No gameweeks played yet.</div>'; return; }
-    if (!state.statsGw || all.indexOf(+state.statsGw) === -1) {
-      // the newest week with a ball kicked: between a deadline and the first
-      // match the new one has nothing to show yet, and is a tap away
-      var kicked = all.filter(function (g) { return !K.gwAhead(ds, g); });
-      state.statsGw = kicked.length ? kicked[kicked.length - 1] : all[all.length - 1];
-    }
     if (!STAT_TABS.some(function (t) { return t.k === state.statsTab; })) state.statsTab = "gw";
+    // Until the reader picks a week, each page opens on its own newest: the
+    // squads, chips and values are known the moment the deadline passes, so
+    // selections and values open on the new week at once; the returns open
+    // on the newest week with a ball kicked, since before the first match the
+    // new one has nothing to show yet (and is a tap away). A week picked here
+    // holds across the pages until the app is next opened.
+    if (!state.statsGwChosen || all.indexOf(+state.statsGw) === -1) {
+      var kicked = all.filter(function (g) { return !K.gwAhead(ds, g); });
+      state.statsGw = state.statsTab === "gw" && kicked.length ? kicked[kicked.length - 1] : all[all.length - 1];
+      state.statsGwChosen = false;
+    }
 
     // Each page is reached from the profile sheet and named in the bar, so
     // there is no row of tabs here. The pictures are the organisers' to make:
@@ -7006,7 +7011,7 @@
     h += '<div id="stBox"></div>';
     host.innerHTML = h;
 
-    $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; drawStats(ds); });
+    $("#stGwSel", host).addEventListener("change", function () { state.statsGw = +this.value; state.statsGwChosen = true; drawStats(ds); });
     var shareBtn = $("#stShare", host);
     if (shareBtn) shareBtn.addEventListener("click", function () {
       var t = STAT_TABS.filter(function (x) { return x.k === state.statsTab; })[0];
