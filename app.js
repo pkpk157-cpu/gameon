@@ -2815,6 +2815,13 @@
         draw();
         if (hero && title) { hero.style.viewTransitionName = ""; title.style.viewTransitionName = "vt-hero"; }
       });
+      // A second page change before this one has begun skips it: the page is
+      // still drawn (the browser runs this update all the same), only the
+      // animation goes, and its promise says so by rejecting. That is
+      // expected, never an error. A fault in drawing the page is: it is
+      // thrown again outside the transition, where it is seen as before.
+      if (t.ready && t.ready.catch) t.ready.catch(function () {});
+      if (t.updateCallbackDone && t.updateCallbackDone.catch) t.updateCallbackDone.catch(function (err) { setTimeout(function () { throw err; }, 0); });
       t.finished.then(clear, clear);
     } catch (e) { clear(); draw(); }
   }

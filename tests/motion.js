@@ -86,6 +86,15 @@ const SPY = () => {
     on: (document.querySelector("#mkPos button.on") || {}).textContent, bg: getComputedStyle(document.querySelector("#mkPos button.on")).backgroundColor }));
   chk(mid.g === 1 && mid.arr === 1, "the highlight is on its way between the pills", J(mid));
   chk(end.g === 0 && end.arr === 0 && end.on === "DEF" && end.bg !== "rgba(0, 0, 0, 0)", "it lands: DEF lit by its own highlight, nothing left behind", J(end));
+  // pages changed faster than a transition can start: each skipped one is
+  // quiet, and the last page asked for is the one on screen
+  const logged = [];
+  p.on("console", (m) => { if (m.type() === "error") logged.push(m.text()); });
+  await p.evaluate(() => { ["#classic", "#lms", "#profile/21743", "#gwstatus", "#stats", "#winnings"].forEach((h, i) => setTimeout(() => { location.hash = h; }, i * 15)); });
+  await p.waitForTimeout(1500);
+  here = await at(p);
+  chk(here.view === "winnings" && !errs.length && !logged.some((t) => /Transition was skipped|ViewTransition/.test(t)),
+      "six pages in a tenth of a second: no error, and the last one is on screen", J({ here, errs: errs.slice(0, 2), logged: logged.slice(0, 2) }));
   chk(errs.length === 0, "no JS errors", errs.slice(0, 3).join(" | "));
   if (process.env.GO_VIDEO) {
     // a recording of it, for a person to look at
