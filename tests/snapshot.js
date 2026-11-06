@@ -61,7 +61,7 @@ const expect = (p, id) => p.evaluate((id) => {
   const H = ds.history[id] || {}; const gws = Object.keys(H).map(Number).sort((a, b) => a - b);
   const sum = (k) => gws.reduce((s, g) => s + (H[g][k] || 0), 0);
   const cnt = rows.filter((r) => typeof r.eventTotal === "number");
-  const avg = Math.round(cnt.reduce((s, r) => s + r.eventTotal, 0) / cnt.length);
+  const avg = Math.round(cnt.reduce((s, r) => s + r.eventTotal, 0) / cnt.length) || 0; // never -0, as the app has it
   let above = null; for (let k = i - 1; k >= 0; k--) if (rows[k].total > me.total) { above = rows[k]; break; }
   let below = null; for (let k = i + 1; k < rows.length; k++) if (rows[k].total < me.total) { below = rows[k]; break; }
   // the gameweek figure is net of hits everywhere: FPL's event_total less the week's cost
