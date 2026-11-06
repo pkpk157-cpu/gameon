@@ -5205,6 +5205,15 @@
     return num(p.pts);
   }
 
+  // The captain's mark, and the vice's: gold when it carries a Triple
+  // Captain (x3), which is the vice's if he stood in for a captain who did not
+  // play. The multiplier is FPL's own, so the gold sits wherever the x3 is.
+  function capMark(p, extra) {
+    var tc = (p.cap || p.vice) && +p.mult === 3;
+    var t = tc ? ' tc" title="Triple Captain' : '';
+    return p.cap ? '<i class="pb cap' + extra + t + '">C</i>'
+      : p.vice ? '<i class="pb vice' + extra + t + '">V</i>' : "";
+  }
   // One player: shirt card with a white name bar and a value bar underneath.
   function pp(p, showPos, metric, swapped) {
     // Turned over: the player this one replaced, and what he scored after
@@ -5221,7 +5230,7 @@
           '<div class="psub">for ' + esc(p.name) + '</div>' +
         '</div></div>';
     }
-    var badge = p.cap ? '<i class="pb cap">C</i>' : (p.vice ? '<i class="pb vice">V</i>' : "");
+    var badge = capMark(p, "");
     if (p.star && metric !== "eo" && metric !== "val") badge += '<i class="pb star"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6 6.6 1-4.8 4.6 1.1 6.6-5.8-3.1-5.8 3.1 1.1-6.6L2.5 9.6l6.6-1Z"/></svg></i>';
     // How close his price is to moving, in the corner the top-scorer star
     // leaves free in this view. Filled means it goes tonight, outlined means he
@@ -7758,7 +7767,7 @@
   // One player in the side-by-side squad table.
   function sqCell(p, metric) {
     if (!p) return '<td class="sqp empty"><div class="sqin"></div></td>';
-    var mark = p.cap ? '<i class="pb cap sq">C</i>' : (p.vice ? '<i class="pb vice sq">V</i>' : "");
+    var mark = capMark(p, " sq");
     // The flex row lives on an inner div: making the cell itself a flex
     // container would drop it out of the table and stack the two columns.
     return '<td class="sqp' + (p.benched ? ' benched' : '') + '"><div class="sqin">' +
