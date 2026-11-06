@@ -795,6 +795,33 @@ main.wrap.fill .freeze .fxwrap > :last-child { padding-bottom:16px; }
 .pseg button { appearance:none; border:0; background:transparent; cursor:pointer; font:inherit;
   font-size:12.5px; font-weight:700; color:var(--ink-soft); padding:6px 22px; border-radius:999px; }
 .pseg button.on { background:var(--glass-hi); color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.14); }
+/* the highlight gliding from one pill to the next (see app.js); the pill
+   arriving lends it its own look and shows none of its own until it lands */
+.pseg button, .srcpill button { position:relative; z-index:1; }
+.pillglide { position:absolute; z-index:0; pointer-events:none; }
+.pseg button.pillarrive.on, .srcpill button.pillarrive.on { background:transparent; box-shadow:none; }
+/* Moving between pages (see app.js): the bars hold still while the page
+   under them slides or fades; a tapped name glides into the bar. */
+header.topbar { view-transition-name:topbar; }
+nav.navbar { view-transition-name:navbar; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration:.26s; animation-timing-function:cubic-bezier(.2,.8,.2,1); }
+html[data-nav="fwd"]::view-transition-old(root) { animation-name:vt-out-left; }
+html[data-nav="fwd"]::view-transition-new(root) { animation-name:vt-in-right; }
+html[data-nav="back"]::view-transition-old(root) { animation-name:vt-out-right; }
+html[data-nav="back"]::view-transition-new(root) { animation-name:vt-in-left; }
+::view-transition-group(vt-hero) { animation-duration:.34s; animation-timing-function:cubic-bezier(.2,.8,.2,1); }
+@keyframes vt-out-left { to { transform:translateX(-18%); opacity:0; } }
+@keyframes vt-in-right { from { transform:translateX(24%); opacity:0; } }
+@keyframes vt-out-right { to { transform:translateX(24%); opacity:0; } }
+@keyframes vt-in-left { from { transform:translateX(-18%); opacity:0; } }
+/* a press you can feel: rows, cards and buttons give a little under the finger */
+@media (hover:none) {
+  .menuitem:active, .nwrow:active, .compcard:active, .fcn:active, button.btn:active { transform:scale(.98); transition:transform .08s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation:none !important; }
+  .menuitem:active, .nwrow:active, .compcard:active, .fcn:active, button.btn:active { transform:none; }
+}
 /* GO | FPL: whose average and highest the card shows, in its corner */
 .srcpill { display:inline-flex; gap:1px; padding:2px; border-radius:999px; background:var(--chip); border:1px solid var(--line); }
 .srcpill button { appearance:none; border:0; background:transparent; cursor:pointer; font:inherit; font-size:11px; font-weight:800;

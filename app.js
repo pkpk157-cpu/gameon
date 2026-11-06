@@ -2238,6 +2238,50 @@
     try { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
     catch (e) { return false; }
   }
+  // A pill switch (GO | FPL, All | GK | DEF..., a gameweek's when) usually
+  // redraws its page, so its highlight cannot simply move. It is measured as
+  // the tap lands, before the page's own handler runs, and again once the page
+  // is drawn; a copy of it then glides from the old pill to the new one.
+  // The control is found again by its words, and only when that is certain.
+  (function () {
+    var SEL = ".pseg, .srcpill";
+    var words = function (box) { return [].map.call(box.querySelectorAll("button"), function (b) { return b.textContent.trim(); }).join("|"); };
+    document.addEventListener("click", function (e) {
+      if (reducedMotion() || !Element.prototype.animate) return;
+      var btn = e.target && e.target.closest && e.target.closest(".pseg button, .srcpill button");
+      if (!btn || btn.classList.contains("on")) return;
+      var box = btn.closest(SEL), from = box && box.querySelector("button.on");
+      if (!from) return;
+      var bx = box.getBoundingClientRect(), fr = from.getBoundingClientRect(), sig = words(box);
+      var start = { x: fr.left - bx.left, w: fr.width };
+      requestAnimationFrame(function () { requestAnimationFrame(function () {
+        var boxes = $all(SEL).filter(function (b) { return b.offsetParent && words(b) === sig; });
+        if (boxes.length !== 1) return;
+        var nb = boxes[0], to = nb.querySelector("button.on");
+        if (!to) return;
+        var nbx = nb.getBoundingClientRect(), tr = to.getBoundingClientRect();
+        if (Math.abs((tr.left - nbx.left) - start.x) < 1) return;
+        glide(nb, to, start, { x: tr.left - nbx.left, w: tr.width });
+      }); });
+    }, true);
+    function glide(box, to, a, b) {
+      var cs = getComputedStyle(to);
+      if (getComputedStyle(box).position === "static") box.style.position = "relative";
+      var g = document.createElement("span");
+      g.className = "pillglide"; g.setAttribute("aria-hidden", "true");
+      g.style.cssText = "left:" + a.x + "px;top:" + to.offsetTop + "px;width:" + a.w + "px;height:" + to.offsetHeight + "px;" +
+        "border-radius:" + cs.borderRadius + ";background:" + cs.backgroundColor + ";box-shadow:" + cs.boxShadow + ";";
+      box.appendChild(g);
+      to.classList.add("pillarrive");
+      var over = false, done = function () { if (over) return; over = true; if (g.parentNode) g.parentNode.removeChild(g); to.classList.remove("pillarrive"); };
+      try {
+        var an = g.animate([{ transform: "translateX(0)", width: a.w + "px" }, { transform: "translateX(" + (b.x - a.x) + "px)", width: b.w + "px" }],
+          { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
+        an.onfinish = done; an.oncancel = done;
+      } catch (e) { done(); }
+      setTimeout(done, 700);
+    }
+  })();
   function liveSnapshot() {
     var host = $(".view.active");
     if (!host) return null;
@@ -2484,6 +2528,8 @@
       startY = null; pulling = false;
       if (!go) { reset(); return; }
       busy = true;
+      // a tick under the finger as it lets go: the refresh has been taken
+      try { if (navigator.vibrate && !reducedMotion()) navigator.vibrate(8); } catch (e) {}
       el.classList.add("busy"); label.textContent = "Refreshing\u2026";
       el.style.transform = "translate(-50%," + THRESH + "px)";
       refreshNow().then(function (msg) { toast(msg); }, function () { toast("Could not refresh"); })
@@ -2722,8 +2768,60 @@
   // it. Only the player page uses it; everything else has a tab to return to.
   var lastHash = null;
 
+  /* ---- motion: moving between pages ----------------------------------------
+     A page change runs inside a view transition where the browser has one:
+     deeper slides in from the right, back slides out to the right, and a move
+     between the five tabs or the menu's sections cross-fades. The top bar and
+     the tab bar stay put. A manager's name tapped in a table glides up into
+     the bar as his profile opens. Never on the first draw, never with reduced
+     motion, and a browser without it simply changes page as before. */
+  var navStack = [], heroTap = null;
+  document.addEventListener("click", function (e) {
+    var c = e.target && e.target.closest && e.target.closest("[data-entry]");
+    heroTap = c ? { el: c, t: Date.now() } : null;
+  }, true);
+  function navDir(prevView, view, h, prevHash) {
+    var at = navStack.lastIndexOf(h), dir;
+    if (at !== -1 && at === navStack.length - 2) { navStack.pop(); dir = "back"; }
+    else { if (navStack[navStack.length - 1] !== prevHash && prevHash) navStack.push(prevHash);
+           navStack.push(h); if (navStack.length > 40) navStack.splice(0, navStack.length - 40); dir = "fwd"; }
+    // the tabs, and the menu's sections at their own front page, sit side by side
+    var side = function (v, hh) {
+      return TABS.some(function (t) { return t.id === v; }) ||
+        (["pl", "fpl", "vol", "news"].indexOf(v) !== -1 && String(hh || "").indexOf("/") === -1);
+    };
+    if (side(prevView, prevHash) && side(view, h)) dir = "side";
+    return dir;
+  }
+  function pageChange(prevView, view, h, prevHash, draw) {
+    var dir = prevHash ? navDir(prevView, view, h, prevHash) : null;
+    // the same page with other figures (a gameweek, a tab inside it) is not a move
+    var same = prevView === view && view !== "profile" && view !== "player";
+    if (!dir || same || reducedMotion() || !document.startViewTransition || document.visibilityState !== "visible") { draw(); return; }
+    var root = document.documentElement, hero = null, title = $("#barTitle");
+    if (dir === "fwd" && view === "profile" && heroTap && Date.now() - heroTap.t < 900 && heroTap.el.isConnected) {
+      hero = heroTap.el.querySelector(".who") || (heroTap.el.tagName !== "TR" ? heroTap.el : null);
+    }
+    heroTap = null;
+    var clear = function () {
+      delete root.dataset.nav;
+      if (hero) hero.style.viewTransitionName = "";
+      if (title) title.style.viewTransitionName = "";
+    };
+    try {
+      root.dataset.nav = dir;
+      if (hero) hero.style.viewTransitionName = "vt-hero";
+      var t = document.startViewTransition(function () {
+        draw();
+        if (hero && title) { hero.style.viewTransitionName = ""; title.style.viewTransitionName = "vt-hero"; }
+      });
+      t.finished.then(clear, clear);
+    } catch (e) { clear(); draw(); }
+  }
+
   function syncFromHash() {
     var h = (location.hash || "#classic").replace("#", "");
+    var prevView = state.view, prevHash = lastHash;
     var parts = h.split("/");
     var view = parts[0];
     var known = TABS.map(function (t) { return t.id; })
@@ -2803,11 +2901,13 @@
     // Never remember a player page as somewhere to go back to, or two taps in
     // a row would send the reader round in a circle.
     if (view !== "player") lastHash = h;
-    render();
-    if (backFromPlayer) {
-      try { window.scrollTo(0, backFromPlayer); } catch (e) {}
-      state.playerFromY = 0;
-    }
+    pageChange(prevView, view, h, prevHash, function () {
+      render();
+      if (backFromPlayer) {
+        try { window.scrollTo(0, backFromPlayer); } catch (e) {}
+        state.playerFromY = 0;
+      }
+    });
   }
 
   // Fill mode sizes the wrap to the screen and lets one table scroll inside it.
