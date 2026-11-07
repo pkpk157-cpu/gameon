@@ -2,8 +2,8 @@
    from six to thirty-eight at every phase — is run through every compute
    entry point, and what comes back is checked against arithmetic done here
    from the raw rows: totals, ranks, the months, the eliminations, the
-   promotions, the groups, the knockouts, the money, the badges, the status
-   page and Theo's lines. Nothing may throw, and nothing may carry a NaN,
+   promotions, the groups, the knockouts, the money, the badges and the status
+   page. Nothing may throw, and nothing may carry a NaN,
    an Infinity or the word "undefined" onto a page.
 
    node tests/season/audit.js [from] [to]      default 6 38
@@ -73,9 +73,8 @@ function loadApp() {
   let current = null;
   sandbox.GO_STORE = { config: () => cfg, overrides: () => ({}), dataset: () => current };
   vm.runInContext(fs.readFileSync(path.join(APP, "compute.js"), "utf8"), sandbox, { filename: "compute.js" });
-  vm.runInContext(fs.readFileSync(path.join(APP, "theo.js"), "utf8"), sandbox, { filename: "theo.js" });
   return {
-    C: sandbox.GO_COMPUTE, T: sandbox.GO_THEO, cfg,
+    C: sandbox.GO_COMPUTE, cfg,
     use: (ds, now) => { current = ds; sandbox.__setNow(now); }
   };
 }
@@ -103,7 +102,7 @@ function call(state, name, fn) {
 
 /* ---- the checks ---------------------------------------------------------- */
 function audit(app, st) {
-  const { C, T, cfg } = app;
+  const { C, cfg } = app;
   const ds = st.dataset, gw = st.gw, phase = st.phase;
   const label = "GW" + gw + " " + phase;
   app.use(ds, st.now);
@@ -437,26 +436,6 @@ function audit(app, st) {
     call(label, "playerBreakdown " + el, () => C.playerBreakdown(ds, +el, cur));
     call(label, "playerHistory " + el, () => C.playerHistory(ds, +el));
   });
-
-  /* Theo */
-  const me = sample[2];
-  T.sync({ ds, me, view: "classic" });
-  const ctx = T.context();
-  chk(label, ctx && +ctx.me === +me, "Theo built his facts", ctx && ctx.me);
-  if (ctx && +ctx.me === +me) {
-    const kinds = T.lines();
-    let fits = 0, bad = [];
-    kinds.forEach((k, i) => {
-      if (!T.fits(i)) return;
-      fits++;
-      try {
-        const txt = T.text(i);
-        if (!txt || /\bNaN\b|\bundefined\b|\bnull\b|\[object/.test(txt)) bad.push(i + ":" + k + " " + JSON.stringify(txt).slice(0, 80));
-      } catch (e) { bad.push(i + ":" + k + " threw " + e.message); }
-    });
-    chk(label, fits >= 8, "Theo has lines for this moment", fits);
-    chk(label, !bad.length, "every Theo line that fits reads cleanly", bad.slice(0, 3).join(" | "));
-  }
 }
 
 (async () => {

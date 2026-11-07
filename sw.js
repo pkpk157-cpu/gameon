@@ -12,13 +12,13 @@
    checked by scripts/check-sources.js on every push: it changes when, and
    only when, the app does, so a worker is reinstalled for a new release and
    not for the data the updater publishes every five minutes. */
-const BUILD = "af2c632e7f97";
+const BUILD = "d856af0bb32a";
 const CACHE = "gameon-" + BUILD;
 // Player and club pictures, kept across releases: they do not change with one.
 const PHOTOS = "gameon-photos";
 const ASSETS = [
   "./index.html", "./styles.css",
-  "./config.js", "./scripts/bonus.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./theo.js", "./app.js",
+  "./config.js", "./scripts/bonus.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./app.js",
   "./manifest.json", "./favicon-64.png", "./logo-splash.webp", "./logo-crest.webp", "./launch-tile.webp",
   "./logo-tile.webp", "./logo-tile-inv.webp", "./pl-lion.webp", "./fpl-tile.webp"
 ];
