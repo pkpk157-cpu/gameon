@@ -121,7 +121,25 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
         const meAt = G.at[me.id];
         chk(t.title === "Live: points and players played" && JSON.stringify(t.cells) === JSON.stringify(G.cells) && t.fits && t.you === (meAt ? 1 : 0),
             w + "px: it opens the grid: every cell the computed count, yours marked, nothing wider than the phone", JSON.stringify({ title: t.title, fits: t.fits, you: t.you }));
-        await p.click("#modalClose"); await p.waitForTimeout(400);
+        // a cell opens its managers, most points first; tapped again it closes
+        const bi = G.cells.findIndex((r) => r.some((n) => n > 1)), ci = G.cells[bi].findIndex((n) => n > 1);
+        await p.click('td[data-lg="' + bi + "," + ci + '"]'); await p.waitForTimeout(500);
+        const want = Object.keys(G.at).filter((id) => G.at[id][0] === bi && G.at[id][1] === ci).map(Number)
+          .map((id) => ({ id, p: K.gwScore(ds, id, gw), t: (K.managerMap(ds)[id] || {}).entryName || "" }))
+          .sort((x, y) => (y.p - x.p) || x.t.localeCompare(y.t)).map((x) => x.id);
+        const got = await p.evaluate(() => ({ ids: [...document.querySelectorAll("#lgList .lgrow")].map((b) => +b.getAttribute("data-lgid")),
+          head: (document.querySelector("#lgList .lglh") || {}).textContent || "", shown: !document.querySelector("#lgList").hidden,
+          below: document.querySelector("#lgList").getBoundingClientRect().top >= document.querySelector("#modalBack .hd").getBoundingClientRect().bottom - 1 }));
+        chk(got.shown && JSON.stringify(got.ids) === JSON.stringify(want) && new RegExp("played" + want.length + " managers?$").test(got.head) && got.below,
+            w + "px: a cell lists its " + want.length + " managers, most points first, its heading in view", JSON.stringify({ head: got.head, n: got.ids.length, below: got.below }));
+        await p.click('td[data-lg="' + bi + "," + ci + '"]'); await p.waitForTimeout(300);
+        chk(await p.evaluate(() => document.querySelector("#lgList").hidden), w + "px: tapped again, the list closes");
+        await p.click('td[data-lg="' + bi + "," + ci + '"]'); await p.waitForTimeout(500);
+        await p.click("#lgList .lgrow"); await p.waitForTimeout(700);
+        const op = await p.evaluate(() => [location.hash, document.querySelector("#modalBack").classList.contains("show")]);
+        chk(op[0] === "#profile/" + want[0] && !op[1], w + "px: a manager in it opens his profile, the sheet closed", JSON.stringify(op));
+        await p.goBack(); await p.waitForTimeout(700);
+        chk(await p.evaluate(() => location.hash === "#fpl" && !!document.querySelector(".fplcard")), w + "px: back returns to FPL", await p.evaluate(() => location.hash));
       }
     }
     {

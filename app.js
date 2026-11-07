@@ -4513,16 +4513,34 @@
         row.map(function (n, j) {
           var mine = at && at[0] === i && at[1] === j;
           var a = n && grid.most ? (0.12 + 0.6 * n / grid.most).toFixed(2) : 0;
-          return '<td class="num lgc' + (mine ? " you" : "") + '"' + (n ? ' style="--a:' + a + '"' : "") +
-            (mine ? ' aria-label="You, ' + n + ' managers"' : "") + '>' + (n ? num(n) : "") + '</td>';
+          return '<td class="num lgc' + (mine ? " you" : "") + '"' + (n ? ' style="--a:' + a + '" data-lg="' + i + ',' + j + '" role="button" tabindex="0"' +
+            ' aria-label="' + (mine ? "You and " + (n - 1) + " more" : n + " managers") + ', ' + num(b.lo) + ' to ' + num(b.hi) + ' points, ' + colName(grid.cols[j]) + ' played"' : "") +
+            '>' + (n ? num(n) : "") + '</td>';
         }).join("") + '<td class="num lgsum">' + num(sum) + '</td></tr>';
     }).join("");
     h += '</tbody><tfoot><tr><td class="lgpts">All</td>' + grid.colTotals.map(function (n) { return '<td class="num">' + num(n) + '</td>'; }).join("") +
       '<td class="num lgsum">' + num(total - grid.unknown) + '</td></tr></tfoot></table></div>';
-    h += '<p class="note lgnote">Players played counts a captain twice, as Last Manager Standing\u2019s Played column does. ' +
+    h += '<div class="lglist" id="lgList" hidden></div>';
+    h += '<p class="note lgnote">Tap a number to see who is in it. Players played counts a captain twice, as Last Manager Standing\u2019s Played column does. ' +
       'Bands of ' + num(g.bucketWidth) + ' points, the same as Where everyone landed in Gameweek returns.' +
       (grid.unknown ? ' ' + num(grid.unknown) + ' without a squad to count are left out.' : "") + '</p></div>';
     return h;
+  }
+  // The managers in one cell of the live grid: most points first, then name
+  function liveGridList(ds, G, bi, ci, me) {
+    var mm = K.managerMap(ds), b = G.g.buckets[bi], c = G.grid.cols[ci];
+    var ids = Object.keys(G.grid.at).filter(function (id) { var a = G.grid.at[id]; return a[0] === bi && a[1] === ci; }).map(Number);
+    var rows = ids.map(function (id) {
+      var m = mm[id] || {};
+      return { id: id, team: m.entryName || "", who: m.playerName || "", p: K.gwScore(ds, id, G.gw), a: G.grid.at[id] };
+    }).sort(function (x, y) { return (y.p - x.p) || x.team.localeCompare(y.team); });
+    return '<div class="lglh"><b>' + num(b.lo) + '–' + num(b.hi) + ' points · ' + (c[0] === c[1] ? num(c[0]) : num(c[0]) + '–' + num(c[1])) +
+      ' played</b><span>' + num(rows.length) + (rows.length === 1 ? " manager" : " managers") + '</span></div>' +
+      rows.map(function (r) {
+        return '<button type="button" class="lgrow' + (me && +me === r.id ? " me" : "") + '" data-lgid="' + r.id + '">' +
+          '<span class="lgn"><b>' + esc(r.team) + '</b><span>' + esc(r.who) + '</span></span>' +
+          '<span class="lgpl">' + num(r.a[2]) + '/' + num(r.a[3]) + '</span><span class="lgp">' + (r.p == null ? "–" : num(r.p)) + '</span></button>';
+      }).join("");
   }
   function fplHomeCard(ds, me, rec) {
     var m = ds && K.managerMap(ds)[+me];
@@ -4574,7 +4592,29 @@
     if (gb) gb.addEventListener("click", function (e) {
       e.preventDefault();
       var G = liveGrid(ds, +ds.pitchGw);
-      if (G) modal("Live: points and players played", liveGridHtml(ds, G, me));
+      if (!G) return;
+      var body = modal("Live: points and players played", liveGridHtml(ds, G, me));
+      var pick = function (cell) {
+        var k = cell.getAttribute("data-lg").split(","), list = $("#lgList", body);
+        var on = cell.classList.contains("sel");
+        $all("td.lgc.sel", body).forEach(function (x) { x.classList.remove("sel"); });
+        if (on) { list.hidden = true; list.innerHTML = ""; return; }
+        cell.classList.add("sel");
+        list.innerHTML = liveGridList(ds, G, +k[0], +k[1], me);
+        list.hidden = false;
+        try { list.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e2) {}
+      };
+      body.addEventListener("click", function (ev) {
+        var m = ev.target.closest("[data-lgid]");
+        // a manager opens his profile, the sheet giving way to it
+        if (m) { closeModal(true); navFromOverlay("profile/" + m.getAttribute("data-lgid")); return; }
+        var c = ev.target.closest("td[data-lg]");
+        if (c) pick(c);
+      });
+      body.addEventListener("keydown", function (ev) {
+        var c = ev.target.closest && ev.target.closest("td[data-lg]");
+        if (c && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); pick(c); }
+      });
     });
     var sp = $(".fplcard .srcpill", host);
     if (!sp) return;
