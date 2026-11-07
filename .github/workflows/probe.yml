@@ -4,39 +4,29 @@ on:
     branches: [probe-news]
     paths-ignore: ["out/**"]
 permissions:
-  contents: write
+  contents: read
 jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Run the news reader and keep its pictures
+      - name: Try lighter pictures
         run: |
           cat > run.js <<'JS'
-          const fs = require("fs");
+          const head = async (u) => { try { const r = await fetch(u); const b = Buffer.from(await r.arrayBuffer()); console.log(r.status + " " + r.headers.get("content-type") + " " + b.length + "  " + u.slice(-90)); } catch (e) { console.log("ERR " + u); } };
           (async () => {
-            const n = await require("./news.js").newsOf(null, { force: true });
-            console.log(JSON.stringify(n.sources));
-            const withPic = n.items.filter((it) => it.i);
-            console.log("items " + n.items.length + ", with a picture " + withPic.length + " (fpl " + withPic.filter((x) => x.s === "fpl").length + ", ffs " + withPic.filter((x) => x.s === "ffs").length + ")");
-            n.items.filter((x) => x.s !== "gn" && !x.i).forEach((x) => console.log("NO PIC " + x.s + " " + x.u));
-            fs.mkdirSync("out/pics", { recursive: true });
-            const map = {};
-            let i = 0, bytes = 0;
-            for (const it of withPic) {
-              const r = await fetch(it.i, { headers: { Referer: "https://pkpk157-cpu.github.io/" } });
-              const b = Buffer.from(await r.arrayBuffer());
-              console.log("PIC " + r.status + " " + r.headers.get("content-type") + " " + b.length + " " + it.i);
-              if (r.ok) { const f = "out/pics/" + (i++) + ".jpg"; fs.writeFileSync(f, b); map[it.i] = f; bytes += b.length; }
-            }
-            console.log("total picture bytes " + bytes);
-            fs.writeFileSync("out/news.json", JSON.stringify({ news: n, map }, null, 1));
+            const pl = "https://resources.premierleague.pulselive.com/photo-resources/2026/10/31/f59cd60c-7f10-4539-8a92-ce4bbc0f1cbf/Nicolas-Jackson-Joao-Pedro.png";
+            for (const q of ["?width=320", "?width=240", "?width=320&format=jpg", "?width=320&format=jpeg", "?width=320&type=jpg", "?width=320&quality=60", "?width=320&format=webp", "?width=320&height=180&format=jpg"]) await head(pl + q);
+            const jp = "https://resources.premierleague.pulselive.com/photo-resources/2026/11/07/3adc1a4c-82a4-4b97-89a2-88f72c5390c6/Nico-Jackson.jpg";
+            for (const q of ["?width=320", "?width=240", "?width=320&quality=60", "?width=320&format=webp"]) await head(jp + q);
+            const f = "https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/11/fpl-gameweek-10-differentials-3-low-owned-picks-to-consider-2";
+            for (const s of ["-320x245.jpg", "-300x132.jpg", "-150x150.jpg", "-480x289.jpg", "-320x245.jpg.webp"]) await head(f + s);
+            // why six Scout posts had no picture
+            const r = await fetch("https://www.fantasyfootballscout.co.uk/wp-json/wp/v2/posts?per_page=20&_fields=link,featured_media,type");
+            const p = await r.json(); p.forEach((x) => console.log("POST media=" + x.featured_media + " " + x.link.slice(-70)));
           })();
           JS
           node run.js
-          git config user.name "probe"; git config user.email "probe@users.noreply.github.com"
-          git add out && git commit -qm "probe output" && git push -q origin HEAD:probe-news
