@@ -2173,7 +2173,7 @@
         i: markTile("mgo", "#ffd76a", "#e6a417", G_TROPHY, "logo-tile.webp") },
       { k: "vol", go: "vol", t: "Game On Voluntary", s: "Five side leagues and prizes",
         i: markTile("mvo", "#ff9f4a", "#d1521c", G_COINS, "logo-tile-inv.webp") },
-      { k: "news", go: "news", t: "FPL news", s: "From FPL, Fantasy Football Scout and the web",
+      { k: "news", go: "news", t: "FPL news", s: "Headlines from FPL and the web",
         i: '<span class="mi-mark">' + tile("mnw", "#5ec8f2", "#1f6fc4", G_NEWS) + '</span>' }
     ];
     // Prices and player stats are not a section of the league — they are
