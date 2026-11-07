@@ -220,6 +220,20 @@
     var ko = fx.map(function (f) { return f[7]; }).filter(Boolean).sort()[0];
     return { ko: ko || null };
   };
+  /* A manager's FPL overall rank for the card: FPL's own figure, the one his
+     gameweek history shows, for gameweek gw (FPL moves it during a live
+     week); before a ball is kicked in gw, the last week's. With the change
+     since the week before that has a rank: gain > 0 is places climbed. */
+  C.overallRank = function (ds, id, gw) {
+    var h = (ds && ds.history && ds.history[id]) || {};
+    var has = function (g) { return h[g] && typeof h[g].r === "number" && h[g].r > 0; };
+    var g = +gw;
+    if (C.gwAhead(ds, g)) g = g - 1;
+    if (!has(g)) return null;
+    var p = g - 1;
+    while (p > 0 && !has(p)) p--;
+    return { gw: g, rank: h[g].r, prevGw: p > 0 ? p : null, gain: p > 0 ? h[p].r - h[g].r : null };
+  };
   // The in-progress gameweek (current but not yet finalised), or null.
   // Asked thousands of times an open, so the answer is kept per events list:
   // a publish brings a new list, and nothing edits one in place.

@@ -4476,6 +4476,18 @@
     try { if (new Intl.DisplayNames(["en"], { type: "region" }).of(code) === code) return ""; } catch (e) { return ""; }
     return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65, 0x1F1E6 + code.charCodeAt(1) - 65);
   }
+  // Overall rank under the three figures: FPL's, as the gameweek history
+  // has it (and opens it), with the places gained or lost since the week before
+  function fplRankRow(ds, me, gw, live) {
+    var o = K.overallRank(ds, +me, gw);
+    if (!o) return "";
+    var label = live && o.gw === gw ? "Live rank" : "Overall rank";
+    var move = o.gain == null ? null : o.gain > 0 ? "up" : o.gain < 0 ? "down" : "same";
+    var says = label + " " + num(o.rank) + (move ? ", " + (move === "same" ? "no change" : (move === "up" ? "up " : "down ") + num(Math.abs(o.gain))) +
+      " since Gameweek " + o.prevGw : "");
+    return '<a class="fcrank" href="#fpl/history" aria-label="' + esc(says) + '"><span class="fcrl">' + label + '</span><b>' + num(o.rank) + '</b>' +
+      (move ? '<span class="fcrm ' + move + '">' + FPL_MOVE[move] + (move === "same" ? "" : '<span>' + num(Math.abs(o.gain)) + '</span>') + '</span>' : "") + '</a>';
+  }
   function fplHomeCard(ds, me, rec) {
     var m = ds && K.managerMap(ds)[+me];
     if (!m || !ds.pitchGw) return "";
@@ -4515,7 +4527,7 @@
         '<a class="fcn main" href="#profile/' + (+me) + '/squad" aria-label="Your squad"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></a>' +
         '<div class="fcn"' + (hiAttr ? hiAttr + ' role="button" tabindex="0"' : "") + '><b>' + fig(hi) + '</b><span>Highest' + sofar +
           (hiAttr ? " " + arrow(16) : "") + '</span></div>' +
-      '</div>' +
+      '</div>' + fplRankRow(ds, me, gw, live) +
       (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
       '</div>';
   }

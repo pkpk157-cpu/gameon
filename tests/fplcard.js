@@ -26,6 +26,25 @@ const sofar = (f) => (!f.final && (f.average != null || f.highest != null) ? " s
       JSON.stringify({ gw, fx, statsAvg: fa }));
 }
 
+{
+  // overall rank: FPL's figure from the gameweek history, the card's week (the
+  // week before while nothing in it has kicked off), and the change since the
+  // last week that has a rank, for every manager and every week
+  let bad = [], seen = 0;
+  ds.managers.forEach((m) => {
+    const h = ds.history[m.id] || {};
+    Object.keys(h).map(Number).forEach((g) => {
+      const o = K.overallRank(ds, m.id, g), ug = K.gwAhead(ds, g) ? g - 1 : g;
+      const r = h[ug] && h[ug].r > 0 ? h[ug].r : null;
+      let p = ug - 1; while (p > 0 && !(h[p] && h[p].r > 0)) p--;
+      const want = r ? { gw: ug, rank: r, prevGw: p > 0 ? p : null, gain: p > 0 ? h[p].r - r : null } : null;
+      if (JSON.stringify(o) !== JSON.stringify(want)) bad.push([m.id, g, o, want]); else seen++;
+    });
+  });
+  chk(!bad.length && seen > 1000, "overall rank on the card is the history's, with places gained since the week before (" + seen + " manager-weeks)", JSON.stringify(bad.slice(0, 2)));
+  chk(K.overallRank(ds, -1, gw) === null && K.overallRank({}, me.id, gw) === null, "no history, no rank: never a made-up one");
+}
+
 // the next deadline shows only once the card's gameweek is finished and finalised
 const cardFinal = K.finishedGws(ds).indexOf(+ds.pitchGw) !== -1;
 const next = cardFinal ? ds.bootstrap.events.find((e) => e.deadline_time && Date.parse(e.deadline_time) > Date.now()) : null;
@@ -68,6 +87,20 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       chk(!c1.next, w + "px: GW" + ds.pitchGw + " not finished and finalised: no next deadline on the card yet", c1.next);
     }
     chk(c1.leagues > 0 && !c1.wide, w + "px: the leagues follow it, nothing wider than the card", c1.leagues + " league rows");
+    {
+      const o = K.overallRank(ds, me.id, gw), liveNow = K.liveGwId(ds) === gw;
+      const rk = await p.evaluate(() => { const a = document.querySelector(".fplcard .fcrank"); if (!a) return null; const r = a.getBoundingClientRect(), card = document.querySelector(".fplcard").getBoundingClientRect();
+        return { l: a.querySelector(".fcrl").textContent, n: a.querySelector("b").textContent, mv: a.querySelector(".fcrm") ? a.querySelector(".fcrm").className : "", d: (a.querySelector(".fcrm span") || {}).textContent || "",
+          href: a.getAttribute("href"), aria: a.getAttribute("aria-label"), one: r.height < 40, inside: r.left >= card.left && r.right <= card.right }; });
+      if (!o) chk(rk === null, w + "px: no rank from FPL yet: no rank row");
+      else {
+        const mv = o.gain == null ? "" : o.gain > 0 ? "up" : o.gain < 0 ? "down" : "same";
+        chk(rk && rk.l === (liveNow && o.gw === gw ? "Live rank" : "Overall rank") && rk.n === o.rank.toLocaleString("en-US") && (mv ? rk.mv === "fcrm " + mv : rk.mv === "") &&
+            rk.d === (mv && mv !== "same" ? Math.abs(o.gain).toLocaleString("en-US") : ""),
+            w + "px: " + (rk && rk.l) + " " + o.rank + " under the figures, " + (mv || "no") + " " + (o.gain == null ? "" : Math.abs(o.gain)) + " since GW" + o.prevGw, JSON.stringify(rk));
+        chk(rk.one && rk.inside && rk.href === "#fpl/history" && /since Gameweek|no change|rank d/.test(rk.aria), w + "px: on one line, inside the card, opening the history; says it all to a screen reader", rk.aria);
+      }
+    }
     await p.click(".fcn.main"); await p.waitForTimeout(600);
     const sq = await p.evaluate(() => { const s = document.querySelector("#ps-squad"); const bar = document.querySelector("header.topbar").getBoundingClientRect().height + ((document.querySelector("#profChips") || { getBoundingClientRect: () => ({ height: 0 }) }).getBoundingClientRect().height);
       return { hash: location.hash, top: s ? Math.round(s.getBoundingClientRect().top - bar) : null }; });
