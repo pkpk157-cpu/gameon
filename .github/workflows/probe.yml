@@ -21,27 +21,30 @@ jobs:
             const b = asBuf ? Buffer.from(await r.arrayBuffer()) : await r.text();
             return { s: r.status, ct: r.headers.get("content-type"), b, url: r.url, len: asBuf ? b.length : b.length }; };
           (async () => {
-            // 1. the Premier League's pictures, and whether they come smaller
             const j = JSON.parse((await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=4&tagNames=" + encodeURIComponent("label:Fantasy Premier League"))).b);
-            const a = j.content[0];
-            console.log("LEADMEDIA " + JSON.stringify(a.leadMedia).slice(0, 1500));
-            const img = (a.leadMedia && a.leadMedia.imageUrl) || a.imageUrl;
-            for (const q of ["", "?width=400", "?width=200&height=120", "?w=400"]) {
-              try { const r = await get(img + q, true); console.log("PLIMG " + (q || "(as is)") + " -> " + r.s + " " + r.ct + " " + r.len + " bytes"); } catch (e) { console.log("PLIMG " + q + " ERROR " + e.message); }
+            for (const a of j.content.slice(0, 2)) {
+              const lm = a.leadMedia || {};
+              console.log("PL keys " + Object.keys(a).join(","));
+              console.log("PL a.imageUrl=" + a.imageUrl + " onDemandUrl=" + lm.onDemandUrl + " variants=" + JSON.stringify(lm.variants || a.variants || null).slice(0, 600));
+              for (const base of [lm.onDemandUrl, lm.imageUrl]) for (const q of ["?width=400", "?width=320&height=180", "?w=400"]) {
+                if (!base) continue;
+                try { const r = await get(base + q, true); console.log("PLIMG " + base.split("/")[3] + " " + q + " -> " + r.s + " " + r.ct + " " + r.len + " bytes"); } catch (e) { console.log("PLIMG ERROR " + e.message); }
+              }
             }
-            // 2. the Scout's feed: any picture in it?
-            const f = (await get("https://www.fantasyfootballscout.co.uk/feed/")).b;
-            const it = f.split(/<item>/)[1] || "";
-            console.log("FFS media tags: media:content " + /<media:content/.test(f) + ", enclosure " + /<enclosure/.test(f) + ", content:encoded " + /<content:encoded/.test(f) + ", img in item " + /<img/.test(it));
-            const link = ((it.match(/<link>([^<]*)/) || [])[1] || "").trim();
-            // 3. the Scout's article page: its share picture
-            try { const r = await get(link); const og = (r.b.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)/i) || r.b.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image/i) || [])[1];
-              console.log("FFS page " + r.s + " og:image " + og);
-              if (og) { const i = await get(og, true); console.log("FFS img " + i.s + " " + i.ct + " " + i.len + " bytes"); }
-            } catch (e) { console.log("FFS page ERROR " + e.message); }
-            // 4. Google News: any picture in the feed?
-            const g = (await get("https://news.google.com/rss/search?q=%22Fantasy+Premier+League%22&hl=en-GB&gl=GB&ceid=GB:en")).b;
-            console.log("GN media tags: media:content " + /<media:content/.test(g) + ", enclosure " + /<enclosure/.test(g) + ", img " + /&lt;img|<img/.test(g));
+            // the Scout's own site interface: pictures in several sizes?
+            try { const r = await get("https://www.fantasyfootballscout.co.uk/wp-json/wp/v2/posts?per_page=3&_embed=wp:featuredmedia&_fields=link,title,featured_media,jetpack_featured_media_url,_links,_embedded");
+              console.log("FFS wp-json " + r.s + " " + r.ct + " " + r.len);
+              try { const p = JSON.parse(r.b); for (const x of p) { const m = x._embedded && x._embedded["wp:featuredmedia"] && x._embedded["wp:featuredmedia"][0];
+                console.log("FFS post " + x.link + " jetpack=" + x.jetpack_featured_media_url);
+                if (m && m.media_details) { const sz = m.media_details.sizes || {}; console.log("FFS sizes " + Object.keys(sz).map(k => k + ":" + sz[k].width + "x" + sz[k].height + " " + sz[k].source_url).join(" | ").slice(0, 900)); }
+                const u = (m && m.media_details && m.media_details.sizes && (m.media_details.sizes.medium || m.media_details.sizes.thumbnail) || {}).source_url;
+                if (u) { const i = await get(u, true); console.log("FFS small img " + i.s + " " + i.ct + " " + i.len + " bytes"); }
+              } } catch (e) { console.log("FFS parse " + e.message + " " + r.b.slice(0, 300)); }
+            } catch (e) { console.log("FFS wp-json ERROR " + e.message); }
+            // Guess a smaller size from the share picture's name
+            for (const u of ["https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/03/leeds-v-brentford-team-news-dango-benched-300x169.jpg", "https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/03/leeds-v-brentford-team-news-dango-benched-300x200.jpg"]) {
+              try { const i = await get(u, true); console.log("FFS guess " + u.slice(-12) + " " + i.s + " " + i.ct + " " + i.len); } catch (e) { console.log("FFS guess ERROR " + e.message); }
+            }
           })();
           JS
           node probe.js
