@@ -16,28 +16,32 @@ jobs:
         run: |
           cat > probe.js <<'JS'
           const UA = "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)";
-          const get = async (u, red) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 20000);
-            const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "*/*" }, signal: c.signal, redirect: red || "follow" }); clearTimeout(t);
-            return { s: r.status, ct: r.headers.get("content-type"), b: await r.text(), url: r.url, loc: r.headers.get("location") }; };
+          const get = async (u, asBuf) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 20000);
+            const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "*/*" }, signal: c.signal }); clearTimeout(t);
+            const b = asBuf ? Buffer.from(await r.arrayBuffer()) : await r.text();
+            return { s: r.status, ct: r.headers.get("content-type"), b, url: r.url, len: asBuf ? b.length : b.length }; };
           (async () => {
-            const j = JSON.parse((await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=6&tagNames=" + encodeURIComponent("label:Fantasy Premier League"))).b);
-            console.log("pageInfo " + JSON.stringify(j.pageInfo));
-            for (const a of j.content.slice(0, 4)) {
-              for (const u of ["https://www.premierleague.com/en/news/" + a.id + "/" + a.titleUrlSegment, "https://www.premierleague.com/news/" + a.id]) {
-                try { const r = await get(u); const tt = (r.b.match(/<title>([^<]*)<\/title>/) || [])[1];
-                  console.log("LINK " + r.s + " " + u + " -> final " + r.url + " | page title: " + tt + " | has headline: " + (r.b.indexOf(a.title.slice(0, 25)) !== -1)); } catch (e) { console.log("LINK ERROR " + u + " " + e.message); }
-              }
-              console.log("   item: " + JSON.stringify({ title: a.title, date: a.date, summary: (a.summary || "").slice(0, 160), desc: (a.description || "").slice(0, 160), hot: a.hotlinkUrl, img: a.leadMedia && a.leadMedia.imageUrl, imgOnItem: a.imageUrl }));
+            // 1. the Premier League's pictures, and whether they come smaller
+            const j = JSON.parse((await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=4&tagNames=" + encodeURIComponent("label:Fantasy Premier League"))).b);
+            const a = j.content[0];
+            console.log("LEADMEDIA " + JSON.stringify(a.leadMedia).slice(0, 1500));
+            const img = (a.leadMedia && a.leadMedia.imageUrl) || a.imageUrl;
+            for (const q of ["", "?width=400", "?width=200&height=120", "?w=400"]) {
+              try { const r = await get(img + q, true); console.log("PLIMG " + (q || "(as is)") + " -> " + r.s + " " + r.ct + " " + r.len + " bytes"); } catch (e) { console.log("PLIMG " + q + " ERROR " + e.message); }
             }
-            // Google News: the outlet's name, and where an article link lands
-            const g = (await get("https://news.google.com/rss/search?q=%22Fantasy+Premier+League%22&hl=en-GB&gl=GB&ceid=GB:en")).b;
-            const items = g.split(/<item>/).slice(1);
-            console.log("google items " + items.length);
-            items.slice(0, 6).forEach((it) => { const src = (it.match(/<source url="([^"]*)">([^<]*)<\/source>/) || []); console.log("G " + ((it.match(/<pubDate>([^<]*)/) || [])[1]) + " | src " + src[2] + " (" + src[1] + ") | " + ((it.match(/<title>([^<]*)/) || [])[1])); });
-            const l0 = (items[0].match(/<link>([^<]*)/) || [])[1];
-            try { const r = await get(l0, "manual"); console.log("google link -> " + r.s + " loc " + r.loc + " bytes " + r.b.length); } catch (e) { console.log("google link ERROR " + e.message); }
+            // 2. the Scout's feed: any picture in it?
             const f = (await get("https://www.fantasyfootballscout.co.uk/feed/")).b;
-            console.log("ffscout items " + f.split(/<item>/).length);
+            const it = f.split(/<item>/)[1] || "";
+            console.log("FFS media tags: media:content " + /<media:content/.test(f) + ", enclosure " + /<enclosure/.test(f) + ", content:encoded " + /<content:encoded/.test(f) + ", img in item " + /<img/.test(it));
+            const link = ((it.match(/<link>([^<]*)/) || [])[1] || "").trim();
+            // 3. the Scout's article page: its share picture
+            try { const r = await get(link); const og = (r.b.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)/i) || r.b.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image/i) || [])[1];
+              console.log("FFS page " + r.s + " og:image " + og);
+              if (og) { const i = await get(og, true); console.log("FFS img " + i.s + " " + i.ct + " " + i.len + " bytes"); }
+            } catch (e) { console.log("FFS page ERROR " + e.message); }
+            // 4. Google News: any picture in the feed?
+            const g = (await get("https://news.google.com/rss/search?q=%22Fantasy+Premier+League%22&hl=en-GB&gl=GB&ceid=GB:en")).b;
+            console.log("GN media tags: media:content " + /<media:content/.test(g) + ", enclosure " + /<enclosure/.test(g) + ", img " + /&lt;img|<img/.test(g));
           })();
           JS
           node probe.js
