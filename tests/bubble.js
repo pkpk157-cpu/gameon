@@ -31,8 +31,18 @@ let fails = 0; const chk = (ok, m, x) => { console.log((ok ? "  ok   " : "  FAIL
       const two = await p.evaluate(() => ({ bubbles: document.querySelectorAll(".bbubble").length, open: [...document.querySelectorAll(".badge")].map(x => x.getAttribute("aria-expanded")) }));
       chk(two.bubbles === 1 && two.open[0] === "false" && two.open[1] === "true", w + ": a second badge takes the bubble over", JSON.stringify(two));
     }
-    await p.mouse.click(w / 2, 600); await p.waitForTimeout(150);
-    chk(!(await p.$(".bbubble")), w + ": tapping elsewhere closes it");
+    // somewhere that is truly elsewhere: not a badge, the bubble, or anything
+    // that does something of its own when tapped
+    const spot = await p.evaluate((w) => {
+      for (let y = 200; y < innerHeight - 90; y += 10) {
+        const e = document.elementFromPoint(w / 2, y);
+        if (e && !e.closest(".badges, .bbubble, a, button, input, select, label, [data-entry], [role=button], nav, header")) return y;
+      }
+      return null;
+    }, w);
+    chk(spot !== null, w + ": the page has somewhere plain to tap");
+    await p.mouse.click(w / 2, spot); await p.waitForTimeout(150);
+    chk(!(await p.$(".bbubble")), w + ": tapping elsewhere closes it", "at y=" + spot);
     chk(errs.length === 0, w + ": no JS errors", errs.join(" | "));
     await ctx.close();
   }
