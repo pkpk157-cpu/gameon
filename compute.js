@@ -2216,6 +2216,33 @@
       });
       gwStats.buckets = buckets.reverse();
       gwStats.bucketWidth = width;
+      // While the week is live: the same bands against how many of each
+      // squad have played so far (the Played count Last Manager Standing
+      // shows, a captain counting twice). One column per count from the
+      // fewest to the most anyone has, two counts a column when that is more
+      // than eight. Each band's row adds up to its Managers figure above.
+      if (C.liveGwId(ds) === +gw) {
+        var pcs = {};
+        rows.forEach(function (r) { pcs[r.id] = playedCount(ds, r.id, gw); });
+        var seenP = rows.map(function (r) { return pcs[r.id].played; }).filter(function (x) { return x != null; });
+        var pLo = seenP.length ? Math.min.apply(null, seenP) : 0, pHi = seenP.length ? Math.max.apply(null, seenP) : 0;
+        var step = pHi - pLo + 1 > 8 ? 2 : 1, cols = [];
+        for (var c0 = step === 2 ? pLo - (pLo % 2) : pLo; c0 <= pHi; c0 += step) cols.push([c0, Math.min(c0 + step - 1, pHi)]);
+        var cells = gwStats.buckets.map(function () { return cols.map(function () { return 0; }); });
+        var colTot = cols.map(function () { return 0; }), unknown = 0, mostCell = 0, you = {};
+        rows.forEach(function (r) {
+          var bi = gwStats.buckets.length - 1 - Math.floor((r.p - start) / width);
+          var pc = pcs[r.id];
+          if (bi < 0 || bi >= cells.length) return;
+          if (pc.played == null) { unknown++; return; }
+          var ci = 0;
+          while (ci < cols.length - 1 && pc.played > cols[ci][1]) ci++;
+          cells[bi][ci]++; colTot[ci]++;
+          if (cells[bi][ci] > mostCell) mostCell = cells[bi][ci];
+          you[r.id] = [bi, ci, pc.played, pc.total];
+        });
+        gwStats.grid = { cols: cols, cells: cells, colTotals: colTot, most: mostCell, unknown: unknown, at: you };
+      }
       // League movement only means anything for the newest gameweek.
       if (+gw === +cur) {
         var moves = C.classic(ds).filter(function (r) { return r.move; });

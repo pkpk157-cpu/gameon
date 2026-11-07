@@ -4488,6 +4488,42 @@
     return '<a class="fcrank" href="#fpl/history" aria-label="' + esc(says) + '"><span class="fcrl">' + label + '</span><b>' + num(o.rank) + '</b>' +
       (move ? '<span class="fcrm ' + move + '">' + FPL_MOVE[move] + (move === "same" ? "" : '<span>' + num(Math.abs(o.gain)) + '</span>') + '</span>' : "") + '</a>';
   }
+  /* While a week is live, Game On's managers by points so far (the bands
+     "Where everyone landed" uses) and by how many of their players have
+     played (Last Manager Standing's Played count). Opened from the card. */
+  var GRID_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
+    '<path d="M3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17" stroke="currentColor" stroke-width="1.5"/><rect x="9.9" y="9.9" width="4.2" height="4.2" fill="currentColor"/></svg>';
+  function liveGrid(ds, gw) {
+    if (K.liveGwId(ds) !== +gw) return null;
+    var H = K.highlights(ds, gw), g = H && H.gwStats;
+    return g && g.grid && g.buckets && g.buckets.length ? { gw: +gw, g: g, grid: g.grid } : null;
+  }
+  function liveGridHtml(ds, G, me) {
+    var g = G.g, grid = G.grid, at = me ? grid.at[+me] : null;
+    var colName = function (c) { return c[0] === c[1] ? num(c[0]) : num(c[0]) + "–" + num(c[1]); };
+    var total = g.buckets.reduce(function (s, b) { return s + b.n; }, 0);
+    var h = '<div class="lgwrap"><p class="lglead">' + num(total) + ' Game On managers, by points so far (down) and players played (across). ' +
+      (at ? 'You: ' + num(K.gwScore(ds, +me, G.gw)) + ' points, ' + num(at[2]) + ' of ' + num(at[3]) + ' played.' : "") + '</p>';
+    h += '<div class="tablewrap"><table class="t lgtbl"><thead><tr class="lgaxis"><th class="lgpts"></th><th colspan="' + grid.cols.length + '">Players played →</th><th class="lgsum"></th></tr>' +
+      '<tr><th class="lgpts">Pts</th>' +
+      grid.cols.map(function (c) { return '<th class="num">' + colName(c) + '</th>'; }).join("") + '<th class="num lgsum">All</th></tr></thead><tbody>';
+    h += g.buckets.map(function (b, i) {
+      var row = grid.cells[i], sum = row.reduce(function (s, n) { return s + n; }, 0);
+      return '<tr' + (at && at[0] === i ? ' class="me"' : "") + '><td class="lgpts">' + num(b.lo) + '–' + num(b.hi) + '</td>' +
+        row.map(function (n, j) {
+          var mine = at && at[0] === i && at[1] === j;
+          var a = n && grid.most ? (0.12 + 0.6 * n / grid.most).toFixed(2) : 0;
+          return '<td class="num lgc' + (mine ? " you" : "") + '"' + (n ? ' style="--a:' + a + '"' : "") +
+            (mine ? ' aria-label="You, ' + n + ' managers"' : "") + '>' + (n ? num(n) : "") + '</td>';
+        }).join("") + '<td class="num lgsum">' + num(sum) + '</td></tr>';
+    }).join("");
+    h += '</tbody><tfoot><tr><td class="lgpts">All</td>' + grid.colTotals.map(function (n) { return '<td class="num">' + num(n) + '</td>'; }).join("") +
+      '<td class="num lgsum">' + num(total - grid.unknown) + '</td></tr></tfoot></table></div>';
+    h += '<p class="note lgnote">Players played counts a captain twice, as Last Manager Standing\u2019s Played column does. ' +
+      'Bands of ' + num(g.bucketWidth) + ' points, the same as Where everyone landed in Gameweek returns.' +
+      (grid.unknown ? ' ' + num(grid.unknown) + ' without a squad to count are left out.' : "") + '</p></div>';
+    return h;
+  }
   function fplHomeCard(ds, me, rec) {
     var m = ds && K.managerMap(ds)[+me];
     if (!m || !ds.pitchGw) return "";
@@ -4521,7 +4557,8 @@
         '<span class="fcwho"><b>' + esc(m.entryName) + '</b><span>' + (flag ? '<i aria-hidden="true">' + flag + '</i>' : "") + esc(m.playerName || "") + '</span></span>' +
         '<span class="fcgo">' + arrow(26) + '</span></a>' +
       '<div class="fcrule"></div>' +
-      '<div class="fcgw"><span></span><span>' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</span>' + srcPill(src) + '</div>' +
+      '<div class="fcgw"><span>' + (live && liveGrid(ds, gw) ? '<button type="button" class="fcgrid" aria-label="Points against players played, live">' + GRID_ICON + '</button>' : "") +
+        '</span><span>' + esc(ev.name || ("Gameweek " + gw)) + (live ? ' <span class="fclive">Live</span>' : "") + '</span>' + srcPill(src) + '</div>' +
       '<div class="fcnums">' +
         '<div class="fcn"><b>' + fig(avg) + '</b><span>Average' + sofar + '</span></div>' +
         '<a class="fcn main" href="#profile/' + (+me) + '/squad" aria-label="Your squad"><b>' + (pts == null ? "\u2013" : num(pts)) + '</b><span>Points ' + arrow(16) + '</span></a>' +
@@ -4533,6 +4570,12 @@
   }
   // The card's GO | FPL switch redraws the card alone, and remembers.
   function wireCardSrc(host, ds, me, rec) {
+    var gb = $(".fplcard .fcgrid", host);
+    if (gb) gb.addEventListener("click", function (e) {
+      e.preventDefault();
+      var G = liveGrid(ds, +ds.pitchGw);
+      if (G) modal("Live: points and players played", liveGridHtml(ds, G, me));
+    });
     var sp = $(".fplcard .srcpill", host);
     if (!sp) return;
     sp.addEventListener("click", function (e) {

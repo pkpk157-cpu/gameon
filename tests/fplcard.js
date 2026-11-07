@@ -45,6 +45,28 @@ const sofar = (f) => (!f.final && (f.average != null || f.highest != null) ? " s
   chk(K.overallRank(ds, -1, gw) === null && K.overallRank({}, me.id, gw) === null, "no history, no rank: never a made-up one");
 }
 
+{
+  // the live grid: points bands by players played, only while the week is live
+  const lv = K.liveGwId(ds);
+  if (lv) {
+    const g = K.highlights(ds, lv).gwStats, G = g.grid;
+    const rowSums = G.cells.map((r) => r.reduce((a, b) => a + b, 0));
+    chk(G && rowSums.every((s, i) => s === g.buckets[i].n) && G.colTotals.reduce((a, b) => a + b, 0) === g.count - G.unknown && G.unknown === 0,
+        "live grid: each band's row adds up to its Managers figure in Where everyone landed; every manager counted once", JSON.stringify({ rowSums, bands: g.buckets.map((b) => b.n), unknown: G.unknown }));
+    const L = K.lms(ds), lt = L && L.live && L.live.table;
+    let off = [];
+    (lt || []).forEach((r) => { const a = G.at[r.id]; if (!a || a[2] !== r.played || a[3] !== r.playedTotal) off.push([r.id, a, r.played, r.playedTotal]); });
+    chk(lt && lt.length && !off.length, "live grid: each manager's played count is the one Last Manager Standing shows (" + (lt ? lt.length : 0) + " survivors)", JSON.stringify(off.slice(0, 3)));
+    let place = [];
+    Object.keys(G.at).forEach((id) => { const a = G.at[id], sc = K.gwScore(ds, +id, lv), b = g.buckets[a[0]], c = G.cols[a[1]];
+      if (!(sc >= b.lo && sc <= b.hi && a[2] >= c[0] && a[2] <= c[1])) place.push([id, sc, a]); });
+    chk(!place.length && G.cols.every((c, i) => i === 0 || c[0] === G.cols[i - 1][1] + 1) && G.cols.length <= 8,
+        "live grid: everyone sits in their band and their played column; columns run on without gaps, eight at most", JSON.stringify(place.slice(0, 3)));
+  }
+  const done = K.finishedGws(ds).filter((x) => x !== lv)[0];
+  chk(!done || !K.highlights(ds, done).gwStats.grid, "a finished week has no live grid", "GW" + done);
+}
+
 // the next deadline shows only once the card's gameweek is finished and finalised
 const cardFinal = K.finishedGws(ds).indexOf(+ds.pitchGw) !== -1;
 const next = cardFinal ? ds.bootstrap.events.find((e) => e.deadline_time && Date.parse(e.deadline_time) > Date.now()) : null;
@@ -87,6 +109,21 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
       chk(!c1.next, w + "px: GW" + ds.pitchGw + " not finished and finalised: no next deadline on the card yet", c1.next);
     }
     chk(c1.leagues > 0 && !c1.wide, w + "px: the leagues follow it, nothing wider than the card", c1.leagues + " league rows");
+    {
+      const lv = K.liveGwId(ds) === gw, btn = await p.$(".fplcard .fcgrid");
+      chk(lv ? !!btn : !btn, w + "px: the live grid's button is on the card " + (lv ? "while the week is live" : "only while a week is live: not now"));
+      if (btn) {
+        await btn.click(); await p.waitForTimeout(400);
+        const G = K.highlights(ds, gw).gwStats.grid;
+        const t = await p.evaluate(() => { const m = document.querySelector("#modalBack"), tb = m.querySelector(".lgtbl");
+          return { title: document.querySelector("#modalTitle").textContent, cells: [...tb.querySelectorAll("tbody tr")].map((r) => [...r.querySelectorAll("td.lgc")].map((c) => +c.textContent || 0)),
+            fits: tb.scrollWidth <= tb.parentElement.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth, you: tb.querySelectorAll("td.you").length }; });
+        const meAt = G.at[me.id];
+        chk(t.title === "Live: points and players played" && JSON.stringify(t.cells) === JSON.stringify(G.cells) && t.fits && t.you === (meAt ? 1 : 0),
+            w + "px: it opens the grid: every cell the computed count, yours marked, nothing wider than the phone", JSON.stringify({ title: t.title, fits: t.fits, you: t.you }));
+        await p.click("#modalClose"); await p.waitForTimeout(400);
+      }
+    }
     {
       const o = K.overallRank(ds, me.id, gw), liveNow = K.liveGwId(ds) === gw;
       const rk = await p.evaluate(() => { const a = document.querySelector(".fplcard .fcrank"); if (!a) return null; const r = a.getBoundingClientRect(), card = document.querySelector(".fplcard").getBoundingClientRect();
