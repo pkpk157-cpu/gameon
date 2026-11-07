@@ -2,49 +2,41 @@ name: Probe news sources (temporary)
 on:
   push:
     branches: [probe-news]
+    paths-ignore: ["out/**"]
 permissions:
-  contents: read
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Fetch each source
+      - name: Run the news reader and keep its pictures
         run: |
-          cat > probe.js <<'JS'
-          const UA = "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)";
-          const get = async (u, asBuf) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), 20000);
-            const r = await fetch(u, { headers: { "User-Agent": UA, "Accept": "*/*" }, signal: c.signal }); clearTimeout(t);
-            const b = asBuf ? Buffer.from(await r.arrayBuffer()) : await r.text();
-            return { s: r.status, ct: r.headers.get("content-type"), b, url: r.url, len: asBuf ? b.length : b.length }; };
+          cat > run.js <<'JS'
+          const fs = require("fs");
           (async () => {
-            const j = JSON.parse((await get("https://api.premierleague.com/content/premierleague/text/EN?pageSize=4&tagNames=" + encodeURIComponent("label:Fantasy Premier League"))).b);
-            for (const a of j.content.slice(0, 2)) {
-              const lm = a.leadMedia || {};
-              console.log("PL keys " + Object.keys(a).join(","));
-              console.log("PL a.imageUrl=" + a.imageUrl + " onDemandUrl=" + lm.onDemandUrl + " variants=" + JSON.stringify(lm.variants || a.variants || null).slice(0, 600));
-              for (const base of [lm.onDemandUrl, lm.imageUrl]) for (const q of ["?width=400", "?width=320&height=180", "?w=400"]) {
-                if (!base) continue;
-                try { const r = await get(base + q, true); console.log("PLIMG " + base.split("/")[3] + " " + q + " -> " + r.s + " " + r.ct + " " + r.len + " bytes"); } catch (e) { console.log("PLIMG ERROR " + e.message); }
-              }
+            const n = await require("./news.js").newsOf(null, { force: true });
+            console.log(JSON.stringify(n.sources));
+            const withPic = n.items.filter((it) => it.i);
+            console.log("items " + n.items.length + ", with a picture " + withPic.length + " (fpl " + withPic.filter((x) => x.s === "fpl").length + ", ffs " + withPic.filter((x) => x.s === "ffs").length + ")");
+            n.items.filter((x) => x.s !== "gn" && !x.i).forEach((x) => console.log("NO PIC " + x.s + " " + x.u));
+            fs.mkdirSync("out/pics", { recursive: true });
+            const map = {};
+            let i = 0, bytes = 0;
+            for (const it of withPic) {
+              const r = await fetch(it.i, { headers: { Referer: "https://pkpk157-cpu.github.io/" } });
+              const b = Buffer.from(await r.arrayBuffer());
+              console.log("PIC " + r.status + " " + r.headers.get("content-type") + " " + b.length + " " + it.i);
+              if (r.ok) { const f = "out/pics/" + (i++) + ".jpg"; fs.writeFileSync(f, b); map[it.i] = f; bytes += b.length; }
             }
-            // the Scout's own site interface: pictures in several sizes?
-            try { const r = await get("https://www.fantasyfootballscout.co.uk/wp-json/wp/v2/posts?per_page=3&_embed=wp:featuredmedia&_fields=link,title,featured_media,jetpack_featured_media_url,_links,_embedded");
-              console.log("FFS wp-json " + r.s + " " + r.ct + " " + r.len);
-              try { const p = JSON.parse(r.b); for (const x of p) { const m = x._embedded && x._embedded["wp:featuredmedia"] && x._embedded["wp:featuredmedia"][0];
-                console.log("FFS post " + x.link + " jetpack=" + x.jetpack_featured_media_url);
-                if (m && m.media_details) { const sz = m.media_details.sizes || {}; console.log("FFS sizes " + Object.keys(sz).map(k => k + ":" + sz[k].width + "x" + sz[k].height + " " + sz[k].source_url).join(" | ").slice(0, 900)); }
-                const u = (m && m.media_details && m.media_details.sizes && (m.media_details.sizes.medium || m.media_details.sizes.thumbnail) || {}).source_url;
-                if (u) { const i = await get(u, true); console.log("FFS small img " + i.s + " " + i.ct + " " + i.len + " bytes"); }
-              } } catch (e) { console.log("FFS parse " + e.message + " " + r.b.slice(0, 300)); }
-            } catch (e) { console.log("FFS wp-json ERROR " + e.message); }
-            // Guess a smaller size from the share picture's name
-            for (const u of ["https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/03/leeds-v-brentford-team-news-dango-benched-300x169.jpg", "https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/03/leeds-v-brentford-team-news-dango-benched-300x200.jpg"]) {
-              try { const i = await get(u, true); console.log("FFS guess " + u.slice(-12) + " " + i.s + " " + i.ct + " " + i.len); } catch (e) { console.log("FFS guess ERROR " + e.message); }
-            }
+            console.log("total picture bytes " + bytes);
+            fs.writeFileSync("out/news.json", JSON.stringify({ news: n, map }, null, 1));
           })();
           JS
-          node probe.js
+          node run.js
+          git config user.name "probe"; git config user.email "probe@users.noreply.github.com"
+          git add out && git commit -qm "probe output" && git push -q origin HEAD:probe-news
