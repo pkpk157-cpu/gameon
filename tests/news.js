@@ -66,6 +66,8 @@ const gn = N.parseRss(GN, "gn");
 chk(gn[0].t === "The Fantasy Premier League assets turning defence into the best form of attack" && gn[0].o === "The New York Times" && gn[0].x === "",
     "Google: the outlet is named once, not repeated on the end of the headline", J(gn[0]));
 chk(gn[3].t === "Saliba, Konsa & João Pedro: Latest FPL injury news", "Google: a doubly escaped & reads as &", gn[3].t);
+chk(!N.parseRss(GN.replace("</channel>", gnItem("Matchweek 10 VAR decisions explained", "Premier League", "https://news.google.com/rss/articles/var?oc=5", "2026-11-05T11:00:00Z") + "</channel>"), "gn").some((x) => /VAR/.test(x.t)),
+    "Google: a story whose headline is not about FPL is left out");
 
 // ---- 2. one list ---------------------------------------------------------
 const merged = N.merge({ fpl: pl, ffs, gn }, NOW);
@@ -102,6 +104,29 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
   try { await N.newsOf({ items: "garbage", at: 7 }, { now: NOW, fetchText: async () => { throw new TypeError("x"); } });
         await N.newsOf("junk", { now: NOW, fetchText: async () => "{" }); } catch (e) { threw = true; }
   chk(!threw, "a broken last read or broken answers never throw into the data run");
+  {
+    const Hh = require(path.join(APP, "tests/audit/harness.js")).loadCompute(), Kc = Hh.C, E = Hh.ds.elements;
+    const byWeb = {}; Object.keys(E).forEach((el) => { (byWeb[E[el][0]] = byWeb[E[el][0]] || []).push(+el); });
+    const shared = Object.keys(byWeb).find((n) => byWeb[n].length > 1 && /^[A-Z][a-z]+$/.test(n));
+    if (shared) {
+      const two = byWeb[shared];
+      chk(Kc.newsNames(Hh.ds, { t: "FPL: " + shared + " back in training" }, two).length === 0,
+          "a name two players share (" + shared + ") points at neither", J(two.map((x) => E[x][5])));
+      chk(J(Kc.newsNames(Hh.ds, { t: "FPL: " + E[two[0]][5] + " back in training" }, two)) === J([two[0]]),
+          "his full name points at him alone", E[two[0]][5]);
+    }
+    const one = Object.keys(E).map(Number).find((el) => /^[A-Z][a-z]{3,}$/.test(E[el][0]) && byWeb[E[el][0]].length === 1 &&
+      Kc.newsNames(Hh.ds, { t: "Why " + E[el][0] + " matters in FPL" }, [el]).length === 1);
+    chk(Kc.newsNames(Hh.ds, { t: "why " + E[one][0].toLowerCase() + " matters" }, [one]).length === 0, "a one-word name only counts written as a name (" + E[one][0] + ", not " + E[one][0].toLowerCase() + ")");
+    const acc = Object.keys(E).map(Number).find((el) => /[\u00C0-\u017F]/.test(E[el][5]) && Kc.newsNames(Hh.ds, { t: E[el][5] }, [el]).length === 1);
+    if (acc) chk(Kc.newsNames(Hh.ds, { t: "FPL: " + E[acc][5].normalize("NFD").replace(/[\u0300-\u036f]/g, "") + " to start" }, [acc]).length === 1,
+        "accents aside: " + E[acc][5] + " written without them is still him");
+    chk(J(Kc.newsTopics({ t: "Leeds v Spurs team news: Calvert-Lewin starts", x: "" })) === J(["team"]) && Kc.newsTopics({ t: "Best FPL captain picks", x: "" }).indexOf("tips") !== -1 &&
+        J(Kc.newsTopics({ t: "FPL price changes: risers and fallers", x: "" })) === J(["price"]),
+        "topics read off the headline: team news, tips, prices");
+    chk(!Kc.newsOnTopic({ s: "gn", t: "Matchweek 10 VAR decisions explained" }) && Kc.newsOnTopic({ s: "gn", t: "FPL GW11 Transfers" }) && Kc.newsOnTopic({ s: "fpl", t: "Matchweek preview" }),
+        "a web story is FPL news only when its headline says so; FPL's own always are");
+  }
   // the updater wires it in without letting it decide anything else
   const fd = fs.readFileSync(path.join(APP, "scripts/fetch-data.js"), "utf8");
   chk(/try \{ news = await require\("\.\/news\.js"\)\.newsOf\(prev\.news\); \} catch \(e\) \{ news = prev\.news \|\| null; \}/.test(fd) && /faceHide, pending, news/.test(fd),
@@ -110,12 +135,28 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
   // ---- 4. the page -------------------------------------------------------
   const raw = JSON.parse(fs.readFileSync(path.join(APP, "data.json"), "utf8"));
   const recent = (mins) => new Date(Date.now() - mins * 6e4).toISOString();
+  // a reader and one of his players, named in full in a headline
+  const H = require(path.join(APP, "tests/audit/harness.js")).loadCompute(), K = H.C;
+  const pgw = Math.max.apply(null, Object.keys(raw.dataset.picks).map(Number).filter((g) => Object.keys(raw.dataset.picks[g] || {}).length));
+  const ME = +Object.keys(raw.dataset.picks[pgw])[0];
+  const squad = raw.dataset.picks[pgw][ME].p.map((x) => +x[0]);
+  const els = raw.dataset.elements;
+  const mineEl = squad.find((el) => K.newsNames(H.ds, { t: "FPL: " + els[el][5] + " backed for a big week" }, [el]).length === 1);
+  const mineName = els[mineEl][5];
   const items = [
-    { s: "fpl", t: "Scout Selection: Best Fantasy team for Gameweek 10", u: "https://www.premierleague.com/en/news/4756626/scout-selection-best-fantasy-team-for-gameweek-10", o: "Premier League", d: recent(90), x: "See the dream FPL line-up for this weekend's matches, featuring FOUR double-ups" },
+    { s: "fpl", t: "Scout Selection: Best Fantasy team for Gameweek 10", u: "https://www.premierleague.com/en/news/4756626/scout-selection-best-fantasy-team-for-gameweek-10", o: "Premier League", d: recent(90),
+      x: "See the dream FPL line-up for this weekend's matches, featuring FOUR double-ups, a goalkeeper rotation and three Liverpool assets for the run ahead" },
     { s: "ffs", t: "FPL notes: 90 mins for Cherki + Szoboszlai", u: "https://www.fantasyfootballscout.co.uk/2026/11/05/fpl-notes", o: "Fantasy Football Scout", d: recent(30), x: "Takeaways from the Champions League" },
     { s: "gn", t: '<img src=x onerror="window.__pwned=1">The FPL assets turning defence into attack', u: "https://news.google.com/rss/articles/abc?oc=5", o: "The New York Times", d: recent(60 * 30), x: "" },
     { s: "gn", t: "Bad link", u: "javascript:window.__pwned=2", o: "X", d: recent(10), x: "" },
-    { s: "gn", t: "An old one", u: "https://example.com/old", o: "Somewhere", d: recent(60 * 24 * 9), x: "" }
+    { s: "gn", t: "An old FPL story", u: "https://example.com/old", o: "Somewhere", d: recent(60 * 24 * 9), x: "" },
+    // found by the search but not about FPL: never shown
+    { s: "gn", t: "Matchweek 10 VAR decisions explained", u: "https://news.google.com/rss/articles/var?oc=5", o: "Premier League", d: recent(20), x: "" },
+    { s: "gn", t: "FPL: " + mineName + " backed for a big week", u: "https://news.google.com/rss/articles/mine?oc=5", o: "Sky Sports", d: recent(45), x: "" },
+    { s: "fpl", t: "FPL player price changes - risers, fallers and top transfers", u: "https://www.premierleague.com/en/news/1/fpl-price", o: "Premier League", d: recent(120), x: "Find out which picks have changed in price overnight" },
+    { s: "ffs", t: "Everton v Coventry team news: Branthwaite fit, no Thomas", u: "https://www.fantasyfootballscout.co.uk/2026/11/05/eve-cov", o: "Fantasy Football Scout", d: recent(200), x: "One change for Everton" },
+    // the Premier League found through Google: the same colour as its own
+    { s: "gn", t: "FPL Challenge: Expert reveals their Gameweek 10 team", u: "https://news.google.com/rss/articles/chal?oc=5", o: "Premier League", d: recent(300), x: "" }
   ];
   const withNews = JSON.parse(J(raw)); withNews.dataset.news = { at: recent(4), items, sources: { fpl: { ok: true, n: 1 }, ffs: { ok: true, n: 1 }, gn: { ok: true, n: 3 } } };
   const noNews = JSON.parse(J(raw)); delete noNews.dataset.news;
@@ -131,6 +172,7 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
     serve = withNews;
     const c = await b.newContext({ viewport: { width: w, height: 800 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     await c.route((u) => !/localhost/.test(u.toString()), (route) => route.abort());
+    await c.addInitScript((me) => { try { localStorage.setItem("go12.me", String(me)); localStorage.setItem("go12.theo", "off"); } catch (e) {} }, ME);
     const p = await c.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(2500);
     await p.click("#barMenu"); await p.waitForTimeout(500);
@@ -141,29 +183,40 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
     const pg = await p.evaluate(() => {
       const v = document.querySelector('section.view[data-view="news"]');
       const rows = [...v.querySelectorAll("a.nwrow")].map((a) => ({ href: a.getAttribute("href"), target: a.getAttribute("target"), rel: a.getAttribute("rel"),
-        src: a.querySelector(".nwsrc").textContent, when: (a.querySelector(".nwwhen") || {}).textContent || "", t: a.querySelector(".nwt").textContent, x: (a.querySelector(".nwx") || {}).textContent || "" }));
+        src: a.querySelector(".nwsrc").textContent, cls: a.querySelector(".nwsrc").className, xl: a.querySelector(".nwx") ? a.querySelector(".nwx").getClientRects().length : 0, when: (a.querySelector(".nwwhen") || {}).textContent || "", t: a.querySelector(".nwt").textContent, x: (a.querySelector(".nwx") || {}).textContent || "" }));
       return { hash: location.hash, title: document.querySelector("#barTitle").textContent, back: getComputedStyle(document.querySelector("#barBack")).display,
         rows, pills: [...v.querySelectorAll("#nwSrc button")].map((x) => x.textContent + (x.classList.contains("on") ? "*" : "")),
         note: (v.querySelector(".note") || {}).textContent || "", pwned: window.__pwned || 0, imgs: v.querySelectorAll("img").length,
         wide: document.documentElement.scrollWidth > innerWidth + 1, cut: [...v.querySelectorAll(".nwt")].some((x) => x.scrollWidth > x.clientWidth + 1) };
     });
     chk(pg.hash === "#news" && pg.title === "FPL news" && pg.back === "none", w + ": its own page, named in the bar, a section with no back arrow", J({ hash: pg.hash, title: pg.title, back: pg.back }));
-    chk(pg.rows.length === 4 && pg.rows.every((r) => /^https:\/\//.test(r.href) && r.target === "_blank" && /noopener/.test(r.rel) && /noreferrer/.test(r.rel)),
+    const row = (t) => pg.rows.find((r) => r.t.indexOf(t) === 0) || {};
+    chk(pg.rows.length === 8 && pg.rows.every((r) => /^https:\/\//.test(r.href) && r.target === "_blank" && /noopener/.test(r.rel) && /noreferrer/.test(r.rel)),
         w + ": every headline opens its own site outside the app; the javascript: one is not drawn", J(pg.rows.map((r) => r.href)));
-    chk(J(pg.rows.map((r) => r.src)) === J(["Fantasy Football Scout", "Premier League", "The New York Times", "Somewhere"]), w + ": newest first, each saying where it is from", J(pg.rows.map((r) => r.src)));
-    chk(pg.rows[0].when === "30m ago" && pg.rows[1].when === "1h ago" && pg.rows[2].when === "1d ago" && /^\d{1,2} [A-Z][a-z]{2}$/.test(pg.rows[3].when),
+    chk(!pg.rows.some((r) => /VAR decisions/.test(r.t)), w + ": a web story whose headline is not about FPL is not shown");
+    chk(J(pg.rows.map((r) => r.src)) === J(["Fantasy Football Scout", "Sky Sports", "Premier League", "Premier League", "Fantasy Football Scout", "Premier League", "The New York Times", "Somewhere"]),
+        w + ": newest first, each saying where it is from", J(pg.rows.map((r) => r.src)));
+    chk(pg.rows[0].when === "30m ago" && pg.rows[1].when === "45m ago" && pg.rows[2].when === "1h ago" && pg.rows[6].when === "1d ago" && /^\d{1,2} [A-Z][a-z]{2}$/.test(pg.rows[7].when),
         w + ": when: how long ago within the week, the day before that", J(pg.rows.map((r) => r.when)));
-    chk(pg.rows[2].t.indexOf("<img") === 0 && pg.pwned === 0 && pg.imgs === 0, w + ": markup in a headline is shown as text and never runs", pg.rows[2].t.slice(0, 40));
-    chk(pg.rows[1].x === items[0].x, w + ": the standfirst under the headline");
-    chk(J(pg.pills) === J(["All*", "FPL", "Scout", "Web"]) && /FPL \(premierleague\.com\), Fantasy Football Scout and Google News/.test(pg.note) && /last checked 4m ago/.test(pg.note),
-        w + ": source pills, and a note saying where these come from and when they were checked", pg.note);
+    chk(row("<img").t && pg.pwned === 0 && pg.imgs === 0, w + ": markup in a headline is shown as text and never runs", (row("<img").t || "").slice(0, 40));
+    chk(row("Scout Selection").x === items[0].x && row("Scout Selection").xl === 1, w + ": the standfirst under the headline, on one line however long", J({ lines: row("Scout Selection").xl }));
+    chk(pg.rows.filter((r) => r.src === "Premier League").every((r) => /nw-pl/.test(r.cls)) && /nw-ffs/.test(row("FPL notes").cls) && /nw-web/.test(row("<img").cls),
+        w + ": the Premier League in one colour however it reached us; the Scout in its own; the rest plain", J(pg.rows.map((r) => r.src + ":" + r.cls.replace("nwsrc ", ""))));
+    chk(J(pg.pills) === J(["All*", "My team", "Team news", "Tips", "Prices"]) && /FPL \(premierleague\.com\), Fantasy Football Scout and Google News/.test(pg.note) && /last checked 4m ago/.test(pg.note),
+        w + ": topic pills, and a note saying where these come from and when they were checked", pg.note);
     chk(!pg.wide && !pg.cut, w + ": nothing wider than the phone, no headline cut");
-    await p.click('#nwSrc [data-src="ffs"]'); await p.waitForTimeout(250);
-    let only = await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="news"] .nwsrc')].map((x) => x.textContent));
-    chk(J(only) === J(["Fantasy Football Scout"]), w + ": Scout narrows to the Scout's", J(only));
-    await p.click('#nwSrc [data-src="fpl"]'); await p.waitForTimeout(250);
-    only = await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="news"] .nwsrc')].map((x) => x.textContent));
-    chk(J(only) === J(["Premier League"]), w + ": FPL narrows to FPL's own", J(only));
+    const pillsFit = await p.evaluate(() => [...document.querySelectorAll("#nwSrc button")].every((x) => x.getClientRects().length === 1 && x.getBoundingClientRect().height < 34));
+    chk(pillsFit, w + ": every topic pill on one line");
+    const shown = async (k) => { await p.click('#nwSrc [data-src="' + k + '"]'); await p.waitForTimeout(250);
+      return p.evaluate(() => [...document.querySelectorAll('section.view[data-view="news"] .nwt')].map((x) => x.textContent)); };
+    let only = await shown("mine");
+    chk(J(only) === J(["FPL: " + mineName + " backed for a big week"]), w + ": My team: the headline naming one of your players, " + mineName, J(only));
+    only = await shown("team");
+    chk(J(only) === J(["Everton v Coventry team news: Branthwaite fit, no Thomas"]), w + ": Team news", J(only));
+    only = await shown("tips");
+    chk(J(only) === J(["Scout Selection: Best Fantasy team for Gameweek 10", "FPL Challenge: Expert reveals their Gameweek 10 team"]), w + ": Tips", J(only));
+    only = await shown("price");
+    chk(J(only) === J(["FPL player price changes - risers, fallers and top transfers"]), w + ": Prices", J(only));
     if (w === 390) { await p.click('#nwSrc [data-src="all"]'); await p.waitForTimeout(250); await p.screenshot({ path: path.join(__dirname, "news.png") }); }
     chk(errs.length === 0, w + ": no JS errors", errs.slice(0, 3).join(" | "));
     await c.close();

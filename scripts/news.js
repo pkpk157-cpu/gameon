@@ -71,6 +71,9 @@ function parseRss(xml, src) {
       // Google names the outlet, and also appends it to the title
       outlet = plain(tag(block, "source"));
       if (outlet && title.endsWith(" - " + outlet)) title = title.slice(0, -(outlet.length + 3)).trim();
+      // the search finds any article that mentions FPL somewhere inside it;
+      // only one whose headline is about FPL is FPL news (the app checks too)
+      if (!/\bFPL\b|fantasy/i.test(title)) return;
     } else {
       outlet = "Fantasy Football Scout";
       // the first paragraph; the rest is WordPress's "The post ... appeared first on ..."

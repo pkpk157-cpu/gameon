@@ -4632,5 +4632,89 @@
     return res;
   };
 
+  /* ---- FPL news: what a headline is about ----------------------------------
+     Read off the headline and its standfirst, by plain keywords, so a reader
+     can see why it is filed where it is. A headline can be about two things
+     (team news that is also a tip) and is filed under both; one about none of
+     them is still under All. */
+  // Team news is read off the headline alone: a tips piece's standfirst
+  // talks of "the dream FPL line-up" too. A bare "transfers" is no tip either:
+  // a price piece lists the top transfers.
+  var NEWS_TOPIC = {
+    team: { head: true, re: /\bteam news\b|injur|press conference|line-?ups?\b|fitness|ruled out|\bdoubts?\b|\bsuspen|\bfit\b|\bstarts?\b|\bbenched\b/i },
+    tips: { re: /captain|differential|transfer (tips|targets|radar|plans?)|best transfers|who to (buy|sell|transfer|pick)|\bpicks?\b|wildcard|free hit|bench boost|triple captain|scout selection|\bbest\b|\bbuy\b|\bsell\b|\bhold\b|\breveal|\bexpert|essentials|everything you need|\bguide\b|\btips?\b|\bpod\b|fixture difficulty|\btargets?\b|\bwatchlist\b|players you need|\badvice\b|\bq&a\b/i },
+    price: { re: /\bprices?\b|\brisers?\b|\bfallers?\b/i }
+  };
+  C.newsTopics = function (it) {
+    var head = String((it && it.t) || ""), text = head + " " + String((it && it.x) || "");
+    var price = NEWS_TOPIC.price.re.test(text);
+    return Object.keys(NEWS_TOPIC).filter(function (k) {
+      // a price piece talks of "picks" whose price changed: a tip only if its headline says so
+      if (k === "tips" && price) return NEWS_TOPIC.tips.re.test(head);
+      return NEWS_TOPIC[k].re.test(NEWS_TOPIC[k].head ? head : text);
+    });
+  };
+  // Google's search finds any article that mentions FPL somewhere inside it;
+  // a story from the wider web is kept only when its headline is about FPL.
+  // FPL's own and the Scout's are about nothing else.
+  C.newsOnTopic = function (it) {
+    if (!it || it.s !== "gn") return !!it;
+    return /\bFPL\b|fantasy/i.test(String(it.t || ""));
+  };
+
+  /* Which players a headline names. A name counts only when it can mean one
+     player: a surname or the name FPL shows him by that nobody else in the
+     game has (so one of two Palmers is never matched on "Palmer" alone, but
+     is on "Cole Palmer"), his first name and surname together, or his full
+     name. A single word must be written as a name, with its capital, so the
+     player "Hall" is not every hall. Accents are ignored either way. */
+  var fold = function (s) {
+    return String(s || "").normalize ? String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "") : String(s || "");
+  };
+  var _nameIdx = typeof WeakMap === "function" ? new WeakMap() : null;
+  function nameIndex(els) {
+    if (_nameIdx && _nameIdx.has(els)) return _nameIdx.get(els);
+    var seen = {}, per = {};
+    var add = function (term, el) {
+      if (!term || term.length < 3) return;
+      (seen[term] = seen[term] || {})[el] = 1;
+      (per[el] = per[el] || []).push(term);
+    };
+    Object.keys(els || {}).forEach(function (el) {
+      var e = els[el] || [];
+      var web = fold(e[0]).replace(/^[A-Z]\.\s*/, "").trim();     // "N.Jackson" is Jackson
+      var toks = fold(e[5]).split(/\s+/).filter(Boolean);
+      var last = toks.length ? toks[toks.length - 1] : "";
+      [web, last].forEach(function (t) { add(t, el); });
+      if (toks.length >= 2) add(toks[0] + " " + last, el);
+      if (toks.length >= 3) add(toks.join(" "), el);
+      if (/\s/.test(web) && toks.length) add(toks[0] + " " + web, el);
+    });
+    var out = {};
+    Object.keys(per).forEach(function (el) {
+      // only the words that point at him alone
+      out[el] = per[el].filter(function (t, i, a) { return a.indexOf(t) === i && Object.keys(seen[t]).length === 1; });
+    });
+    if (_nameIdx) _nameIdx.set(els, out);
+    return out;
+  }
+  var _reCache = {};
+  function nameRe(term) {
+    if (_reCache[term]) return _reCache[term];
+    var esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // one word: as a name, capital first; more than one: any case
+    var re = /\s/.test(term) ? new RegExp("(^|[^A-Za-z])" + esc + "(?![A-Za-z])", "i")
+                             : new RegExp("(^|[^A-Za-z])" + esc.charAt(0).toUpperCase() + esc.slice(1) + "(?![A-Za-z])");
+    return (_reCache[term] = re);
+  }
+  // the players among elIds a headline names
+  C.newsNames = function (ds, it, elIds) {
+    var idx = nameIndex((ds && ds.elements) || {});
+    var text = fold(String((it && it.t) || "") + " \u2014 " + String((it && it.x) || ""));
+    return (elIds || []).filter(function (el) {
+      return (idx[el] || []).some(function (term) { return nameRe(term).test(text); });
+    });
+  };
+
   window.GO_COMPUTE = C;
 })();

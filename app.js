@@ -4988,21 +4988,39 @@
   /* ---- FPL news ------------------------------------------------------------
      Headlines only, each opening on its own site. The updater reads them
      (scripts/news.js): FPL's own articles, Fantasy Football Scout, and Google
-     News for everyone else. Each says where it is from and when it was
-     published; the pills narrow the list to one source. */
-  var NEWS_SRC = [["all", "All"], ["fpl", "FPL"], ["ffs", "Scout"], ["gn", "Web"]];
+     News for everyone else, whose stories are kept only when the headline is
+     about FPL. Each says where it is from and when it was published. The
+     pills narrow it by what it is about: your own players, team news, tips,
+     prices (see C.newsTopics and C.newsNames). */
+  var NEWS_TOPICS = [["all", "All"], ["mine", "My team"], ["team", "Team news"], ["tips", "Tips"], ["price", "Prices"]];
+  var NEWS_EMPTY = { mine: "Nothing about your players just now.", team: "No team news just now.",
+                     tips: "No tips just now.", price: "Nothing on prices just now." };
   function renderNews(host, ds) {
-    var N = ds && ds.news, items = N && Array.isArray(N.items) ? N.items : [];
+    var N = ds && ds.news;
+    var items = (N && Array.isArray(N.items) ? N.items : []).filter(function (it) { return it && K.newsOnTopic(it); });
     if (!items.length) {
       host.innerHTML = '<div class="callout">No news yet. The first headlines arrive with the next update.</div>';
       return;
     }
-    if (!NEWS_SRC.some(function (p) { return p[0] === state.newsSrc; })) state.newsSrc = "all";
+    if (!NEWS_TOPICS.some(function (p) { return p[0] === state.newsSrc; })) state.newsSrc = "all";
+    // your squad in the newest gameweek with squads: who "My team" is about
+    var mine = null;
+    if (state.me && ds.picks) {
+      var gws = Object.keys(ds.picks).map(Number).filter(function (g) { return ds.picks[g] && ds.picks[g][state.me]; }).sort(function (a, b) { return a - b; });
+      var rec = gws.length ? ds.picks[gws[gws.length - 1]][state.me] : null;
+      mine = rec && rec.p ? rec.p.map(function (x) { return +x[0]; }) : null;
+    }
+    var keep = function (it) {
+      var k = state.newsSrc;
+      if (k === "all") return true;
+      if (k === "mine") return !!mine && K.newsNames(ds, it, mine).length > 0;
+      return K.newsTopics(it).indexOf(k) !== -1;
+    };
     var now = Date.now();
     var link = function (u) { return /^https:\/\/[^\s"'<>]+$/i.test(String(u || "")) ? String(u) : null; };
     // newest first, whatever order they were stored in
     var stamp = function (it) { var t = Date.parse(it && it.d); return isFinite(t) ? t : 0; };
-    var rows = items.filter(function (it) { return it && (state.newsSrc === "all" || it.s === state.newsSrc); })
+    var rows = items.filter(keep)
       .sort(function (a, b) { return stamp(b) - stamp(a); })
       .map(function (it) {
         var u = link(it.u);
@@ -5011,20 +5029,23 @@
         // within the week, how long ago; before that, the day
         var when = age == null ? "" : age < 7 * 864e5 ? agoText(age)
           : new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+        // the outlet's colour is the outlet's, however the headline reached us
+        var who = it.o === "Premier League" ? "pl" : it.o === "Fantasy Football Scout" ? "ffs" : "web";
         return '<a class="nwrow" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' +
-          '<span class="nwmeta"><span class="nwsrc nw-' + esc(it.s) + '">' + esc(it.o || "") + '</span>' +
+          '<span class="nwmeta"><span class="nwsrc nw-' + who + '">' + esc(it.o || "") + '</span>' +
             (when ? '<span class="nwwhen">' + esc(when) + '</span>' : '') + '</span>' +
           '<span class="nwt">' + esc(it.t) + '</span>' +
           (it.x ? '<span class="nwx">' + esc(it.x) + '</span>' : '') + '</a>';
       }).join("");
-    var label = (NEWS_SRC.filter(function (p) { return p[0] === state.newsSrc; })[0] || [])[1];
+
     var read = N.at && isFinite(Date.parse(N.at)) ? agoText(now - Date.parse(N.at)) : "";
     host.innerHTML =
-      '<div class="psegrow"><div class="pseg sm" id="nwSrc" role="tablist" aria-label="Source">' + NEWS_SRC.map(function (p) {
+      '<div class="psegrow"><div class="pseg sm" id="nwSrc" role="tablist" aria-label="Topic">' + NEWS_TOPICS.map(function (p) {
         return '<button type="button" role="tab" data-src="' + p[0] + '"' + (state.newsSrc === p[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>' + p[1] + '</button>';
       }).join("") + '</div></div>' +
       (rows ? '<div class="card nwlist">' + rows + '</div>'
-            : '<div class="callout">Nothing from ' + esc(label) + ' just now.</div>') +
+            : '<div class="callout">' + (state.newsSrc === "mine" && !mine ? "Pick your team first, and this shows the news about your players."
+                : esc(NEWS_EMPTY[state.newsSrc] || "Nothing just now.")) + '</div>') +
       '<div class="note" style="margin:10px 2px 4px">Headlines from FPL (premierleague.com), Fantasy Football Scout and Google News, ' +
         'checked every 15 minutes' + (read ? '; last checked ' + esc(read) : '') + '. Each opens on its own site.</div>';
     $("#nwSrc", host).addEventListener("click", function (e) {
