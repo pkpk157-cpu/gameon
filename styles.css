@@ -2683,7 +2683,6 @@ html.ovl .theo, html.ovl .theobub { display:none; }
 .fcgrid { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:11px; border:0; cursor:pointer;
   color:#fff; background:rgba(255,255,255,.16); box-shadow:inset 0 0 0 1px rgba(255,255,255,.45); padding:0; }
 .fcgrid:active { transform:scale(.94); }
-.lglead { margin:0 0 10px; font-size:13.5px; line-height:1.45; color:var(--ink-soft); }
 table.t.lgtbl { font-variant-numeric:tabular-nums; table-layout:fixed; width:100%; }
 table.t.lgtbl th.lgpts { width:62px; }
 table.t.lgtbl th.lgsum { width:40px; }
@@ -2695,7 +2694,6 @@ table.t.lgtbl td.lgc.you { outline:2px solid var(--gold); outline-offset:-2px; b
 table.t.lgtbl tr.me td.lgpts { color:var(--gold); }
 table.t.lgtbl .lgsum { font-weight:800; color:var(--ink-soft); }
 table.t.lgtbl tfoot td { font-weight:700; color:var(--ink-soft); }
-.lgnote { margin:10px 2px 0; }
 table.t.lgtbl td.lgc[data-lg] { cursor:pointer; }
 table.t.lgtbl td.lgc.sel { box-shadow:inset 0 0 0 2px var(--accent); border-radius:6px; }
 table.t.lgtbl td.lgc.you.sel { box-shadow:inset 0 0 0 2px var(--accent); }

@@ -4502,8 +4502,7 @@
     var g = G.g, grid = G.grid, at = me ? grid.at[+me] : null;
     var colName = function (c) { return c[0] === c[1] ? num(c[0]) : num(c[0]) + "–" + num(c[1]); };
     var total = g.buckets.reduce(function (s, b) { return s + b.n; }, 0);
-    var h = '<div class="lgwrap"><p class="lglead">' + num(total) + ' Game On managers, by points so far (down) and players played (across). ' +
-      (at ? 'You: ' + num(K.gwScore(ds, +me, G.gw)) + ' points, ' + num(at[2]) + ' of ' + num(at[3]) + ' played.' : "") + '</p>';
+    var h = '<div class="lgwrap">';
     h += '<div class="tablewrap"><table class="t lgtbl"><thead><tr class="lgaxis"><th class="lgpts"></th><th colspan="' + grid.cols.length + '">Players played →</th><th class="lgsum"></th></tr>' +
       '<tr><th class="lgpts">Pts</th>' +
       grid.cols.map(function (c) { return '<th class="num">' + colName(c) + '</th>'; }).join("") + '<th class="num lgsum">All</th></tr></thead><tbody>';
@@ -4521,9 +4520,7 @@
     h += '</tbody><tfoot><tr><td class="lgpts">All</td>' + grid.colTotals.map(function (n) { return '<td class="num">' + num(n) + '</td>'; }).join("") +
       '<td class="num lgsum">' + num(total - grid.unknown) + '</td></tr></tfoot></table></div>';
     h += '<div class="lglist" id="lgList" hidden></div>';
-    h += '<p class="note lgnote">Tap a number to see who is in it. Players played counts a captain twice, as Last Manager Standing\u2019s Played column does. ' +
-      'Bands of ' + num(g.bucketWidth) + ' points, the same as Where everyone landed in Gameweek returns.' +
-      (grid.unknown ? ' ' + num(grid.unknown) + ' without a squad to count are left out.' : "") + '</p></div>';
+    h += '</div>';
     return h;
   }
   // The managers in one cell of the live grid: most points first, then name
