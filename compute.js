@@ -4690,13 +4690,16 @@
       if (toks.length >= 3) add(toks.join(" "), el);
       if (/\s/.test(web) && toks.length) add(toks[0] + " " + web, el);
     });
-    var out = {};
+    var out = {}, amb = [];
     Object.keys(per).forEach(function (el) {
       // only the words that point at him alone
       out[el] = per[el].filter(function (t, i, a) { return a.indexOf(t) === i && Object.keys(seen[t]).length === 1; });
     });
-    if (_nameIdx) _nameIdx.set(els, out);
-    return out;
+    // and the names more than one player has: someone, but nobody in particular
+    Object.keys(seen).forEach(function (t) { if (Object.keys(seen[t]).length > 1) amb.push(t); });
+    var res = { per: out, amb: amb };
+    if (_nameIdx) _nameIdx.set(els, res);
+    return res;
   }
   var _reCache = {};
   function nameRe(term) {
@@ -4707,13 +4710,53 @@
                              : new RegExp("(^|[^A-Za-z])" + esc.charAt(0).toUpperCase() + esc.slice(1) + "(?![A-Za-z])");
     return (_reCache[term] = re);
   }
+  // Every player a text names. A name inside a longer one is the longer
+  // one's: "David Raya" is Raya, not also Promise David. Memoised per text.
+  var _lc = {};
+  var _namedMemo = typeof WeakMap === "function" ? new WeakMap() : null;
+  function namedIn(els, text) {
+    var memo = _namedMemo ? (_namedMemo.get(els) || {}) : {};
+    if (_namedMemo && !_namedMemo.has(els)) _namedMemo.set(els, memo);
+    if (Object.prototype.hasOwnProperty.call(memo, text)) return memo[text];
+    var idx = nameIndex(els), spans = [], low = text.toLowerCase();
+    var look = function (el, term) {
+      // most names are nowhere in the text: a plain search rules them out
+      if (low.indexOf(_lc[term] || (_lc[term] = term.toLowerCase())) === -1) return;
+      var re = nameRe(term), from = 0, m;
+      while (from <= text.length && (m = re.exec(text.slice(from)))) {
+        var a = from + m.index + m[1].length;
+        spans.push({ el: el, a: a, b: a + term.length });
+        from = a + term.length;
+      }
+    };
+    Object.keys(idx.per).forEach(function (el) { idx.per[el].forEach(function (term) { look(el, term); }); });
+    // a shared name stands for someone else unless a longer name holds it
+    idx.amb.forEach(function (term) { look("?" + term, term); });
+    var inside = function (s) {
+      return spans.some(function (o) { return o.el !== s.el && o.a <= s.a && o.b >= s.b && (o.b - o.a) > (s.b - s.a); });
+    };
+    var out = {};
+    spans.forEach(function (s) { if (!inside(s)) out[s.el] = 1; });
+    return (memo[text] = out);
+  }
   // the players among elIds a headline names
   C.newsNames = function (ds, it, elIds) {
-    var idx = nameIndex((ds && ds.elements) || {});
-    var text = fold(String((it && it.t) || "") + " \u2014 " + String((it && it.x) || ""));
-    return (elIds || []).filter(function (el) {
-      return (idx[el] || []).some(function (term) { return nameRe(term).test(text); });
-    });
+    var named = namedIn((ds && ds.elements) || {}, fold(String((it && it.t) || "") + " \u2014 " + String((it && it.x) || "")));
+    return (elIds || []).filter(function (el) { return named[el] === 1; });
+  };
+
+  // the one player a headline itself names (not its summary), for its
+  // picture when the article brings none: two or more people (a name more
+  // than one player has counts as somebody), or none, is nobody
+  var _faceMemo = typeof WeakMap === "function" ? new WeakMap() : null;
+  C.newsFace = function (ds, it) {
+    var els = (ds && ds.elements) || {}, t = String((it && it.t) || "");
+    if (!t) return null;
+    var memo = _faceMemo ? (_faceMemo.get(els) || {}) : {};
+    if (_faceMemo && !_faceMemo.has(els)) _faceMemo.set(els, memo);
+    if (Object.prototype.hasOwnProperty.call(memo, t)) return memo[t];
+    var hit = Object.keys(namedIn(els, fold(t)));
+    return (memo[t] = hit.length === 1 && hit[0].charAt(0) !== "?" ? hit[0] : null);
   };
 
   window.GO_COMPUTE = C;

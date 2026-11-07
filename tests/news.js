@@ -20,9 +20,12 @@ const rfc = (iso) => new Date(iso).toUTCString();
 // ---- feeds as the sources send them -------------------------------------
 const PL = { pageInfo: { page: 0, numPages: 1, pageSize: 20, numEntries: 3 }, content: [
   { id: 4756626, title: "Scout Selection: Best Fantasy team for Gameweek 10", date: "2026-11-05T10:00:00Z", hotlinkUrl: null,
+    leadMedia: { type: "photo", imageUrl: "https://resources.premierleague.pulselive.com/premierleague/photo/2026/11/05/aa/Scout.jpg",
+                 onDemandUrl: "https://resources.premierleague.pulselive.com/photo-resources/2026/11/05/aa/Scout.jpg" },
     titleUrlSegment: "scout-selection-best-fantasy-team-for-gameweek-10", summary: "See the dream FPL line-up for this weekend's matches, featuring FOUR double-ups", description: "x" },
   { id: 4756801, title: "Is Maguire the man for your FPL team?", date: "2026-11-05T14:00:00Z",
-    hotlinkUrl: "https://www.manutd.com/en/news/is-harry-maguire-the-man-for-your-fpl-team", titleUrlSegment: "is-maguire-the-man-for-your-fpl-team", summary: "" },
+    hotlinkUrl: "https://www.manutd.com/en/news/is-harry-maguire-the-man-for-your-fpl-team", titleUrlSegment: "is-maguire-the-man-for-your-fpl-team", summary: "",
+    leadMedia: { onDemandUrl: "https://evil.example/photo-resources/x.jpg" } },
   { id: 4756031, title: "It’s time to go BIG in defence in FPL – see the best picks", date: "2026-11-03T16:00:00Z", hotlinkUrl: null,
     titleUrlSegment: "its-time-to-go-big-in-defence-in-fpl-see-the-best-picks", summary: "The Scout analyses the data" },
   { id: "x1", title: "No address", date: "2026-11-05T10:00:00Z", hotlinkUrl: null, titleUrlSegment: "bad segment!" },
@@ -48,6 +51,18 @@ const GN = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>' 
   gnItem("Saliba, Konsa &amp;amp; João Pedro: Latest FPL injury news", "3 Added Minutes", "https://news.google.com/rss/articles/s3?oc=5", "2026-11-05T12:15:00Z") +
   '</channel></rss>';
 
+// the Scout's WordPress interface: its posts' pictures in sizes
+const media = (base) => ({ media_details: { sizes: {
+  thumbnail: { width: 150, height: 150, source_url: base + "-150x150.jpg" },
+  featured_mob: { width: 320, height: 245, source_url: base + "-320x245.jpg" },
+  full: { width: 1920, height: 850, source_url: base + ".jpg" } } } });
+const WP = [
+  { link: "https://www.fantasyfootballscout.co.uk/2026/11/05/fpl-notes-90-mins-for-cherki-szoboszlai-isak-rest-and-goal/",
+    _embedded: { "wp:featuredmedia": [media("https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/11/notes")] } },
+  { link: "https://www.fantasyfootballscout.co.uk/2026/11/05/spurs", _embedded: { "wp:featuredmedia": [media("https://elsewhere.example/wp-content/uploads/spurs")] } },
+  { link: "https://www.fantasyfootballscout.co.uk/2026/11/05/nopic" }
+];
+
 // ---- 1. each source read as it is sent -----------------------------------
 const pl = N.parsePl(PL);
 chk(pl.length === 3 && pl[0].u === "https://www.premierleague.com/en/news/4756626/scout-selection-best-fantasy-team-for-gameweek-10" && pl[0].o === "Premier League" &&
@@ -56,6 +71,15 @@ chk(pl.length === 3 && pl[0].u === "https://www.premierleague.com/en/news/475662
 chk(pl[1].u === "https://www.manutd.com/en/news/is-harry-maguire-the-man-for-your-fpl-team" && pl[1].o === "manutd.com",
     "FPL: a club's article it lists opens on the club's site, and says whose", J(pl[1]));
 chk(!pl.some((x) => /No address|Undated/.test(x.t)), "FPL: an article with no safe address or no date is left out");
+chk(pl[0].i === "https://resources.premierleague.pulselive.com/photo-resources/2026/11/05/aa/Scout.jpg?width=240" && !("i" in pl[1]) && !("i" in pl[2]),
+    "FPL: its picture is the small copy from its picture service; one from anywhere else, or none, is no picture", J(pl.map((x) => x.i || null)));
+const wpp = N.parseFfsPics(WP);
+chk(J(Object.values(wpp)) === J(["https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/11/notes-320x245.jpg"]),
+    "Scout: a post's small picture, from its own picture host only", J(wpp));
+chk(N.safePic("http://cdn.fantasyfootballscout.co.uk/a.jpg") === null && N.safePic("javascript:alert(1)//x.jpg") === null &&
+    N.safePic("https://cdn.fantasyfootballscout.co.uk/a.html") === null && N.safePic("https://cdn.fantasyfootballscout.co.uk.evil.example/a.jpg") === null &&
+    !!N.safePic("https://cdn.fantasyfootballscout.co.uk/a-320x245.jpg"),
+    "a picture is https, a picture file, from a known picture host, nothing else");
 const ffs = N.parseRss(FFS, "ffs");
 chk(ffs[0].t === "FPL notes: 90 mins for Cherki + Szoboszlai, Isak rest and goal" && ffs[0].o === "Fantasy Football Scout" &&
     ffs[0].x === "Takeaways from the Champions League trips for Man City and Liverpool" && ffs[0].d === "2026-11-05T17:00:00.000Z",
@@ -81,12 +105,27 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
 // ---- 3. reading: cadence, failures, never a throw ------------------------
 (async () => {
   const feeds = { fpl: J(PL), ffs: FFS, gn: GN };
-  const srcOf = (u) => (u === N.SOURCES.fpl ? "fpl" : u === N.SOURCES.ffs ? "ffs" : "gn");
+  feeds.wp = J(WP);
+  const srcOf = (u) => (u === N.SOURCES.fpl ? "fpl" : u === N.SOURCES.ffs ? "ffs" : u === N.FFS_PICS ? "wp" : "gn");
   let calls = 0;
   const ok = async (u) => { calls++; return feeds[srcOf(u)]; };
   let n1 = await N.newsOf(null, { now: NOW, fetchText: ok });
-  chk(calls === 3 && n1.items.length === merged.length && n1.sources.fpl.ok && n1.sources.ffs.ok && n1.sources.gn.ok && n1.at === new Date(NOW).toISOString(),
-      "a first read: every source, one list", J(n1.sources));
+  chk(calls === 4 && n1.items.length === merged.length && n1.sources.fpl.ok && n1.sources.ffs.ok && n1.sources.gn.ok && n1.at === new Date(NOW).toISOString(),
+      "a first read: every source and the Scout's pictures, one list", J(n1.sources));
+  const picOf = (n, t) => (n.items.find((x) => x.t.indexOf(t) === 0) || {}).i;
+  chk(picOf(n1, "FPL notes") === "https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/11/notes-320x245.jpg" && !picOf(n1, "Spurs") &&
+      /photo-resources.*\?width=240$/.test(picOf(n1, "Scout Selection")) && n1.items.filter((x) => x.s === "gn").every((x) => !x.i),
+      "pictures: the Scout's matched to its headlines by link, FPL's its own, Google's none", J(n1.items.map((x) => x.s + ":" + (x.i ? "pic" : "-"))));
+  {
+    // the Scout's interface down: each of its headlines keeps last time's picture
+    const noWp = async (u) => { if (u === N.FFS_PICS) throw new Error("HTTP 500"); return feeds[srcOf(u)]; };
+    const nk = await N.newsOf(n1, { now: NOW + 20 * 6e4, fetchText: noWp });
+    chk(picOf(nk, "FPL notes") === picOf(n1, "FPL notes") && nk.items.length === n1.items.length,
+        "the pictures' interface failing keeps last time's pictures and every headline");
+    const junk = async (u) => (u === N.FFS_PICS ? J([{ link: 7 }, null, { _embedded: { "wp:featuredmedia": [{ media_details: { sizes: "x" } }] } }]) : feeds[srcOf(u)]);
+    const nj = await N.newsOf(null, { now: NOW, fetchText: junk });
+    chk(nj.items.length === n1.items.length && !picOf(nj, "FPL notes"), "nonsense from the pictures' interface costs a picture, never a headline");
+  }
   calls = 0;
   const n2 = await N.newsOf(n1, { now: NOW + 10 * 6e4, fetchText: ok });
   chk(calls === 0 && n2 === n1, "ten minutes later nothing is asked: the last read stands", calls + " calls");
@@ -143,13 +182,21 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
   const els = raw.dataset.elements;
   const mineEl = squad.find((el) => K.newsNames(H.ds, { t: "FPL: " + els[el][5] + " backed for a big week" }, [el]).length === 1);
   const mineName = els[mineEl][5];
+  const hidden = new Set((raw.dataset.faceHide || []).map(String));
+  const mineFace = els[mineEl][7] && !hidden.has(String(els[mineEl][7])) ? "photos/p" + els[mineEl][7] + ".webp" : null;
+  // a picture the PL's host sends, one the Scout's host never answers
+  const PL_PIC = "https://resources.premierleague.pulselive.com/photo-resources/2026/11/05/aa/Scout.jpg?width=240";
+  const FFS_PIC_DOWN = "https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/11/notes-320x245.jpg";
+  const AN_IMAGE = fs.readFileSync(path.join(APP, "photos", fs.readdirSync(path.join(APP, "photos")).find((f) => /\.webp$/.test(f))));
   const items = [
     { s: "fpl", t: "Scout Selection: Best Fantasy team for Gameweek 10", u: "https://www.premierleague.com/en/news/4756626/scout-selection-best-fantasy-team-for-gameweek-10", o: "Premier League", d: recent(90),
+      i: PL_PIC,
       x: "See the dream FPL line-up for this weekend's matches, featuring FOUR double-ups, a goalkeeper rotation and three Liverpool assets for the run ahead" },
-    { s: "ffs", t: "FPL notes: 90 mins for Cherki + Szoboszlai", u: "https://www.fantasyfootballscout.co.uk/2026/11/05/fpl-notes", o: "Fantasy Football Scout", d: recent(30), x: "Takeaways from the Champions League" },
+    { s: "ffs", t: "FPL notes: 90 mins for Cherki + Szoboszlai", u: "https://www.fantasyfootballscout.co.uk/2026/11/05/fpl-notes", o: "Fantasy Football Scout", d: recent(30), x: "Takeaways from the Champions League",
+      i: FFS_PIC_DOWN },
     { s: "gn", t: '<img src=x onerror="window.__pwned=1">The FPL assets turning defence into attack', u: "https://news.google.com/rss/articles/abc?oc=5", o: "The New York Times", d: recent(60 * 30), x: "" },
     { s: "gn", t: "Bad link", u: "javascript:window.__pwned=2", o: "X", d: recent(10), x: "" },
-    { s: "gn", t: "An old FPL story", u: "https://example.com/old", o: "Somewhere", d: recent(60 * 24 * 9), x: "" },
+    { s: "gn", t: "An old FPL story", u: "https://example.com/old", o: "Somewhere", d: recent(60 * 24 * 9), x: "", i: "https://evil.example/tracker.jpg" },
     // found by the search but not about FPL: never shown
     { s: "gn", t: "Matchweek 10 VAR decisions explained", u: "https://news.google.com/rss/articles/var?oc=5", o: "Premier League", d: recent(20), x: "" },
     { s: "gn", t: "FPL: " + mineName + " backed for a big week", u: "https://news.google.com/rss/articles/mine?oc=5", o: "Sky Sports", d: recent(45), x: "" },
@@ -172,6 +219,7 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
     serve = withNews;
     const c = await b.newContext({ viewport: { width: w, height: 800 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
     await c.route((u) => !/localhost/.test(u.toString()), (route) => route.abort());
+    await c.route((u) => u.toString() === PL_PIC, (route) => route.fulfill({ status: 200, contentType: "image/webp", body: AN_IMAGE }));
     await c.addInitScript((me) => { try { localStorage.setItem("go12.me", String(me)); localStorage.setItem("go12.theo", "off"); } catch (e) {} }, ME);
     const p = await c.newPage(); const errs = []; p.on("pageerror", (e) => errs.push(e.message));
     await p.goto("http://localhost:" + PORT + "/index.html#classic", { waitUntil: "domcontentloaded" }); await p.waitForTimeout(2500);
@@ -186,7 +234,7 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
         src: a.querySelector(".nwsrc").textContent, cls: a.querySelector(".nwsrc").className, xl: a.querySelector(".nwx") ? a.querySelector(".nwx").getClientRects().length : 0, when: (a.querySelector(".nwwhen") || {}).textContent || "", t: a.querySelector(".nwt").textContent, x: (a.querySelector(".nwx") || {}).textContent || "" }));
       return { hash: location.hash, title: document.querySelector("#barTitle").textContent, back: getComputedStyle(document.querySelector("#barBack")).display,
         rows, pills: [...v.querySelectorAll("#nwSrc button")].map((x) => x.textContent + (x.classList.contains("on") ? "*" : "")),
-        note: (v.querySelector(".note") || {}).textContent || "", pwned: window.__pwned || 0, imgs: v.querySelectorAll("img").length,
+        note: (v.querySelector(".note") || {}).textContent || "", pwned: window.__pwned || 0, onerr: v.querySelectorAll("[onerror]").length + v.querySelectorAll(".nwt img, .nwt *").length,
         wide: document.documentElement.scrollWidth > innerWidth + 1, cut: [...v.querySelectorAll(".nwt")].some((x) => x.scrollWidth > x.clientWidth + 1) };
     });
     chk(pg.hash === "#news" && pg.title === "FPL news" && pg.back === "none", w + ": its own page, named in the bar, a section with no back arrow", J({ hash: pg.hash, title: pg.title, back: pg.back }));
@@ -198,13 +246,30 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
         w + ": newest first, each saying where it is from", J(pg.rows.map((r) => r.src)));
     chk(pg.rows[0].when === "30m ago" && pg.rows[1].when === "45m ago" && pg.rows[2].when === "1h ago" && pg.rows[6].when === "1d ago" && /^\d{1,2} [A-Z][a-z]{2}$/.test(pg.rows[7].when),
         w + ": when: how long ago within the week, the day before that", J(pg.rows.map((r) => r.when)));
-    chk(row("<img").t && pg.pwned === 0 && pg.imgs === 0, w + ": markup in a headline is shown as text and never runs", (row("<img").t || "").slice(0, 40));
+    chk(row("<img").t && pg.pwned === 0 && pg.onerr === 0, w + ": markup in a headline is shown as text and never runs", (row("<img").t || "").slice(0, 40));
     chk(row("Scout Selection").x === items[0].x && row("Scout Selection").xl === 1, w + ": the standfirst under the headline, on one line however long", J({ lines: row("Scout Selection").xl }));
     chk(pg.rows.filter((r) => r.src === "Premier League").every((r) => /nw-pl/.test(r.cls)) && /nw-ffs/.test(row("FPL notes").cls) && /nw-web/.test(row("<img").cls),
         w + ": the Premier League in one colour however it reached us; the Scout in its own; the rest plain", J(pg.rows.map((r) => r.src + ":" + r.cls.replace("nwsrc ", ""))));
     chk(J(pg.pills) === J(["All*", "My team", "Team news", "Tips", "Prices"]) && /FPL \(premierleague\.com\), Fantasy Football Scout and Google News/.test(pg.note) && /last checked 4m ago/.test(pg.note),
         w + ": topic pills, and a note saying where these come from and when they were checked", pg.note);
     chk(!pg.wide && !pg.cut, w + ": nothing wider than the phone, no headline cut");
+    // pictures: once they have had time to arrive (or fail)
+    await p.evaluate(() => { document.querySelectorAll(".nwpic img").forEach((i) => { i.loading = "eager"; }); });
+    await p.waitForTimeout(1200);
+    const pics = await p.evaluate(() => [...document.querySelectorAll('section.view[data-view="news"] a.nwrow')].map((a) => {
+      const box = a.querySelector(".nwpic"), img = box && box.querySelector("img"), r = box && box.getBoundingClientRect(), ar = a.getBoundingClientRect();
+      return { t: a.querySelector(".nwt").textContent, n: a.querySelectorAll(".nwpic").length, cls: box ? box.className : "", w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0,
+        src: img ? img.getAttribute("src") : null, ok: img ? img.complete && img.naturalWidth > 0 : null, inside: r ? r.right <= ar.right + 0.5 && r.left >= ar.left : false };
+    }));
+    const pic = (t) => pics.find((x) => x.t.indexOf(t) === 0) || {};
+    const sz = w < 390 ? [78, 52] : [96, 64];
+    chk(pics.length === 8 && pics.every((x) => x.n === 1 && x.w === sz[0] && x.h === sz[1] && x.inside), w + ": every headline has one picture, " + sz.join("x") + ", inside its row", J(pics.map((x) => x.w + "x" + x.h)));
+    chk(pic("Scout Selection").src === PL_PIC && pic("Scout Selection").ok === true, w + ": an article's own picture is shown", J(pic("Scout Selection")));
+    chk(/nwnone/.test(pic("FPL notes").cls) && pic("FPL notes").src === null, w + ": a picture that never arrives gives way to the plain tile (two players named: no photo)", J(pic("FPL notes")));
+    chk(mineFace ? (pic("FPL: " + mineName).src === mineFace && /nwface/.test(pic("FPL: " + mineName).cls)) : /nwnone/.test(pic("FPL: " + mineName).cls),
+        w + ": a web headline naming one player shows his photo", J(pic("FPL: " + mineName)));
+    chk(/nwnone/.test(pic("An old FPL story").cls) && !pics.some((x) => /evil\.example/.test(x.src || "")), w + ": a picture from any other host is never loaded", J(pic("An old FPL story")));
+    chk(pics.every((x) => x.src === null || x.ok === true), w + ": no broken picture anywhere", J(pics.filter((x) => x.src && !x.ok)));
     const pillsFit = await p.evaluate(() => [...document.querySelectorAll("#nwSrc button")].every((x) => x.getClientRects().length === 1 && x.getBoundingClientRect().height < 34));
     chk(pillsFit, w + ": every topic pill on one line");
     const shown = async (k) => { await p.click('#nwSrc [data-src="' + k + '"]'); await p.waitForTimeout(250);

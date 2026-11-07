@@ -5,6 +5,12 @@
 //        its content API, filtered on the tag its FPL pieces carry
 //   ffs  Fantasy Football Scout's RSS feed
 //   gn   Google News, searched for "Fantasy Premier League": everyone else
+// Pictures (checked the same way, 7 Nov 2026): the PL's picture service makes
+// a small copy on request (about 10 KB for a photo at 240px wide; its plain address
+// is the 2 MB original), and the Scout's own WordPress interface names each
+// post's picture in small sizes (about 10-60 KB). Google News has none; the
+// app finds its own picture for those. A picture is only ever a small copy
+// from one of those two hosts, and a missing one never costs a headline.
 // Read at most every NEWS_EVERY minutes. A source that fails keeps what it had
 // last time; nothing here may ever throw into the data run, so the caller gets
 // the last good news (or none) whatever happens.
@@ -12,6 +18,9 @@ const NEWS_EVERY = 15;           // minutes between reads
 const KEEP_DAYS = 21;            // older than this is not news
 const MAX = { fpl: 12, ffs: 12, gn: 20 };
 const OUT_MAX = 40;
+// the Scout's posts with their pictures: links matched to the feed's
+const FFS_PICS = "https://www.fantasyfootballscout.co.uk/wp-json/wp/v2/posts?per_page=20&_embed=wp:featuredmedia&_fields=link,_links,_embedded";
+const PIC_HOSTS = ["resources.premierleague.pulselive.com", "cdn.fantasyfootballscout.co.uk"];
 const SOURCES = {
   fpl: "https://api.premierleague.com/content/premierleague/text/EN?pageSize=20&tagNames=" + encodeURIComponent("label:Fantasy Premier League"),
   ffs: "https://www.fantasyfootballscout.co.uk/feed/",
@@ -55,6 +64,19 @@ function isoOf(d) {
 }
 function hostName(u) {
   try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; }
+}
+// a picture address: https, from a known picture host, a picture file
+function safePic(u) {
+  const s = safeUrl(u);
+  if (!s) return null;
+  try {
+    const x = new URL(s);
+    return PIC_HOSTS.indexOf(x.hostname) !== -1 && /\.(jpe?g|png|webp)$/i.test(x.pathname) && s.length <= 400 ? s : null;
+  } catch (e) { return null; }
+}
+// a link as a key: no query, no trailing slash, any case
+function linkKey(u) {
+  try { const x = new URL(String(u)); return (x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/+$/, "")).toLowerCase(); } catch (e) { return ""; }
 }
 
 // RSS 2.0 items: Fantasy Football Scout and Google News
@@ -100,8 +122,26 @@ function parsePl(json) {
       url = "https://www.premierleague.com/en/news/" + a.id + "/" + a.titleUrlSegment;
     if (!url) return;
     const own = /(^|\.)premierleague\.com$/.test(hostName(url));
-    out.push({ s: "fpl", t: plain(a.title), u: url, o: own ? "Premier League" : hostName(url), d,
-               x: clip(plain(a.summary || a.description || ""), 180) });
+    const it = { s: "fpl", t: plain(a.title), u: url, o: own ? "Premier League" : hostName(url), d,
+               x: clip(plain(a.summary || a.description || ""), 180) };
+    // the picture service's small copy (its "photo-resources" address resizes)
+    const od = (a.leadMedia && a.leadMedia.onDemandUrl) || a.onDemandUrl;
+    const pic = od && /\/photo-resources\//.test(String(od)) && safePic(od);
+    if (pic && pic.indexOf("?") === -1) it.i = pic + "?width=240";
+    out.push(it);
+  });
+  return out;
+}
+
+// the Scout's pictures by post: link key -> a small copy (about 320px wide)
+function parseFfsPics(json) {
+  const out = {};
+  (Array.isArray(json) ? json : []).forEach((p) => {
+    const m = p && p._embedded && p._embedded["wp:featuredmedia"] && p._embedded["wp:featuredmedia"][0];
+    const sz = (m && m.media_details && m.media_details.sizes) || {};
+    const pick = ["featured_mob", "medium", "featured_mob_slide", "thumbnail"].map((k) => sz[k] && safePic(sz[k].source_url)).filter(Boolean)[0];
+    const k = p && linkKey(p.link);
+    if (k && pick) out[k] = pick;
   });
   return out;
 }
@@ -155,6 +195,21 @@ async function newsOf(prev, opts) {
         sources[k] = { ok: false, why: String((e && e.message) || e).slice(0, 80) };
       }
     }
+    // pictures for the Scout's headlines: fresh where its interface answered,
+    // otherwise whatever each headline had last time
+    let ffsPics = {};
+    if (bySource.ffs && bySource.ffs.length) {
+      try { ffsPics = parseFfsPics(JSON.parse(await get(FFS_PICS))); } catch (e) { ffsPics = {}; }
+    }
+    const lastPic = {};
+    (last ? last.items : []).forEach((it) => { if (it && it.i && safePic(it.i)) lastPic[it.u] = it.i; });
+    Object.keys(bySource).forEach((k) => {
+      bySource[k] = bySource[k].map((it) => {
+        if (it.i) return it;
+        const pic = (k === "ffs" && ffsPics[linkKey(it.u)]) || lastPic[it.u];
+        return pic ? Object.assign({}, it, { i: pic }) : it;
+      });
+    });
     const items = merge(bySource, nowMs);
     return { at: new Date(nowMs).toISOString(), items, sources };
   } catch (e) {
@@ -162,4 +217,4 @@ async function newsOf(prev, opts) {
   }
 }
 
-module.exports = { newsOf, parseRss, parsePl, merge, plain, clip, safeUrl, SOURCES, NEWS_EVERY };
+module.exports = { newsOf, parseRss, parsePl, parseFfsPics, merge, plain, clip, safeUrl, safePic, SOURCES, FFS_PICS, NEWS_EVERY };

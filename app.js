@@ -4995,6 +4995,22 @@
   var NEWS_TOPICS = [["all", "All"], ["mine", "My team"], ["team", "Team news"], ["tips", "Tips"], ["price", "Prices"]];
   var NEWS_EMPTY = { mine: "Nothing about your players just now.", team: "No team news just now.",
                      tips: "No tips just now.", price: "Nothing on prices just now." };
+  // Each headline's picture: the article's own (a small copy, from the PL's
+  // or the Scout's picture host only), else the photo of the one player its
+  // headline names, else a plain tile in the outlet's colour. Fixed size,
+  // so nothing moves as pictures arrive.
+  var NEWS_TILE = '<svg viewBox="5.5 6.6 19 16.8" width="30" height="27" aria-hidden="true">' + G_NEWS + '</svg>';
+  var NEWS_PIC_RE = /^https:\/\/(resources\.premierleague\.pulselive\.com|cdn\.fantasyfootballscout\.co\.uk)\/[^\s"'<>]+$/;
+  function newsPic(ds, it, who) {
+    var el = K.newsFace(ds, it), code = el ? faceCode(el) : 0;
+    var face = code && !faceHidden(code) ? "photos/p" + code + ".webp" : "";
+    var own = NEWS_PIC_RE.test(String(it.i || "")) ? String(it.i) : "";
+    var box = '<span class="nwpic nw-' + who;
+    if (own) return box + '"><img src="' + esc(own) + '" alt="" width="96" height="64" loading="lazy" decoding="async" referrerpolicy="no-referrer"' +
+      (face ? ' data-face="' + esc(face) + '"' : '') + '></span>';
+    if (face) return box + ' nwface"><img src="' + esc(face) + '" alt="" width="96" height="64" loading="lazy" decoding="async"></span>';
+    return box + ' nwnone">' + NEWS_TILE + '</span>';
+  }
   function renderNews(host, ds) {
     var N = ds && ds.news;
     var items = (N && Array.isArray(N.items) ? N.items : []).filter(function (it) { return it && K.newsOnTopic(it); });
@@ -5032,10 +5048,10 @@
         // the outlet's colour is the outlet's, however the headline reached us
         var who = it.o === "Premier League" ? "pl" : it.o === "Fantasy Football Scout" ? "ffs" : "web";
         return '<a class="nwrow" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' +
-          '<span class="nwmeta"><span class="nwsrc nw-' + who + '">' + esc(it.o || "") + '</span>' +
+          '<span class="nwbody"><span class="nwmeta"><span class="nwsrc nw-' + who + '">' + esc(it.o || "") + '</span>' +
             (when ? '<span class="nwwhen">' + esc(when) + '</span>' : '') + '</span>' +
           '<span class="nwt">' + esc(it.t) + '</span>' +
-          (it.x ? '<span class="nwx">' + esc(it.x) + '</span>' : '') + '</a>';
+          (it.x ? '<span class="nwx">' + esc(it.x) + '</span>' : '') + '</span>' + newsPic(ds, it, who) + '</a>';
       }).join("");
 
     var read = N.at && isFinite(Date.parse(N.at)) ? agoText(now - Date.parse(N.at)) : "";
@@ -5048,6 +5064,20 @@
                 : esc(NEWS_EMPTY[state.newsSrc] || "Nothing just now.")) + '</div>') +
       '<div class="note" style="margin:10px 2px 4px">Headlines from FPL (premierleague.com), Fantasy Football Scout and Google News, ' +
         'checked every 15 minutes' + (read ? '; last checked ' + esc(read) : '') + '. Each opens on its own site.</div>';
+    // a picture that will not load gives way to the player's photo, then
+    // to the plain tile; nothing is ever left as a broken image
+    if (!host._nwPicErr) host.addEventListener("error", host._nwPicErr = function (e) {
+      var img = e.target;
+      if (!img || img.tagName !== "IMG" || !img.closest(".nwpic")) return;
+      var box = img.closest(".nwpic"), face = img.getAttribute("data-face");
+      if (face) {
+        img.removeAttribute("data-face"); box.classList.add("nwface");
+        img.removeAttribute("referrerpolicy"); img.src = face;
+      } else {
+        box.classList.remove("nwface"); box.classList.add("nwnone");
+        box.innerHTML = NEWS_TILE;
+      }
+    }, true);
     $("#nwSrc", host).addEventListener("click", function (e) {
       var b = e.target.closest("button[data-src]");
       if (!b || b.getAttribute("data-src") === state.newsSrc) return;
