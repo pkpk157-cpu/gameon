@@ -140,6 +140,16 @@ const srv = http.createServer((q, r) => { let u = q.url.split("?")[0]; if (u ===
         chk(op[0] === "#profile/" + want[0] && !op[1], w + "px: a manager in it opens his profile, the sheet closed", JSON.stringify(op));
         await p.goBack(); await p.waitForTimeout(700);
         chk(await p.evaluate(() => location.hash === "#fpl" && !!document.querySelector(".fplcard")), w + "px: back returns to FPL", await p.evaluate(() => location.hash));
+        // opened again and again, a tap opens the list every time (its
+        // handlers once piled up, one per opening, and cancelled out)
+        const every = [];
+        for (let k = 0; k < 4; k++) {
+          await p.click(".fplcard .fcgrid"); await p.waitForTimeout(350);
+          await p.click('td[data-lg="' + bi + "," + ci + '"]'); await p.waitForTimeout(350);
+          every.push(await p.evaluate(() => { const l = document.querySelector("#lgList"); return !!l && !l.hidden && l.querySelectorAll(".lgrow").length; }));
+          await p.click("#modalClose"); await p.waitForTimeout(350);
+        }
+        chk(every.every((n) => n === want.length), w + "px: opened four times over, a tap shows the list every time", JSON.stringify(every));
       }
     }
     {

@@ -4581,6 +4581,39 @@
       (next ? '<div class="fcrule"></div><div class="fcnext"><span>' + esc(next.name || ("Gameweek " + next.id)) + '</span><b>Deadline: ' + esc(when) + '</b></div>' : "") +
       '</div>';
   }
+  /* The grid's taps. The sheet's body is the one every sheet uses, so its
+     listeners are added once, for good, and read the grid now on show:
+     added on every opening they piled up, and a tap ran once per opening,
+     opening the list and closing it again on every second visit. */
+  var lgNow = null;
+  function wireLiveGrid(body) {
+    if (body._lgWired) return;
+    body._lgWired = true;
+    var pick = function (cell) {
+      if (!lgNow) return;
+      var k = cell.getAttribute("data-lg").split(","), list = $("#lgList", body);
+      if (!list) return;
+      var on = cell.classList.contains("sel");
+      $all("td.lgc.sel", body).forEach(function (x) { x.classList.remove("sel"); });
+      if (on) { list.hidden = true; list.innerHTML = ""; return; }
+      cell.classList.add("sel");
+      list.innerHTML = liveGridList(lgNow.ds, lgNow.G, +k[0], +k[1], lgNow.me);
+      list.hidden = false;
+      try { list.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e2) {}
+    };
+    body.addEventListener("click", function (ev) {
+      if (!ev.target.closest) return;
+      var m = ev.target.closest("[data-lgid]");
+      // a manager opens his profile, the sheet giving way to it
+      if (m) { closeModal(true); navFromOverlay("profile/" + m.getAttribute("data-lgid")); return; }
+      var c = ev.target.closest("td[data-lg]");
+      if (c) pick(c);
+    });
+    body.addEventListener("keydown", function (ev) {
+      var c = ev.target.closest && ev.target.closest("td[data-lg]");
+      if (c && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); pick(c); }
+    });
+  }
   // The card's GO | FPL switch redraws the card alone, and remembers.
   function wireCardSrc(host, ds, me, rec) {
     var gb = $(".fplcard .fcgrid", host);
@@ -4588,28 +4621,8 @@
       e.preventDefault();
       var G = liveGrid(ds, +ds.pitchGw);
       if (!G) return;
-      var body = modal("Live: points and players played", liveGridHtml(ds, G, me));
-      var pick = function (cell) {
-        var k = cell.getAttribute("data-lg").split(","), list = $("#lgList", body);
-        var on = cell.classList.contains("sel");
-        $all("td.lgc.sel", body).forEach(function (x) { x.classList.remove("sel"); });
-        if (on) { list.hidden = true; list.innerHTML = ""; return; }
-        cell.classList.add("sel");
-        list.innerHTML = liveGridList(ds, G, +k[0], +k[1], me);
-        list.hidden = false;
-        try { list.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e2) {}
-      };
-      body.addEventListener("click", function (ev) {
-        var m = ev.target.closest("[data-lgid]");
-        // a manager opens his profile, the sheet giving way to it
-        if (m) { closeModal(true); navFromOverlay("profile/" + m.getAttribute("data-lgid")); return; }
-        var c = ev.target.closest("td[data-lg]");
-        if (c) pick(c);
-      });
-      body.addEventListener("keydown", function (ev) {
-        var c = ev.target.closest && ev.target.closest("td[data-lg]");
-        if (c && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); pick(c); }
-      });
+      lgNow = { ds: ds, G: G, me: me };
+      wireLiveGrid(modal("Live: points and players played", liveGridHtml(ds, G, me)));
     });
     var sp = $(".fplcard .srcpill", host);
     if (!sp) return;
