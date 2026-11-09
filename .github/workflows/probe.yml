@@ -13,20 +13,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Try lighter pictures
+      - name: Compare FPL's overall ranks
         run: |
           cat > run.js <<'JS'
-          const head = async (u) => { try { const r = await fetch(u); const b = Buffer.from(await r.arrayBuffer()); console.log(r.status + " " + r.headers.get("content-type") + " " + b.length + "  " + u.slice(-90)); } catch (e) { console.log("ERR " + u); } };
+          const UA = "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)";
+          const get = async (p) => (await fetch("https://fantasy.premierleague.com/api" + p, { headers: { "User-Agent": UA } })).json();
           (async () => {
-            const pl = "https://resources.premierleague.pulselive.com/photo-resources/2026/10/31/f59cd60c-7f10-4539-8a92-ce4bbc0f1cbf/Nicolas-Jackson-Joao-Pedro.png";
-            for (const q of ["?width=320", "?width=240", "?width=320&format=jpg", "?width=320&format=jpeg", "?width=320&type=jpg", "?width=320&quality=60", "?width=320&format=webp", "?width=320&height=180&format=jpg"]) await head(pl + q);
-            const jp = "https://resources.premierleague.pulselive.com/photo-resources/2026/11/07/3adc1a4c-82a4-4b97-89a2-88f72c5390c6/Nico-Jackson.jpg";
-            for (const q of ["?width=320", "?width=240", "?width=320&quality=60", "?width=320&format=webp"]) await head(jp + q);
-            const f = "https://cdn.fantasyfootballscout.co.uk/wp-content/uploads/2026/11/fpl-gameweek-10-differentials-3-low-owned-picks-to-consider-2";
-            for (const s of ["-320x245.jpg", "-300x132.jpg", "-150x150.jpg", "-480x289.jpg", "-320x245.jpg.webp"]) await head(f + s);
-            // why six Scout posts had no picture
-            const r = await fetch("https://www.fantasyfootballscout.co.uk/wp-json/wp/v2/posts?per_page=20&_fields=link,featured_media,type");
-            const p = await r.json(); p.forEach((x) => console.log("POST media=" + x.featured_media + " " + x.link.slice(-70)));
+            for (const id of [21743, 4824513]) {
+              const [e, h, pk] = await Promise.all([get("/entry/" + id + "/"), get("/entry/" + id + "/history/"), get("/entry/" + id + "/event/10/picks/")]);
+              const ov = (e.leagues.classic || []).find((l) => l.name === "Overall") || {};
+              const last = h.current[h.current.length - 1];
+              console.log("ENTRY " + id + " summary_overall_rank=" + e.summary_overall_rank + " summary_event_points=" + e.summary_event_points + " summary_event_rank=" + e.summary_event_rank + " current_event=" + e.current_event + " last_deadline_total? " + e.summary_overall_points);
+              console.log("  leagues Overall entry_rank=" + ov.entry_rank + " entry_last_rank=" + ov.entry_last_rank + " rank_count=" + ov.rank_count);
+              console.log("  history last row: event=" + last.event + " points=" + last.points + " total=" + last.total_points + " overall_rank=" + last.overall_rank + " rank=" + last.rank);
+              console.log("  picks entry_history: points=" + pk.entry_history.points + " overall_rank=" + pk.entry_history.overall_rank + " rank=" + pk.entry_history.rank);
+            }
+            const bs = await get("/bootstrap-static/");
+            const ev = bs.events.find((x) => x.is_current);
+            console.log("EVENT " + ev.id + " finished=" + ev.finished + " data_checked=" + ev.data_checked + " average=" + ev.average_entry_score + " highest=" + ev.highest_score);
+            const st = await get("/event-status/");
+            console.log("STATUS " + JSON.stringify(st));
           })();
           JS
           node run.js
