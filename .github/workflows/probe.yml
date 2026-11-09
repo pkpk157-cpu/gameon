@@ -10,29 +10,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Compare FPL's overall ranks
+      - name: Run the new updater, publish nothing
+        working-directory: run
         run: |
-          cat > run.js <<'JS'
-          const UA = "Mozilla/5.0 (compatible; GameOnV12-bot/1.0)";
-          const get = async (p) => (await fetch("https://fantasy.premierleague.com/api" + p, { headers: { "User-Agent": UA } })).json();
-          (async () => {
-            for (const id of [21743, 4824513]) {
-              const [e, h, pk] = await Promise.all([get("/entry/" + id + "/"), get("/entry/" + id + "/history/"), get("/entry/" + id + "/event/10/picks/")]);
-              const ov = (e.leagues.classic || []).find((l) => l.name === "Overall") || {};
-              const last = h.current[h.current.length - 1];
-              console.log("ENTRY " + id + " summary_overall_rank=" + e.summary_overall_rank + " summary_event_points=" + e.summary_event_points + " summary_event_rank=" + e.summary_event_rank + " current_event=" + e.current_event + " last_deadline_total? " + e.summary_overall_points);
-              console.log("  leagues Overall entry_rank=" + ov.entry_rank + " entry_last_rank=" + ov.entry_last_rank + " rank_count=" + ov.rank_count);
-              console.log("  history last row: event=" + last.event + " points=" + last.points + " total=" + last.total_points + " overall_rank=" + last.overall_rank + " rank=" + last.rank);
-              console.log("  picks entry_history: points=" + pk.entry_history.points + " overall_rank=" + pk.entry_history.overall_rank + " rank=" + pk.entry_history.rank);
-            }
-            const bs = await get("/bootstrap-static/");
-            const ev = bs.events.find((x) => x.is_current);
-            console.log("EVENT " + ev.id + " finished=" + ev.finished + " data_checked=" + ev.data_checked + " average=" + ev.average_entry_score + " highest=" + ev.highest_score);
-            const st = await get("/event-status/");
-            console.log("STATUS " + JSON.stringify(st));
-          })();
-          JS
-          node run.js
+          start=$(date +%s)
+          node scripts/fetch-data.js 2>&1 | grep -E "histories done|live ranks|Wrote data.json|FPL is not answering|Error" || true
+          echo "took $(( $(date +%s) - start ))s"
+          node -e 'const d=require("./data.json").dataset; const ev=d.bootstrap.events.find(e=>e.is_current); const h=d.history; const me=h[21743][ev.id]; console.log("GW"+ev.id+" you: r="+me.r+" gr="+me.gr+" pc="+me.pc+" points row="+me.p); let n=0,z=0; Object.keys(h).forEach(id=>{const r=h[id][ev.id]; if(r){n++; if(!(r.r>0)) z++;}}); console.log("rows "+n+", without a rank "+z)'
