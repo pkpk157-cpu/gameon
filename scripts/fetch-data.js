@@ -346,7 +346,21 @@ function histRow(c) {
   if (c.percentile_rank != null && c.percentile_rank !== "") row.pc = Number(c.percentile_rank);
   return row;
 }
-module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf, histRow, classicOf };
+// A live gameweek's history row brought up to the manager's entry, FPL's
+// latest overall and gameweek ranks; the row's percentage rank belonged to
+// the older figures, so it goes. Only for the entry's own current week, and
+// only with a real rank. True when the row changed.
+function freshRank(row, e, gw) {
+  if (!row || !e || +e.current_event !== +gw) return false;
+  const r = Number(e.summary_overall_rank);
+  if (!(r > 0) || r === row.r) return false;
+  row.r = r;
+  const g = Number(e.summary_event_rank);
+  if (g > 0) row.gr = g; else delete row.gr;
+  delete row.pc;
+  return true;
+}
+module.exports = { squadPlan, subsCandidates, subsShown, purchasePrices, marketOf, histRow, classicOf, freshRank };
 
 if (require.main === module) (async () => {
   console.log("Fetching bootstrap…");
@@ -421,6 +435,23 @@ if (require.main === module) (async () => {
   }, 6);
   if (fplDown) throw fplDown;
   console.log("  histories done, failed " + hist.failed);
+
+  // While a gameweek is live FPL's history rows lag: on 9 Nov 2026 a GW10
+  // row still said 17 points and an overall rank of 1,093,417 when the same
+  // manager's entry said 57 points and 908,021, the rank FPL's own app and
+  // its league lists showed. So while the week is live each manager's entry
+  // is read too and its overall rank (and gameweek rank) put on the row;
+  // a read that fails leaves the row as FPL's history had it.
+  const liveEv = events.find((e) => e.is_current && !e.data_checked);
+  if (liveEv) {
+    let freshened = 0;
+    const er = await pool(managers.filter((m) => history[m.id] && history[m.id][liveEv.id]), async (m) => {
+      const e = await getJSON("/entry/" + m.id + "/", 2);
+      if (freshRank(history[m.id][liveEv.id], e, liveEv.id)) freshened++;
+    }, 6);
+    if (fplDown) throw fplDown;
+    console.log("  live ranks: " + freshened + " rows moved to FPL's latest, " + er.failed + " entries unread");
+  }
 
   // A history that did not answer must not be published as a blank. Every
   // competition except the classic table is built from these rows, so a

@@ -67,6 +67,24 @@ const sofar = (f) => (!f.final && (f.average != null || f.highest != null) ? " s
   chk(!done || !K.highlights(ds, done).gwStats.grid, "a finished week has no live grid", "GW" + done);
 }
 
+{
+  // while a week is live the updater puts each entry's latest ranks on the
+  // history row (FPL's history lags: 9 Nov, GW10 said 1,093,417 when the
+  // entry and FPL's own app said 908,021); anything else leaves it alone
+  const FD = require(path.join(APP, "scripts/fetch-data.js"));
+  const row = FD.histRow({ event: 10, points: 17, total_points: 608, overall_rank: 1093417, rank: 8996391, percentile_rank: 85, value: 1031, bank: 31 });
+  const moved = FD.freshRank(row, { current_event: 10, summary_overall_rank: 908021, summary_event_rank: 4420337 }, 10);
+  chk(moved && row.r === 908021 && row.gr === 4420337 && !("pc" in row) && row.p === 17 && row.t === 608,
+      "live week: the row takes the entry's overall and gameweek ranks, drops the stale percentage, keeps the rest", JSON.stringify(row));
+  const keep = FD.histRow({ event: 10, points: 5, total_points: 5, overall_rank: 700, rank: 800, percentile_rank: 9 }), was = JSON.stringify(keep);
+  chk(!FD.freshRank(keep, { current_event: 11, summary_overall_rank: 1 }, 10) && !FD.freshRank(keep, { current_event: 10, summary_overall_rank: 0 }, 10) &&
+      !FD.freshRank(keep, null, 10) && !FD.freshRank(null, { current_event: 10, summary_overall_rank: 1 }, 10) && !FD.freshRank(keep, { current_event: 10, summary_overall_rank: 700 }, 10) &&
+      JSON.stringify(keep) === was, "another week's entry, no rank, no entry, no row, or the same rank: the row is left exactly as FPL gave it");
+  const fd = fs.readFileSync(path.join(APP, "scripts/fetch-data.js"), "utf8");
+  chk(/events\.find\(\(e\) => e\.is_current && !e\.data_checked\)/.test(fd) && /getJSON\("\/entry\/" \+ m\.id \+ "\/", 2\)/.test(fd),
+      "the updater reads entries only while a week is live, two tries each");
+}
+
 // the next deadline shows only once the card's gameweek is finished and finalised
 const cardFinal = K.finishedGws(ds).indexOf(+ds.pitchGw) !== -1;
 const next = cardFinal ? ds.bootstrap.events.find((e) => e.deadline_time && Date.parse(e.deadline_time) > Date.now()) : null;
