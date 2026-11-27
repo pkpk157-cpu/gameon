@@ -1,0 +1,73 @@
+# Scouting reports: one per position for each gameweek, under FPL news.
+#
+# A workflow of its own, like the photos: the data updater is what the league
+# depends on, and nothing here may slow it down or fail it. Every three hours
+# scripts/scout.js asks whether a report is due (a gameweek finished and
+# checked by FPL, the next deadline still ahead, nothing built for it in the
+# last twelve hours) and only then reads FPL and writes reports/. The first
+# build of a gameweek is also printed to PDF. The data updater deploys the
+# repository every ten minutes, so a report is live within ten minutes of its
+# commit. If this never runs again, the reports already written stay up.
+name: Scouting reports
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build now even if one was built in the last twelve hours, and print the PDFs again'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '23 */3 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: scout
+  cancel-in-progress: false
+jobs:
+  scout:
+    # Pinned for the season, as the other workflows are.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the reports if one is due
+        id: scout
+        env:
+          SCOUT_FORCE: ${{ (github.event_name == 'workflow_dispatch' && inputs.force == true) && '1' || '' }}
+        run: node scripts/scout.js
+      # Printing tools only when there is something to print, and outside the
+      # working tree so none of it can reach the repository or the site.
+      - name: Printing tools
+        if: steps.scout.outputs.built == 'true'
+        run: |
+          npm install --no-save --prefix /tmp/pdftools playwright-core@1.49.1
+          /tmp/pdftools/node_modules/.bin/playwright-core install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-inter || echo "Inter not available; the PDFs use the default sans"
+      - name: Print the PDFs
+        if: steps.scout.outputs.built == 'true'
+        env:
+          NODE_PATH: /tmp/pdftools/node_modules
+        # a PDF that fails is not worth failing the reports for: the page in
+        # the app shows no download link until the PDF is there
+        run: node scripts/scout-pdf.js "${{ steps.scout.outputs.gw }}" ${{ (github.event_name == 'workflow_dispatch' && inputs.force == true) && '--force' || '' }} || echo "Some PDFs could not be printed; the next build tries again."
+      - name: Commit the reports
+        if: steps.scout.outputs.built == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A reports
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          git commit -m "Scouting reports for GW${{ steps.scout.outputs.gw }}"
+          # the data updater commits every ten minutes: rebase and try again
+          for i in 1 2 3 4; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep $((2 ** i))
+          done
+          echo "Could not push; the next run builds again."
+          exit 1

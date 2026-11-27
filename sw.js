@@ -12,13 +12,13 @@
    checked by scripts/check-sources.js on every push: it changes when, and
    only when, the app does, so a worker is reinstalled for a new release and
    not for the data the updater publishes every five minutes. */
-const BUILD = "3e267ddcda66";
+const BUILD = "e725f9289026";
 const CACHE = "gameon-" + BUILD;
 // Player and club pictures, kept across releases: they do not change with one.
 const PHOTOS = "gameon-photos";
 const ASSETS = [
   "./index.html", "./styles.css",
-  "./config.js", "./scripts/bonus.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./app.js",
+  "./config.js", "./scripts/bonus.js", "./api.js", "./data.js", "./usage.js", "./compute.js", "./report.js", "./app.js",
   "./manifest.json", "./favicon-64.png", "./logo-splash.webp", "./logo-crest.webp", "./launch-tile.webp",
   "./logo-tile.webp", "./logo-tile-inv.webp", "./pl-lion.webp", "./fpl-tile.webp"
 ];
@@ -57,6 +57,19 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return;
   // The data has its own keeping (data.js): the browser fetches it as asked.
   if (url.pathname.endsWith("data.json")) return;
+  // Scouting reports: a PDF is downloaded, never kept; a report's JSON (and
+  // the list of them) from the network first, so a new gameweek shows on the
+  // first open, and from the phone only when there is no network.
+  if (url.pathname.indexOf("/reports/") !== -1) {
+    if (url.pathname.endsWith(".pdf")) return;
+    e.respondWith(
+      caches.open(PHOTOS).then((c) => fetch(req).then((res) => {
+        if (res.ok) c.put(req, res.clone()).catch(() => {});
+        return res;
+      }, () => c.match(req).then((hit) => hit || Response.error())))
+    );
+    return;
+  }
 
   // The page and its files: from the stored release, at once. Only a phone
   // with nothing stored yet (the very first open) goes to the network.

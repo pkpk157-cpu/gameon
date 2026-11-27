@@ -2847,7 +2847,7 @@
     if (SUB_VIEWS.indexOf(view) === -1) state.backView = state.backTo = view;
     // A section's own page (Premier League, FPL, Voluntary) is somewhere to
     // come back to as well, as it stood; a match, a league or a team is not
-    else if ((view === "fpl" && !parts[1]) || view === "vol" || view === "news" ||
+    else if ((view === "fpl" && !parts[1]) || view === "vol" || (view === "news" && parts[1] !== "report") ||
              (view === "pl" && !/^[A-Z]{3}-[A-Z]{3}$/.test(parts[2] || ""))) state.backTo = h;
     // A player can be opened from a match, a leaderboard, a pitch or a price
     // table, and back has to mean the page he was opened from. backView holds
@@ -2877,6 +2877,11 @@
     if (view === "prices") state.prTab = parts[1] === "stats" ? "stats" : "prices";
     if (view === "stats" && parts[1]) state.statsTab = parts[1];
     if (view === "vol" && parts[1]) state.volKey = parts[1];
+    // a scouting report: news/report/<gw>/<gkp|def|mid|fwd>
+    if (view === "news") {
+      state.newsReport = parts[1] === "report" && +parts[2] > 0 && /^(gkp|def|mid|fwd)$/.test(parts[3] || "") ? { gw: +parts[2], pos: parts[3] } : null;
+      if (state.newsReport) state.newsSrc = "reports";
+    }
     if (view === "player") {
       // A tap on a card adds the gameweek it came from (player/<id>/<gw>); the
       // page no longer opens that row, so only the id is read. A card on a
@@ -3084,7 +3089,7 @@
     // a team or a player opened inside one does.
     var back = $("#barBack");
     var landing = (state.view === "fpl" && !state.fplTeam && !state.fplLeague && !state.fplHistory) ||
-      (state.view === "pl" && !state.plMatch) || state.view === "vol" || state.view === "news";
+      (state.view === "pl" && !state.plMatch) || state.view === "vol" || (state.view === "news" && !state.newsReport);
     back.style.display = SUB_VIEWS.indexOf(state.view) === -1 || landing ? "none" : "";
 
     var info = $("#barInfo");
@@ -5095,7 +5100,7 @@
      about FPL. Each says where it is from and when it was published. The
      pills narrow it by what it is about: your own players, team news, tips,
      prices (see C.newsTopics and C.newsNames). */
-  var NEWS_TOPICS = [["all", "All"], ["mine", "My team"], ["team", "Team news"], ["tips", "Tips"], ["price", "Prices"]];
+  var NEWS_TOPICS = [["all", "All"], ["reports", "Reports"], ["mine", "My team"], ["team", "Team news"], ["tips", "Tips"], ["price", "Prices"]];
   var NEWS_EMPTY = { mine: "Nothing about your players just now.", team: "No team news just now.",
                      tips: "No tips just now.", price: "Nothing on prices just now." };
   // Each headline's picture: the article's own (a small copy, from the PL's
@@ -5114,14 +5119,71 @@
     if (face) return box + ' nwface"><img src="' + esc(face) + '" alt="" width="96" height="64" loading="lazy" decoding="async"></span>';
     return box + ' nwnone">' + NEWS_TILE + '</span>';
   }
+  /* Scouting reports (report.js, scripts/scout.js): the list under the
+     Reports pill, and a report of its own at news/report/<gw>/<pos>. They are
+     files beside the app, read when asked for, never part of data.json. */
+  var REPORT_NAMES = { gkp: "Goalkeepers", def: "Defenders", mid: "Midfielders", fwd: "Forwards" };
+  function reportFile(url, done) {
+    fetch(url, { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) { done(null, j); }, function (e) { done(e); });
+  }
+  function renderReport(host, ds, want) {
+    // the data refreshing underneath is no reason to redraw a report being
+    // read: it would reload and jump to the top
+    var key = want.gw + "/" + want.pos;
+    if (host._rpKey === key && host.querySelector(".rp-hero")) return;
+    host._rpKey = null;
+    host.innerHTML = '<div class="callout">Loading the ' + esc((REPORT_NAMES[want.pos] || "").toLowerCase()) + ' report…</div>';
+    var at = location.hash;
+    reportFile("reports/gw" + want.gw + "/" + want.pos + ".json", function (err, rep) {
+      if (location.hash !== at) return; // the reader has moved on
+      if (err || !rep || !Array.isArray(rep.players) || !window.GOReport) {
+        host.innerHTML = '<div class="callout">This report isn\'t available. <a href="#news">Back to the reports</a>.</div>';
+        return;
+      }
+      try {
+        window.GOReport.render(host, rep, {
+          crest: crest,
+          face: function (id) { var c = faceCode(id); return c && !faceHidden(c) ? "photos/p" + c + ".webp" : ""; },
+          pdf: "reports/gw" + want.gw + "/" + want.pos + ".pdf",
+          onPlayer: function (id) { if (ds && ds.elements && ds.elements[id]) location.hash = "player/" + id; }
+        });
+        host._rpKey = key;
+        // the PDF is printed after the report is built; until it is there, no link to it
+        var dl = host.querySelector(".rp-pdf");
+        if (dl) fetch(dl.getAttribute("href"), { method: "HEAD", cache: "no-cache" })
+          .then(function (r) { if (!r.ok) throw 0; }).catch(function () { if (dl.parentNode) dl.parentNode.removeChild(dl); });
+      } catch (e) {
+        host.innerHTML = '<div class="callout">This report couldn\'t be shown. <a href="#news">Back to the reports</a>.</div>';
+        setTimeout(function () { throw e; }, 0);
+      }
+    });
+  }
+  // the list as last read: drawn at once on a redraw, then checked for a newer one
+  var reportIndex = null;
+  function renderReportList(box) {
+    var had = reportIndex ? JSON.stringify(reportIndex) : "";
+    if (reportIndex) window.GOReport.list(box, reportIndex, {});
+    else box.innerHTML = '<div class="callout">Loading the scouting reports…</div>';
+    reportFile("reports/index.json", function (err, idx) {
+      if (!box.isConnected) return;
+      if (err) {
+        if (!reportIndex) box.innerHTML = '<div class="callout">No scouting reports yet. The first arrives once a gameweek is finished and checked.</div>';
+        return;
+      }
+      reportIndex = idx;
+      if (JSON.stringify(idx) !== had) window.GOReport.list(box, idx, {});
+    });
+  }
   function renderNews(host, ds) {
+    if (state.newsReport && window.GOReport) return renderReport(host, ds, state.newsReport);
     var N = ds && ds.news;
     var items = (N && Array.isArray(N.items) ? N.items : []).filter(function (it) { return it && K.newsOnTopic(it); });
-    if (!items.length) {
+    if (!NEWS_TOPICS.some(function (p) { return p[0] === state.newsSrc; })) state.newsSrc = "all";
+    if (!items.length && state.newsSrc !== "reports") {
       host.innerHTML = '<div class="callout">No news yet. The first headlines arrive with the next update.</div>';
       return;
     }
-    if (!NEWS_TOPICS.some(function (p) { return p[0] === state.newsSrc; })) state.newsSrc = "all";
     // your squad in the newest gameweek with squads: who "My team" is about
     var mine = null;
     if (state.me && ds.picks) {
@@ -5132,6 +5194,7 @@
     var keep = function (it) {
       var k = state.newsSrc;
       if (k === "all") return true;
+      if (k === "reports") return false;
       if (k === "mine") return !!mine && K.newsNames(ds, it, mine).length > 0;
       return K.newsTopics(it).indexOf(k) !== -1;
     };
@@ -5157,16 +5220,20 @@
           (it.x ? '<span class="nwx">' + esc(it.x) + '</span>' : '') + '</span>' + newsPic(ds, it, who) + '</a>';
       }).join("");
 
-    var read = N.at && isFinite(Date.parse(N.at)) ? agoText(now - Date.parse(N.at)) : "";
+    var read = N && N.at && isFinite(Date.parse(N.at)) ? agoText(now - Date.parse(N.at)) : "";
     host.innerHTML =
       '<div class="psegrow"><div class="pseg sm" id="nwSrc" role="tablist" aria-label="Topic">' + NEWS_TOPICS.map(function (p) {
         return '<button type="button" role="tab" data-src="' + p[0] + '"' + (state.newsSrc === p[0] ? ' class="on" aria-selected="true"' : ' aria-selected="false"') + '>' + p[1] + '</button>';
       }).join("") + '</div></div>' +
-      (rows ? '<div class="card nwlist">' + rows + '</div>'
+      (state.newsSrc === "reports" ? '<div id="nwReports"></div>' :
+       rows ? '<div class="card nwlist">' + rows + '</div>'
             : '<div class="callout">' + (state.newsSrc === "mine" && !mine ? "Pick your team first, and this shows the news about your players."
                 : esc(NEWS_EMPTY[state.newsSrc] || "Nothing just now.")) + '</div>') +
-      '<div class="note" style="margin:10px 2px 4px">Headlines from FPL (premierleague.com), Fantasy Football Scout and Google News, ' +
-        'checked every 15 minutes' + (read ? '; last checked ' + esc(read) : '') + '. Each opens on its own site.</div>';
+      (state.newsSrc === "reports"
+        ? '<div class="note" style="margin:10px 2px 4px">A report for each position, written from FPL\u2019s own numbers once a gameweek is finished and checked, ' +
+          'ready before the next deadline. Each can be saved as a PDF.</div>'
+        : '<div class="note" style="margin:10px 2px 4px">Headlines from FPL (premierleague.com), Fantasy Football Scout and Google News, ' +
+          'checked every 15 minutes' + (read ? '; last checked ' + esc(read) : '') + '. Each opens on its own site.</div>');
     // a picture that will not load gives way to the player's photo, then
     // to the plain tile; nothing is ever left as a broken image
     if (!host._nwPicErr) host.addEventListener("error", host._nwPicErr = function (e) {
@@ -5181,6 +5248,7 @@
         box.innerHTML = NEWS_TILE;
       }
     }, true);
+    if (state.newsSrc === "reports" && window.GOReport) renderReportList($("#nwReports", host));
     $("#nwSrc", host).addEventListener("click", function (e) {
       var b = e.target.closest("button[data-src]");
       if (!b || b.getAttribute("data-src") === state.newsSrc) return;

@@ -250,7 +250,7 @@ chk(merged.every((x) => /^https:\/\//.test(x.u)), "every link https");
     chk(row("Scout Selection").x === items[0].x && row("Scout Selection").xl === 1, w + ": the standfirst under the headline, on one line however long", J({ lines: row("Scout Selection").xl }));
     chk(pg.rows.filter((r) => r.src === "Premier League").every((r) => /nw-pl/.test(r.cls)) && /nw-ffs/.test(row("FPL notes").cls) && /nw-web/.test(row("<img").cls),
         w + ": the Premier League in one colour however it reached us; the Scout in its own; the rest plain", J(pg.rows.map((r) => r.src + ":" + r.cls.replace("nwsrc ", ""))));
-    chk(J(pg.pills) === J(["All*", "My team", "Team news", "Tips", "Prices"]) && /FPL \(premierleague\.com\), Fantasy Football Scout and Google News/.test(pg.note) && /last checked 4m ago/.test(pg.note),
+    chk(J(pg.pills) === J(["All*", "Reports", "My team", "Team news", "Tips", "Prices"]) && /FPL \(premierleague\.com\), Fantasy Football Scout and Google News/.test(pg.note) && /last checked 4m ago/.test(pg.note),
         w + ": topic pills, and a note saying where these come from and when they were checked", pg.note);
     chk(!pg.wide && !pg.cut, w + ": nothing wider than the phone, no headline cut");
     // pictures: once they have had time to arrive (or fail)

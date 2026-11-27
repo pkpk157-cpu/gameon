@@ -134,6 +134,28 @@ half an hour old, on every page. That is the signal to check:
   will have failed too and emailed.
 - **`CRON_PAT`** — a token that has expired or been revoked stops the handover.
 
+## Scouting reports
+
+Under **FPL news → Reports**: one report per position (goalkeepers, defenders,
+midfielders, forwards) for every gameweek, each also as a PDF. A report has the
+verdict (buy, hold, watch, sell), a leaderboard, value and underlying numbers,
+form, fixtures over the next six, a weighted model (form 45, fixtures 25,
+points per £m 20, minutes 10, with three other weightings beside it), player
+files and a transfer plan.
+
+- **Actions → Scouting reports** (`.github/workflows/scout.yml`) runs every three
+  hours. `scripts/scout.js` builds only when a gameweek is finished and checked
+  by FPL and the next deadline is still ahead, and then every twelve hours until
+  that deadline, since prices, transfers and injury news move all week. Run it
+  by hand with **force** to build at once.
+- Everything comes from FPL's public API, and every sentence is written by fixed
+  rules from those numbers: no paid service, nothing written by hand.
+- `scripts/scout-pdf.js` prints the PDFs with headless Chromium, once per
+  gameweek (each is close to a megabyte, so refreshes update the page only).
+  The app shows no download link until a PDF is there.
+- Output: `reports/index.json` and `reports/gw<N>/<pos>.json|pdf`. The data
+  updater deploys them with its next run.
+
 ## Files
 
 | File | Purpose |
@@ -148,6 +170,8 @@ half an hour old, on every page. That is the signal to check:
 | `data.json` | what the Action publishes; what every phone actually reads |
 | `scripts/fetch-data.js` | the Action's fetcher — builds `data.json` from the FPL API |
 | `scripts/verify-data.js` | checks that file against FPL's own totals before it ships |
+| `scripts/scout.js`, `scripts/scout-pdf.js` | the weekly scouting reports and their PDFs |
+| `report.js` | draws a scouting report in the app |
 | `scripts/bonus.js` | provisional bonus from bps, shared by the fetcher and the app |
 | `worker.js` | the Cloudflare Worker: FPL-only CORS proxy, and the cron that dispatches the Action |
 | `.github/workflows/` | fetch-and-publish, and the Pages deploy |

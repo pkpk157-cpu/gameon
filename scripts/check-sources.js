@@ -18,7 +18,7 @@ let bad = 0;
 const fail = (f, why) => { bad++; console.log("  FAIL " + f + " — " + why); };
 
 // Browser sources are classic scripts; the worker is a module.
-const SCRIPTS = ["app.js", "compute.js", "data.js", "api.js", "config.js", "sw.js"];
+const SCRIPTS = ["app.js", "report.js", "scripts/scout.js", "scripts/scout-pdf.js", "compute.js", "data.js", "api.js", "config.js", "sw.js"];
 const MODULES = ["worker.js"];
 const NODE = ["scripts/fetch-data.js", "scripts/verify-data.js", "scripts/bonus.js"];
 
